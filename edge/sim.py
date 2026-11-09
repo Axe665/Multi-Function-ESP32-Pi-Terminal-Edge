@@ -296,6 +296,8 @@ def append_window(ts: int | None = None) -> int:
         }
         store.insert_batch(dev, hashlib.sha256(f"{dev}|{now}|live".encode()).hexdigest()[:16],
                            now, now + config.WINDOW_MS, payload, aggs, adv_out)
+        # 补的窗口也要推进 last_seen，否则界面会显示成掉线
+        store.touch_device(dev, now + config.WINDOW_MS)
         n += 1
     from . import analysis
     analysis.rebuild_words()

@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>边节点 · 三个设计方向</title>
+<style>
+  :root { --bg: #0c0d0f; --fg: #f2f1ec; --dim: #8b8d88; --line: #1e2024; --hot: #e8b45c; }
+  @font-face { font-family: "Archivo"; src: url("/fonts/archivo.woff2") format("woff2"); font-weight: 400 600; font-display: swap; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font-family: "Archivo", "Noto Sans SC", system-ui, sans-serif; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { padding: 0 clamp(20px, 4vw, 56px) 80px; max-width: 1560px; margin: 0 auto; }
+  header { display: flex; align-items: baseline; justify-content: space-between; padding: 34px 0 10px; }
+  h1 { margin: 0; font-size: clamp(26px, 2.6vw, 40px); letter-spacing: -0.03em; font-weight: 500; }
+  header span { font-size: 12px; color: var(--dim); }
+  .lede { margin: 10px 0 40px; font-size: 15px; line-height: 1.6; color: var(--dim); max-width: 60ch; }
+  .lede b { color: var(--fg); font-weight: 500; }
+
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+  .card { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: #0f1113; }
+  .shot { position: relative; aspect-ratio: 1440 / 1000; overflow: hidden; background: #000; }
+  .shot iframe {
+    position: absolute; top: 0; left: 0;
+    width: 1440px; height: 1000px; border: 0;
+    transform-origin: top left;
+    transform: scale(var(--s, .32));
+    pointer-events: none;
+  }
+  .shot a { position: absolute; inset: 0; }
+  .shot a:hover ~ .hint { opacity: 1; }
+  .hint {
+    position: absolute; right: 12px; bottom: 12px; opacity: 0; transition: opacity .2s;
+    background: var(--fg); color: #0c0d0f; font-size: 12px; padding: 6px 11px; border-radius: 999px;
+    pointer-events: none;
+  }
+  .body { padding: 18px 20px 22px; }
+  .body h2 { margin: 0; font-size: 17px; font-weight: 500; letter-spacing: -0.01em; }
+  .body .tag { font-size: 11px; color: var(--hot); letter-spacing: .04em; margin-bottom: 6px; display: block; }
+  .body p { margin: 8px 0 0; font-size: 13.5px; line-height: 1.6; color: var(--dim); }
+  .body ul { margin: 12px 0 0; padding: 0; list-style: none; font-size: 12.5px; color: var(--dim); }
+  .body li { padding: 4px 0; border-top: 1px solid #16181b; }
+  .body li b { color: var(--fg); font-weight: 500; }
+  .open {
+    display: inline-flex; margin-top: 16px; align-items: center; gap: 8px;
+    height: 34px; padding: 0 14px; border-radius: 999px;
+    border: 1px solid #2b2f34; color: var(--fg); text-decoration: none; font-size: 13px;
+  }
+  .open:hover { border-color: var(--hot); color: var(--hot); }
+  footer { margin-top: 46px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 12px; color: var(--dim); }
+  @media (max-width: 1100px) { .grid { grid-template-columns: 1fr; } .shot iframe { transform: scale(.6); } }
+  @media (max-width: 700px) { .shot iframe { transform: scale(.25); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>三个方向，选一个</h1>
+    <span>edge-lab-01 · 真实数据</span>
+  </header>
+  <p class="lede">
+    同一份实时数据，三种完全不同的版式。<b>都不是现在这个仪表盘</b>——按产品官网的方式重新组织。
+    点缩略图进全屏，或直接开单页。
+  </p>
+
+  <div class="grid">
+    <article class="card">
+      <div class="shot">
+        <iframe src="/design/a.html" title="方向 A 预览" loading="lazy"></iframe>
+        <a href="/design/a.html" target="_blank" aria-label="打开方向 A"></a>
+        <span class="hint">打开全屏 →</span>
+      </div>
+      <div class="body">
+        <span class="tag">方向 A</span>
+        <h2>一句话即版式</h2>
+        <p>把整个系统压成两行大字，字中间嵌一个会动的环。安静、克制，靠字号和留白撑住。</p>
+        <ul>
+          <li><b>气质</b> 设计工作室的产品页</li>
+          <li><b>标签</b> 8.4vw 字号 · 嵌入画布 · 编号列表</li>
+        </ul>
+        <a class="open" href="/design/a.html" target="_blank">打开 →</a>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="shot">
+        <iframe src="/design/b.html" title="方向 B 预览" loading="lazy"></iframe>
+        <a href="/design/b.html" target="_blank" aria-label="打开方向 B"></a>
+        <span class="hint">打开全屏 →</span>
+      </div>
+      <div class="body">
+        <span class="tag">方向 B</span>
+        <h2>一个母题：那道环</h2>
+        <p>k≥5 变成一圈 118vh 的刻度环，被视口裁掉一半。所有元素都从圆形里长出来。</p>
+        <ul>
+          <li><b>气质</b> 有攻击性的产品发布页</li>
+          <li><b>标签</b> 巨型裁切 · 弧形数据 · 薄荷绿</li>
+        </ul>
+        <a class="open" href="/design/b.html" target="_blank">打开 →</a>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="shot">
+        <iframe src="/design/c.html" title="方向 C 预览" loading="lazy"></iframe>
+        <a href="/design/c.html" target="_blank" aria-label="打开方向 C"></a>
+        <span class="hint">打开全屏 →</span>
+      </div>
+      <div class="body">
+        <span class="tag">方向 C</span>
+        <h2>纯字排</h2>
+        <p>一张都不画。数字排成规格表，像实验室的检测报告。最冒险的一个，也最不像仪表盘。</p>
+        <ul>
+          <li><b>气质</b> 瑞士排版 / 技术白皮书</li>
+          <li><b>标签</b> 无图 · 长表 · 一个朱红</li>
+        </ul>
+        <a class="open" href="/design/c.html" target="_blank">打开 →</a>
+      </div>
+    </article>
+  </div>
+
+  <footer>选好之后我把边和云两个应用整套重做，包括各个功能页。</footer>
+</div>
+
+<script>
+// 缩略图按容器宽度缩放，保证整页都能塞进卡片
+function fit() {
+  document.querySelectorAll(".shot").forEach((s) => {
+    const f = s.querySelector("iframe");
+    if (f) f.style.setProperty("--s", (s.clientWidth / 1440).toFixed(4));
+  });
+}
+addEventListener("resize", fit);
+fit();
+</script>
+</body>
+</html>

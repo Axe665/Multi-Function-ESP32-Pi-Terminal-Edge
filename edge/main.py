@@ -21,7 +21,7 @@ DESCRIPTION = """\
 async def _ticker() -> None:
     """演示用：每 5 分钟补一个窗口，省得界面看起来像断了线。
 
-    EDGE_SIM=0 关掉；没有演示设备（mt-3b-01）时也不会启动。
+    EDGE_SIM=0 关掉；库里没有任何设备时不会启动。
     """
     while True:
         await asyncio.sleep(config.WINDOW_MS / 1000)
@@ -31,8 +31,13 @@ async def _ticker() -> None:
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
     task = None
-    if os.environ.get("EDGE_SIM", "1") != "0" and store.device("mt-3b-01"):
-        await asyncio.to_thread(sim.backfill, 288)
+    # 有任何设备就走演示补数；不能再写死某个 device_id
+    if os.environ.get("EDGE_SIM", "1") != "0" and store.devices():
+        try:
+            n = await asyncio.to_thread(sim.backfill, 288)
+            print(f"sim: 启动补数 {n} 个窗口", flush=True)
+        except Exception as e:  # noqa: BLE001
+            print(f"sim: 启动补数失败 {e}", flush=True)
         task = asyncio.create_task(_ticker())
 
     # 主通道：MQTT + mTLS（配了 EDGE_MQTT_HOST 才起）

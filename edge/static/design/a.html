@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>边节点 · 方向 A · 一句话即版式</title>
+<link rel="stylesheet" href="/app.css">
+<style>
+  :root {
+    --ink: #f4f2ec;
+    --ground: #08090b;
+    --dim: #8b8a84;
+    --line: #1c1e21;
+    --hot: #e8b45c;
+  }
+  @font-face {
+    font-family: "Archivo";
+    src: url("/fonts/archivo.woff2") format("woff2");
+    font-weight: 400 600;
+    font-display: swap;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--ground); color: var(--ink); }
+  body {
+    font-family: "Archivo", "Noto Sans SC", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  .wrap { padding: 0 clamp(20px, 5vw, 72px); }
+
+  /* ---------- 顶部 ---------- */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 28px 0 0; font-size: 13px; color: var(--dim);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; color: var(--ink); }
+  .brand svg { width: 20px; height: 20px; fill: none; stroke: var(--hot); stroke-width: 1.4; stroke-linecap: round; }
+  .brand b { font-weight: 600; letter-spacing: -0.01em; }
+  header nav { display: flex; gap: 22px; }
+  header nav a { color: var(--dim); text-decoration: none; }
+  header nav a:hover { color: var(--ink); }
+
+  /* ---------- 第一屏：那句话就是版式 ---------- */
+  .hero { padding: clamp(48px, 9vh, 120px) 0 clamp(40px, 7vh, 90px); }
+  h1 {
+    margin: 0;
+    font-size: clamp(44px, 8.4vw, 148px);
+    line-height: 0.94;
+    letter-spacing: -0.045em;
+    font-weight: 500;
+    text-wrap: balance;
+  }
+  h1 .row { display: block; }
+  h1 .slot {
+    display: inline-block; vertical-align: baseline;
+    width: 1.55em; height: 0.74em;
+    margin: 0 0.06em; border-radius: 999px;
+    overflow: hidden; position: relative; transform: translateY(0.06em);
+    background: #101214;
+  }
+  h1 .slot canvas { width: 100%; height: 100%; display: block; }
+  h1 em { font-style: normal; color: var(--hot); }
+
+  .hero-foot {
+    margin-top: clamp(28px, 5vh, 56px);
+    display: flex; align-items: flex-end; justify-content: space-between; gap: 32px;
+    flex-wrap: wrap;
+  }
+  .lede { max-width: 34ch; font-size: clamp(15px, 1.3vw, 18px); line-height: 1.6; color: var(--dim); }
+  .lede b { color: var(--ink); font-weight: 500; }
+  .cta {
+    display: inline-flex; align-items: center; gap: 10px;
+    height: 46px; padding: 0 22px; border-radius: 999px;
+    background: var(--ink); color: #08090b; text-decoration: none;
+    font-size: 14px; font-weight: 500; white-space: nowrap;
+  }
+  .cta span { display: inline-block; transition: transform .2s; }
+  .cta:hover span { transform: translateX(4px); }
+
+  /* ---------- 数字脊柱 ---------- */
+  .spine { border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(4, 1fr); }
+  .spine div { padding: 26px 0 30px; border-left: 1px solid var(--line); padding-left: 24px; }
+  .spine div:first-child { border-left: 0; padding-left: 0; }
+  .spine small { display: block; font-size: 12px; color: var(--dim); margin-bottom: 8px; }
+  .spine b {
+    font-size: clamp(30px, 3.4vw, 46px); font-weight: 400;
+    font-variant-numeric: tabular-nums; letter-spacing: -0.03em;
+  }
+  .spine u { text-decoration: none; color: var(--dim); font-size: 14px; margin-left: 4px; }
+
+  /* ---------- 三台设备 ---------- */
+  .section { padding-top: clamp(60px, 10vh, 130px); }
+  .kicker { font-size: 12px; color: var(--dim); margin-bottom: 18px; }
+  .devices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border-top: 1px solid var(--line); }
+  .device { padding: 22px 24px 0 0; }
+  .device h3 { margin: 0; font-size: 20px; font-weight: 500; letter-spacing: -0.01em; }
+  .device .id { font-size: 12px; color: var(--dim); margin-top: 4px; }
+  .device .mods { font-size: 12px; color: var(--dim); margin-top: 10px; }
+  .device .mods i { font-style: normal; color: var(--hot); }
+  .device ul { list-style: none; margin: 16px 0 0; padding: 0; font-size: 14px; }
+  .device li { display: flex; justify-content: space-between; padding: 9px 0; border-top: 1px solid #141619; font-variant-numeric: tabular-nums; }
+  .device li span { color: var(--dim); }
+
+  /* ---------- 建议流 ---------- */
+  .advice { border-top: 1px solid var(--line); }
+  .advice a { display: grid; grid-template-columns: 4ch 1fr auto; gap: 20px; align-items: baseline;
+    padding: 22px 0; border-bottom: 1px solid #141619; color: inherit; text-decoration: none; }
+  .advice a:hover { background: #0d0f11; }
+  .advice i { font-style: normal; font-size: 12px; color: var(--hot); font-variant-numeric: tabular-nums; }
+  .advice p { margin: 0; font-size: clamp(16px, 1.5vw, 21px); line-height: 1.45; letter-spacing: -0.01em; }
+  .advice time { font-size: 12px; color: var(--dim); font-variant-numeric: tabular-nums; }
+
+  .close { padding: clamp(70px, 12vh, 150px) 0 40px; border-top: 1px solid var(--line); }
+  .close p { margin: 0; font-size: clamp(28px, 4.2vw, 64px); line-height: 1.05; letter-spacing: -0.035em; max-width: 18ch; }
+  .close p em { font-style: normal; color: var(--hot); }
+  footer { display: flex; justify-content: space-between; padding: 24px 0 40px; font-size: 12px; color: var(--dim); border-top: 1px solid var(--line); }
+
+  @media (max-width: 860px) {
+    .spine { grid-template-columns: repeat(2, 1fr); }
+    .spine div:nth-child(3) { border-left: 0; padding-left: 0; }
+    .devices { grid-template-columns: 1fr; }
+    .device { padding-right: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <svg viewBox="0 0 20 20"><path d="M4 3v14M4 6h7M4 13h7M11 6v7"/><circle cx="16" cy="6" r="1.6"/><circle cx="16" cy="13" r="1.6"/></svg>
+      <b>Modular Terminal</b>
+    </div>
+    <nav>
+      <a href="#devices">设备</a><a href="#advice">建议</a><a href="#close">边界</a>
+    </nav>
+  </header>
+
+  <section class="hero">
+    <h1>
+      <span class="row">三块板子，<span class="slot"><canvas id="ring"></canvas></span>汇成一环</span>
+      <span class="row">原始数据<em>不出门</em></span>
+    </h1>
+
+    <div class="hero-foot">
+      <p class="lede">
+        三台树莓派各接不同的模块，每 5 分钟把<b>假名聚合</b>推上来。
+        低于 k=5 的桶在端侧就被丢掉，边看到的只有均值、斜率和样本量。
+      </p>
+      <a class="cta" href="#devices">看这台边节点 <span>→</span></a>
+    </div>
+  </section>
+
+  <section class="spine" id="kpis">
+    <div><small>在线终端</small><b>—</b></div>
+    <div><small>24 h 批次</small><b>—</b></div>
+    <div><small>被拦下的桶</small><b>—</b></div>
+    <div><small>待上云</small><b>—</b></div>
+  </section>
+
+  <section class="section" id="devices">
+    <p class="kicker">此刻接在边上的三块板子</p>
+    <div class="devices" id="devices-grid"></div>
+  </section>
+
+  <section class="section" id="advice">
+    <p class="kicker">最近生成的三条建议</p>
+    <div class="advice" id="advice-list"></div>
+  </section>
+
+  <section class="close" id="close">
+    <p>k ≥ 5 不是一句口号，是一道<em>会真的丢掉数据</em>的闸门。</p>
+    <footer>
+      <span>edge-lab-01 · 5 分钟窗口</span>
+      <span>数据只到边上，不出内网</span>
+    </footer>
+  </section>
+</div>
+
+<script>
+const fmt = (n, d = 0) => Number(n).toLocaleString("zh-CN", { minimumFractionDigits: d, maximumFractionDigits: d });
+
+/* 头图里那个胶囊槽：一圈点，速度跟着批次量走 */
+(() => {
+  const c = document.getElementById("ring");
+  const ctx = c.getContext("2d");
+  let dpr = 1, w = 0, h = 0, t0 = performance.now();
+  const dots = Array.from({ length: 46 }, (_, i) => ({ a: (i / 46) * Math.PI * 2, r: 0.9 + Math.random() * 0.1 }));
+  function size() {
+    dpr = Math.min(devicePixelRatio || 1, 2);
+    w = c.clientWidth; h = c.clientHeight;
+    c.width = w * dpr; c.height = h * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  new ResizeObserver(size).observe(c); size();
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function draw(now) {
+    const t = (now - t0) / 1000;
+    ctx.clearRect(0, 0, w, h);
+    const cx = w / 2, cy = h / 2, R = Math.min(w, h) * 0.33;
+    ctx.strokeStyle = "rgba(232,180,92,.28)";
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.stroke();
+    dots.forEach((d, i) => {
+      const a = d.a + (reduce ? 0 : t * 0.9);
+      const x = cx + Math.cos(a) * R * d.r, y = cy + Math.sin(a) * R * d.r;
+      const near = Math.cos(a) > 0.6 ? 1 : 0.35;
+      ctx.fillStyle = `rgba(232,180,92,${0.35 + near * 0.6})`;
+      ctx.beginPath(); ctx.arc(x, y, i % 7 === 0 ? 1.8 : 1.1, 0, Math.PI * 2); ctx.fill();
+    });
+    if (!reduce) requestAnimationFrame(draw);
+  }
+  requestAnimationFrame(draw);
+})();
+
+fetch("/api/v1/overview").then((r) => r.json()).then((o) => {
+  const cells = document.querySelectorAll("#kpis b");
+  cells[0].innerHTML = `${o.devices_online}<u>/ ${o.devices_total}</u>`;
+  cells[1].innerHTML = fmt(o.batches_24h);
+  cells[2].innerHTML = fmt(o.suppressed_buckets);
+  cells[3].innerHTML = `${o.pending_reports}<u>份</u>`;
+
+  document.getElementById("devices-grid").innerHTML = o.lanes.map((l) => `
+    <article class="device">
+      <h3>${l.name.split("·")[0].trim()}</h3>
+      <div class="id">${l.device_id}</div>
+      <div class="mods">模块 <i>${l.modules.join(" / ")}</i> · 最小 k <i>${l.k}</i></div>
+      <ul>${l.metrics.map((m) => `<li><span>${m.label}</span><b>${fmt(m.mean, m.decimals)} ${m.unit}</b></li>`).join("")}</ul>
+    </article>`).join("");
+
+  fetch("/api/v1/advice?limit=3").then((r) => r.json()).then((rows) => {
+    document.getElementById("advice-list").innerHTML = rows.map((a, i) => `
+      <a href="#">
+        <i>0${i + 1}</i>
+        <p>${a.text}</p>
+        <time>${new Date(a.created_at).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</time>
+      </a>`).join("");
+  });
+});
+</script>
+</body>
+</html>
