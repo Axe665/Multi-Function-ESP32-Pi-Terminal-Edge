@@ -3,3 +3,6 @@ __pycache__/
 data/
 .env
 .taste-skill/
+
+# broker 私钥不进仓库
+docker/mosquitto/certs/
