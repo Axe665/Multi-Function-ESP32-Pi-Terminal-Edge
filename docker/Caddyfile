@@ -1,0 +1,23 @@
+{
+	# 边节点的对外入口：只绑本机，公网访问靠前面的反向隧道或 VPN
+	admin :8001
+
+	# 端 → 边的摄取（HTTP 通道，MQTT 直连 mosquitto:8883）
+	@ingest path /api/v1/ingest/*
+	handle @ingest {
+		reverse_proxy ingest:8001
+	}
+
+	# 管理 API：查询、配对、证书、设置、上云
+	handle /api/* {
+		reverse_proxy api:8001
+	}
+
+	# 其余是静态前端
+	handle {
+		root * /srv/web
+		encode gzip
+		try_files {path} /index.html
+		file_server
+	}
+}

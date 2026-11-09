@@ -1,46 +1,90 @@
-services:
-  edge:
-    build: ..
-    image: modular-terminal-edge:1.0.0
-    container_name: mt-edge
-    restart: unless-stopped
-    ports:
-      # 只绑本机：管理台不对外，需要外网访问时在前面加一层 Caddy + mTLS
-      - "127.0.0.1:8001:8001"
-    volumes:
-      - ../data:/app/data
-    environment:
-      EDGE_ID: ${EDGE_ID:-edge-lab-01}
-      EDGE_NAME: ${EDGE_NAME:-实验室边节点}
-      # 端 → 边 走 MQTT；配了主机就连 broker，连不上不影响 HTTPS 摄取
-      EDGE_MQTT_HOST: ${EDGE_MQTT_HOST:-mosquitto}
-      EDGE_MQTT_PORT: ${EDGE_MQTT_PORT:-8883}
-      EDGE_MQTT_CA: /app/certs/ca.crt
-      EDGE_MQTT_CERT: /app/certs/edge.crt
-      EDGE_MQTT_KEY: /app/certs/edge.key
-      EDGE_CLOUD_URL: ${EDGE_CLOUD_URL:-}
-      EDGE_CLOUD_TOKEN: ${EDGE_CLOUD_TOKEN:-}
-      EDGE_INGEST_TOKEN: ${EDGE_INGEST_TOKEN:-}
-      EDGE_ADMIN_TOKEN: ${EDGE_ADMIN_TOKEN:-}
-      EDGE_K_MIN: ${EDGE_K_MIN:-5}
-      TZ: Asia/Shanghai
-    # cgroup 限额：边只做聚合和查询，给 1G 足够
-    deploy:
-      resources:
-        limits:
-          memory: 1g
+# 边节点：mosquitto + ingest + api + web（文档 §5.1 的四服务）
+# 数据落 ./data（SQLite WAL，文档要求边保持 SQLite，不换 PG）
+x-edge: &edge
+  build: ..
+  image: modular-terminal-edge:2.0.0
+  restart: unless-stopped
+  depends_on:
+    mosquitto:
+      condition: service_started
+  volumes:
+    - ../data:/app/data
+    - ../data/mqtt-certs:/app/certs:ro
+  environment: &edge-env
+    EDGE_ID: ${EDGE_ID:-edge-lab-01}
+    EDGE_NAME: ${EDGE_NAME:-实验室边节点}
+    EDGE_MQTT_HOST: ${EDGE_MQTT_HOST:-mosquitto}
+    EDGE_MQTT_PORT: ${EDGE_MQTT_PORT:-8883}
+    EDGE_MQTT_CA: /app/certs/ca.crt
+    EDGE_MQTT_CERT: /app/certs/edge.crt
+    EDGE_MQTT_KEY: /app/certs/edge.key
+    EDGE_CLOUD_URL: ${EDGE_CLOUD_URL:-}
+    EDGE_CLOUD_TOKEN: ${EDGE_CLOUD_TOKEN:-}
+    EDGE_INGEST_TOKEN: ${EDGE_INGEST_TOKEN:-}
+    EDGE_ADMIN_TOKEN: ${EDGE_ADMIN_TOKEN:-}
+    EDGE_K_MIN: ${EDGE_K_MIN:-5}
+    EDGE_SIM: ${EDGE_SIM:-1}
+    TZ: Asia/Shanghai
 
-  # 主通道 broker。证书用 scripts/make_broker_cert.py 签，见 mosquitto/mosquitto.conf
+services:
+  # 主通道 broker：8883 mTLS 给设备，8884 只给内网管理
   mosquitto:
     image: eclipse-mosquitto:2
     container_name: mt-mqtt
     restart: unless-stopped
     ports:
       - "8883:8883"
+      # 8884（内网管理）暂未启用：管理面走 HTTP，不需要第二个 listener
     volumes:
       - ./mosquitto:/mosquitto/config:ro
       - ../data/mqtt:/mosquitto/data
+      - ../data/mqtt-certs:/mosquitto/certs:ro
     deploy:
       resources:
         limits:
           memory: 256m
+
+  # 写入口：MQTT 订阅 + HTTP 摄取 + 演示补数 + 定时上云 + mDNS
+  ingest:
+    <<: *edge
+    container_name: mt-edge-ingest
+    command: ["python", "-m", "uvicorn", "edge.ingest_main:app", "--host", "0.0.0.0", "--port", "8001"]
+    ports:
+      - "8885:8001"   # 只需给本机的 mosquitto 之外的调试用，正式流量走 web
+    deploy:
+      resources:
+        limits:
+          memory: 768m
+
+  # 查询与管理：不连 MQTT，不跑定时任务
+  api:
+    <<: *edge
+    container_name: mt-edge-api
+    command: ["python", "-m", "uvicorn", "edge.api_main:app", "--host", "0.0.0.0", "--port", "8001"]
+    environment:
+      <<: *edge-env
+      EDGE_SIM: "0"
+    deploy:
+      resources:
+        limits:
+          memory: 768m
+
+  # 静态前端 + 反代（文档 §5.1 的 web）
+  web:
+    image: caddy:2-alpine
+    container_name: mt-edge-web
+    restart: unless-stopped
+    ports:
+      # 管理台不对外，需要外网时在前面加隧道或 VPN
+      - "127.0.0.1:8001:8001"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../edge/static:/srv/web:ro
+      - ../data/caddy:/data
+    depends_on:
+      - ingest
+      - api
+    deploy:
+      resources:
+        limits:
+          memory: 128m

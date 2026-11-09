@@ -145,7 +145,7 @@ MQTT 真实报文往返、退避序列与保留期清理。
 
 | 文档条目 | 要求 | 现状 |
 |---|---|---|
-| §5.1 部署形态 | Compose 四服务 | **部分**：ingest/api/web 合成一个进程 + mosquitto；单机下没必要拆四个容器 |
+| §5.1 部署形态 | Compose 四服务 | ✅ `docker/compose.yml` 起 mosquitto + ingest + api + web 四个服务；ingest 与 api 共用镜像、按角色挂不同路由 |
 | §5.2 接入与主题 | 5 个主题、QoS1、retained status、幂等 | ✅ 全部实现，ACK 回执带 batch_id |
 | §5.3 存储 | devices/telemetry/aggregates/advice/word_freq | ✅ 另加 catalog、certs、revoked、audit、outbox |
 | §5.4 分析 | 趋势 / 热力 / 词云 / 异常 | ✅ 四项都在页面上，数字全部重算 |
