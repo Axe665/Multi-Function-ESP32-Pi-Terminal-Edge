@@ -1,7 +1,7 @@
-"""演示数据生成器：3 台终端（1 带屏 + 2 无头）× 10 个用户 × 7 天 × 5 min。
+"""演示数据生成器：每次生成都重新抽一组板子与模块。
 
-指标名与终端仓的列名一致（systolic / temperature_c / counter_delta …），
-噪声用固定种子，重复生成结果一致。
+三块板子接什么模块是随机的 —— 带屏机也一样。指标名、单位、所属表
+随模块一起上报，边登记进 catalog，界面全部照它渲染。
 """
 from __future__ import annotations
 
@@ -11,16 +11,18 @@ import math
 import random
 from typing import Any
 
-from . import config, metrics, store
+from . import catalog, config, modules, store
 
 NOISE = {
     "systolic": 1.1, "diastolic": 0.9, "pulse": 1.2,
     "temperature_c": 0.32, "humidity_rh": 1.1, "light_lux": 260.0,
+    "battery_v": 0.03, "battery_pct": 0.4,
     "counter_delta": 0.8, "counter_rate": 0.15,
+    "intrusion_count": 0.12, "frames": 0.9,
 }
 
-# 每个指标在一天里的形状（t = 小时 0–24）
-def _value(metric: str, t: float, day_index: int, module_id: int) -> float:
+
+def _value(metric: str, t: float, day_index: int) -> float:
     h = t % 24
     if metric == "systolic":
         return 126 + 5.5 * math.exp(-((h - 7.5) ** 2) / 3.2) + 1.8 * math.exp(-((h - 20) ** 2) / 6) + day_index * 0.12
@@ -28,26 +30,28 @@ def _value(metric: str, t: float, day_index: int, module_id: int) -> float:
         return 78 + 2.4 * math.exp(-((h - 7.5) ** 2) / 4) + day_index * 0.05
     if metric == "pulse":
         return 69 + 6 * math.exp(-((h - 8) ** 2) / 5) + 4 * math.exp(-((h - 18) ** 2) / 6)
-    if metric == "temperature_c" and module_id == 80:
-        return 23.4 + 1.6 * math.sin((h - 9) / 24 * 2 * math.pi)
-    if metric == "humidity_rh" and module_id == 80:
-        return 52 - 6 * math.sin((h - 9) / 24 * 2 * math.pi)
-    if metric == "temperature_c" and module_id == 129:
-        return 24.5 + 4.2 * math.sin((h - 10) / 24 * 2 * math.pi)
-    if metric == "humidity_rh" and module_id == 129:
-        return 68 - 9 * math.sin((h - 10) / 24 * 2 * math.pi)
+    if metric == "temperature_c":
+        return 23.4 + 3.1 * math.sin((h - 9) / 24 * 2 * math.pi) + day_index * 0.02
+    if metric == "humidity_rh":
+        return 56 - 8 * math.sin((h - 9) / 24 * 2 * math.pi)
     if metric == "light_lux":
-        return max(0.0, 28000 * math.sin((h - 6.2) / 11.6 * math.pi)) if 6.2 < h < 18 else 0.0
+        return max(0.0, 26000 * math.sin((h - 6.2) / 11.6 * math.pi)) if 6.2 < h < 18 else 0.0
+    if metric == "battery_v":
+        return 3.92 - day_index * 0.004 + 0.02 * math.sin(h / 24 * 2 * math.pi)
+    if metric == "battery_pct":
+        return 86 - day_index * 0.35
     if metric == "counter_delta":
-        # 计数增量：白天平稳，晚间做饭时段尖峰
         return 9 + 7 * math.exp(-((h - 8) ** 2) / 2.2) + 9 * math.exp(-((h - 19) ** 2) / 3)
     if metric == "counter_rate":
         return (9 + 7 * math.exp(-((h - 8) ** 2) / 2.2) + 9 * math.exp(-((h - 19) ** 2) / 3)) / 5
-    return 0.0
+    if metric == "intrusion_count":
+        return max(0.0, 0.6 * math.exp(-((h - 2) ** 2) / 3))
+    if metric == "frames":
+        return 4 + 3 * (h % 6 < 1)
+    return 10.0
 
 
 def _spike(metric: str, window_start: int) -> float:
-    """人工注入的异常，保证演示里一定看得到告警。"""
     rnd = random.Random(f"spike-{metric}-{window_start}")
     return rnd.uniform(2.6, 3.4) if rnd.random() < 0.004 else 0.0
 
@@ -57,12 +61,16 @@ ADVICE = {
         ("收缩压连续三个窗口高于基线，建议复测并与医生确认", "alert", 0.81),
         ("近 7 天收缩压缓慢上升，建议复测并关注晨间读数", "watch", 0.72),
         ("脉搏与血压同步平稳，未见异常", "info", 0.78),
-        ("舒张压夜间低于基线，建议关注睡眠时长", "watch", 0.63),
     ],
     80: [
         ("盆土温度偏低，建议检查摆放位置", "watch", 0.64),
         ("环境湿度不足，建议补水并观察叶片", "watch", 0.67),
         ("盆栽环境平稳，与昨日同一时段接近", "info", 0.75),
+    ],
+    82: [
+        ("红外围界夜间触发次数偏高，建议核对布防时段", "watch", 0.66),
+        ("围界电池电压下降，建议更换电池", "alert", 0.71),
+        ("围界运行平稳，未见异常触发", "info", 0.79),
     ],
     129: [
         ("温室内温度偏高，建议开启通风", "watch", 0.69),
@@ -74,16 +82,24 @@ ADVICE = {
         ("夜间计数速率偏高，建议核对用电设备", "watch", 0.62),
         ("计数增量平稳，未见异常尖峰", "info", 0.77),
     ],
+    131: [
+        ("抓拍帧数下降，建议检查存储空间", "watch", 0.63),
+        ("相机运行平稳，电量充足", "info", 0.76),
+    ],
 }
 
+GENERIC_ADVICE = [
+    ("指标出现短时波动，建议对照设备侧记录复核", "watch", 0.6),
+    ("数据平稳，未见异常", "info", 0.7),
+]
 
-def _advice(metric: str, module_id: int, z: float, ts: int) -> dict[str, Any] | None:
-    texts = ADVICE.get(module_id, [])
-    if not texts:
-        return None
-    rnd = random.Random(f"{metric}|{ts}")
-    if abs(z) >= 2.5:
-        t = texts[0] if texts[0][1] == "alert" else texts[1]
+
+def _advice(module_id: int, z: float, ts: int) -> dict[str, Any] | None:
+    texts = ADVICE.get(module_id, GENERIC_ADVICE)
+    rnd = random.Random(f"{module_id}|{ts}")
+    # 告警门槛比异常清单（2.5σ）更严：提醒要值钱
+    if abs(z) >= 3.0:
+        t = texts[0]
     elif abs(z) >= 1.5 and rnd.random() < 0.5:
         t = texts[1] if len(texts) > 2 else texts[0]
     elif rnd.random() < 0.04:
@@ -93,73 +109,98 @@ def _advice(metric: str, module_id: int, z: float, ts: int) -> dict[str, Any] | 
     return {"text": t[0], "risk": t[1], "confidence": t[2], "source": "local"}
 
 
-def generate(days: int = 7) -> dict[str, int]:
-    rnd = random.Random(20261109)
+def fleet(seed: int | None = None) -> list[dict]:
+    """抽三块板子（1 带屏 + 2 无头），各自接 1–2 个模块。
+
+    seed 固定时结果可复现（测试用）；不传就每次不同 —— 模块组合本来就不该是常量。
+    """
+    rnd = random.Random(seed)
+    screens = [b for b in modules.BOARDS if not b["headless"]]
+    headless = [b for b in modules.BOARDS if b["headless"]]
+    boards = [rnd.choice(screens)] + rnd.sample(headless, k=min(2, len(headless)))
+    out = []
+    for board in boards:
+        pool = [m for m in modules.CAPS if m != 82]  # 围界偶发，不进默认池
+        if rnd.random() < 0.35:
+            pool.append(82)
+        picked = rnd.sample(sorted(pool), k=rnd.choice([1, 1, 2]))
+        # 带屏机至少要有一个能看的模块
+        if not board["headless"] and not set(picked) & {83, 80, 129}:
+            picked[0] = 83
+        scenes = {modules.CAPS[m].scene for m in picked if m in modules.CAPS}
+        out.append({
+            **board,
+            "modules": sorted(set(picked)),
+            "scene": scenes.pop() if len(scenes) == 1 else "mixed",
+        })
+    return out
+
+
+def _register(device: dict) -> None:
+    store.upsert_device(device["device_id"], device["name"], device["scene"],
+                        device["fw"], device["modules"],
+                        cert_fp=hashlib.sha256(device["device_id"].encode()).hexdigest()[:16])
+    for row in modules.metrics_for(device["modules"]):
+        catalog.upsert(device["device_id"], row["metric"], row["module_id"],
+                       row["package_id"], row["label"], row["unit"], row["table"],
+                       row["decimals"])
+
+
+def generate(days: int = 7, seed: int | None = None) -> dict[str, int]:
+    rnd = random.Random(seed if seed is not None else 20261109)
     now = store.now_ms()
     window = config.WINDOW_MS
     end = now // window * window
     start = end - days * 24 * 3600_000
+    devices = fleet(seed)
 
-    for d in metrics.DEVICES:
-        store.upsert_device(d["device_id"], d["name"], d["scene"], d["fw"],
-                            d["modules"], cert_fp=_fp(d["device_id"]))
-
-    # 先算数值，再算 z（相对同小时历史），z 不是编的
-    base: dict[str, list[float]] = {}
-    for d in metrics.DEVICES:
-        for m in metrics.for_device(d["device_id"]):
-            for ts in range(start, end, window):
-                h = (ts / 3600_000) % 24
-                day_index = (ts - start) / 86_400_000
-                v = _value(m.key, h, day_index, m.module_id) + rnd.gauss(0, NOISE[m.key])
-                z_spike = _spike(m.key, ts)
-                if z_spike:
-                    v += z_spike * NOISE[m.key]
-                base.setdefault(f"{d['device_id']}|{m.key}|{int(h)}", []).append(v)
+    # 先清库，再登记本轮抽到的设备，最后灌数据（三个短事务，避免锁库）
+    with store.connect() as conn:
+        for table in ("telemetry", "aggregates", "advice", "word_freq",
+                      "catalog", "counters", "devices", "outbox"):
+            conn.execute(f"DELETE FROM {table}")
+    for d in devices:
+        _register(d)
 
     inserted = 0
     suppressed = 0
     with store.connect() as conn:
-        conn.execute("DELETE FROM telemetry")
-        conn.execute("DELETE FROM aggregates")
-        conn.execute("DELETE FROM advice")
-        conn.execute("DELETE FROM word_freq")
-        conn.execute("DELETE FROM counters")
-
-        for d in metrics.DEVICES:
-            dev = d["device_id"]
+        for device in devices:
+            dev = device["device_id"]
+            rows = modules.metrics_for(device["modules"])
             for ts in range(start, end, window):
                 h = (ts / 3600_000) % 24
                 day_index = (ts - start) / 86_400_000
                 aggs, adv_out = [], []
-                # 10 个用户里多数在报；抑制按「指标 × 窗口」发生
                 subjects = 8 + rnd.randint(0, 2)
-                for m in metrics.for_device(dev):
+                for row in rows:
                     if rnd.random() < 0.05:
                         suppressed += 1
                         continue
-                    v = _value(m.key, h, day_index, m.module_id) + rnd.gauss(0, NOISE[m.key])
-                    z_spike = _spike(m.key, ts)
+                    metric = row["metric"]
+                    v = _value(metric, h, day_index) + rnd.gauss(0, NOISE.get(metric, 0.5))
+                    z_spike = _spike(metric, ts)
                     if z_spike:
-                        v += z_spike * NOISE[m.key]
-                    if m.key == "light_lux":
+                        v += z_spike * NOISE.get(metric, 0.5)
+                    if metric in ("light_lux", "counter_delta", "counter_rate",
+                                  "intrusion_count", "frames"):
                         v = max(0.0, v)
-                    if m.key in ("counter_delta", "counter_rate"):
-                        v = max(0.0, v)
-                    hist = base[f"{dev}|{m.key}|{int(h)}"]
-                    mu = sum(hist) / len(hist)
-                    sd = math.sqrt(sum((x - mu) ** 2 for x in hist) / len(hist))
-                    # 噪声地板：夜间光照这类同小时几乎恒定的指标不能让 z 被 sd≈0 放大
-                    sd = max(sd, NOISE[m.key] * 0.9, 1e-6)
+                    # z：同小时的历史均值与标准差
+                    hist = [b for b in _baseline(metric, h, day_index, devices, window, start)]
+                    mu = sum(hist) / len(hist) if hist else v
+                    sd = math.sqrt(sum((x - mu) ** 2 for x in hist) / len(hist)) if hist else 0.0
+                    sd = max(sd, NOISE.get(metric, 0.5) * 0.9, 1e-6)
                     z = (v - mu) / sd
-                    v_prev = _value(m.key, h - window / 3600_000, day_index, m.module_id)
                     aggs.append({
-                        "metric": m.key, "module_id": m.module_id,
+                        "metric": metric, "module_id": row["module_id"],
+                        "label": row["label"], "unit": row["unit"], "table": row["table"],
+                        "package_id": row["package_id"], "decimals": row["decimals"],
                         "n_subjects": subjects, "n_samples": subjects * rnd.randint(38, 44),
-                        "mean": round(v, 3), "slope": round(v - v_prev, 3),
+                        "mean": round(v, 3),
+                        "slope": round(v - _value(metric, h - window / 3600_000, day_index), 3),
                         "z": round(z, 2), "k": subjects,
                     })
-                    a = _advice(m.key, m.module_id, z, ts)
+                    a = _advice(row["module_id"], z, ts)
                     if a:
                         adv_out.append(a)
 
@@ -167,7 +208,7 @@ def generate(days: int = 7) -> dict[str, int]:
                     conn.execute("UPDATE devices SET last_seen=? WHERE device_id=?",
                                  (ts + window, dev))
                     continue
-                batch_id = hashlib.sha256(f"{dev}|{ts}".encode()).hexdigest()[:16]
+                batch = hashlib.sha256(f"{dev}|{ts}".encode()).hexdigest()[:16]
                 payload = {
                     "schema": "orpi.telemetry.v1", "device_id": dev,
                     "edge_id": config.EDGE_ID, "sent_at": ts + window,
@@ -180,7 +221,7 @@ def generate(days: int = 7) -> dict[str, int]:
                     """INSERT OR REPLACE INTO telemetry
                        (device_id, batch_id, ts_from, ts_to, payload, received_at)
                        VALUES(?,?,?,?,?,?)""",
-                    (dev, batch_id, ts, ts + window,
+                    (dev, batch, ts, ts + window,
                      json.dumps(payload, ensure_ascii=False), ts + window))
                 for a in aggs:
                     conn.execute(
@@ -190,6 +231,8 @@ def generate(days: int = 7) -> dict[str, int]:
                            VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
                         (dev, a["metric"], a["module_id"], ts, ts + window,
                          a["n_subjects"], a["n_samples"], a["mean"], a["slope"], a["z"], a["k"]))
+                    catalog.upsert(dev, a["metric"], a["module_id"], a["package_id"],
+                               a["label"], a["unit"], a["table"], a["decimals"], conn=conn)
                 for a in adv_out:
                     conn.execute(
                         """INSERT INTO advice(device_id, text, risk, confidence, source, created_at)
@@ -202,11 +245,18 @@ def generate(days: int = 7) -> dict[str, int]:
     store.bump("suppressed_buckets", suppressed)
     from . import analysis
     analysis.rebuild_words()
-    return {"batches": inserted, "suppressed": suppressed, "days": days}
+    return {"batches": inserted, "suppressed": suppressed, "days": days,
+            "devices": len(devices)}
 
 
-def _fp(device_id: str) -> str:
-    return hashlib.sha256(f"device:{device_id}".encode()).hexdigest()[:16]
+def _baseline(metric: str, hour: float, day_index: float, devices: list,
+              window: int, start: int):
+    """同一小时、相邻几天的取值，用来算 z。"""
+    for back in (1, 2, 3):
+        d = day_index - back
+        if d < 0:
+            continue
+        yield _value(metric, hour, d) + random.Random(f"b|{metric}|{int(hour)}|{d}").gauss(0, NOISE.get(metric, 0.5))
 
 
 def append_window(ts: int | None = None) -> int:
@@ -214,22 +264,27 @@ def append_window(ts: int | None = None) -> int:
     now = ts or (store.now_ms() // config.WINDOW_MS * config.WINDOW_MS)
     rnd = random.Random(now)
     n = 0
-    for d in metrics.DEVICES:
+    for d in store.devices():
         dev = d["device_id"]
+        rows = catalog.for_device(dev)
+        if not rows:
+            continue
         aggs, adv_out = [], []
         h = (now / 3600_000) % 24
         subjects = 8 + rnd.randint(0, 2)
-        for m in metrics.for_device(dev):
-            v = _value(m.key, h, 7, m.module_id) + rnd.gauss(0, NOISE[m.key])
-            v = max(0.0, v)
+        for row in rows:
+            metric = row["metric"]
+            v = max(0.0, _value(metric, h, 7) + rnd.gauss(0, NOISE.get(metric, 0.5)))
             z = rnd.gauss(0, 0.8)
             aggs.append({
-                "metric": m.key, "module_id": m.module_id,
+                "metric": metric, "module_id": row["module_id"],
+                "label": row["label"], "unit": row["unit"], "table": row["table_name"],
+                "package_id": row["package_id"], "decimals": row["decimals"],
                 "n_subjects": subjects, "n_samples": subjects * 40,
                 "mean": round(v, 3), "slope": round(rnd.gauss(0, 0.2), 3),
                 "z": round(z, 2), "k": subjects,
             })
-            a = _advice(m.key, m.module_id, z, now)
+            a = _advice(row["module_id"], z, now)
             if a:
                 adv_out.append(a)
         payload = {
@@ -248,7 +303,6 @@ def append_window(ts: int | None = None) -> int:
 
 
 def backfill(max_windows: int = 288) -> int:
-    """把最后一个批次到现在的空窗口补齐，演示环境不会显示成「断线」。"""
     window = config.WINDOW_MS
     current = store.now_ms() // window * window
     with store.connect() as conn:

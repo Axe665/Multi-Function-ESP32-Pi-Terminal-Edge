@@ -18,7 +18,18 @@
 | 字段白名单 `temperature_c` `humidity_rh` `light_lux` `battery_v` `battery_pct` | 直接作为指标 key |
 | `Measurements.systolic/diastolic/pulse` | 直接作为指标 key |
 
-三机布局与方案一致：1 台带屏（83 + 80）+ 2 台无头（129 / 130）。
+三机布局与方案一致：1 台带屏 + 2 台无头。
+
+**模块不是写死的。** 端在 `telemetry` 里带上 `module_id / label / unit / table / decimals`，
+边把它登记进 `catalog` 表（键是 `(device, metric)`）；`status` 主题还可以直接推模块清单。
+换一块板子、插一个新模块、同一台机器换模块，边都不用改代码：
+
+- 新指标第一次出现就出现在 `/api/v1/metrics` 与所有下拉框里
+- 设备的模块列表来自 `status`，不再有 `DEVICES` 常量
+- 演示数据每次 `./run.sh` 都会重抽板子与模块组合（`edge/sim.py` 的 `fleet()`）
+
+`catalog` 表就是「这台设备有哪些指标」的唯一事实来源，分析层、热力图、
+上云报表全部从它取标签和单位。
 
 ![设备](docs/screenshots/devices.png)
 
@@ -82,6 +93,7 @@ HTTPS  POST /ingest/telemetry                                   ← 兜底通道
 | 退避与保留期 | 1/5/30 分钟、2 小时；按天清理过期聚合 | 同上 |
 | 隐私闸门 | k<5 抑制、原始字段整份 422、min/max/subject 不出端 | `tests/test_contracts.py` |
 | 证书校验 | 出站前用同一份契约再验一次 | `cloudpush.send` |
+| 指标目录 | 端报什么就登记什么，前端下拉框动态生成 | `edge/catalog.py` + `/api/v1/metrics` |
 | 磁盘加密 | 设 `EDGE_DB_KEY` 时强制走 SQLCipher，没驱动就拒绝启动 | `store._driver` |
 
 ## 隐私边界
@@ -103,6 +115,7 @@ HTTPS  POST /ingest/telemetry                                   ← 兜底通道
 | 方法 | 路径 | 用途 |
 |---|---|---|
 | POST | `/api/v1/pair/redeem` | 终端拿配对码 + CSR 换 365 天证书 |
+| GET | `/api/v1/metrics` | 端上报过的全部指标（动态，无写死列表） |
 | GET | `/api/v1/ca.crt` | 下发给终端的 CA |
 | GET | `/api/v1/crl.pem` | 吊销列表 |
 | GET | `/api/v1/certs` | 已签发证书 |

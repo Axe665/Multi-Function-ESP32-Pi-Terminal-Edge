@@ -9,15 +9,11 @@ import hashlib
 from collections import defaultdict
 from typing import Any
 
-from . import config, metrics, store
+from . import catalog, config, store
 
 
 def day_of(ms: int) -> str:
     return dt.datetime.fromtimestamp(ms / 1000).strftime("%Y-%m-%d")
-
-
-def _dec(device_id: str, metric: str) -> int:
-    return metrics.decimals(device_id, metric)
 
 
 def daily_aggregates(since_ms: int) -> list[dict[str, Any]]:
@@ -33,11 +29,13 @@ def daily_aggregates(since_ms: int) -> list[dict[str, Any]]:
         buckets[(r["device_id"], r["metric"], day_of(r["ts_from"]))].append(r)
     out = []
     for (dev, met, day), xs in sorted(buckets.items()):
-        m = metrics.get(dev, met)
+        m = catalog.get(dev, met) or {}
         out.append({
             "device_id": dev, "day": day, "metric": met,
-            "module_id": m.module_id if m else 0,
-            "table": m.table if m else "samples",
+            "module_id": m.get("module_id", 0),
+            "label": m.get("label") or met,
+            "unit": m.get("unit") or "",
+            "table": m.get("table_name") or "samples",
             "n_subjects": max(x["n_subjects"] for x in xs),
             "n_samples": sum(x["n_samples"] for x in xs),
             "mean": round(sum(x["mean"] for x in xs) / len(xs), 3),
@@ -88,15 +86,16 @@ def trend(device_id: str, metric: str, hours: int = 24) -> dict[str, Any]:
     hist = store.series(device_id, metric, now - 7 * 24 * 3_600_000, now - span, 3_600_000)
     baseline = sum(p["mean"] for p in hist) / len(hist) if hist else 0.0
 
-    info = metrics.get(device_id, metric)
+    info = catalog.get(device_id, metric) or {}
     if not pts:
         return {"metric": metric, "points": [], "baseline": baseline, "delta": 0.0,
                 "slope": 0.0, "current": 0.0, "k": 0,
-                "unit": info.unit if info else "", "label": info.label if info else metric,
-                "decimals": info.decimals if info else 1,
-                "module_id": info.module_id if info else 0}
+                "unit": info.get("unit", ""), "label": info.get("label") or metric,
+                "decimals": info.get("decimals", 1),
+                "module_id": info.get("module_id", 0)}
 
-    current = pts[-1]["mean"]
+    # 结论里的"平均"必须是窗口平均，不能拿最后一个瞬时点去比 7 天均值
+    current = sum(p["mean"] for p in pts) / len(pts)
     n = len(pts)
     xs = list(range(n))
     mx = sum(xs) / n
@@ -105,11 +104,11 @@ def trend(device_id: str, metric: str, hours: int = 24) -> dict[str, Any]:
     slope = sum((x - mx) * (p["mean"] - my) for x, p in zip(xs, pts)) / denom
     return {
         "metric": metric,
-        "unit": info.unit if info else "",
-        "label": info.label if info else metric,
-        "decimals": info.decimals if info else 1,
-        "module_id": info.module_id if info else 0,
-        "table": info.table if info else "samples",
+        "unit": info.get("unit", ""),
+        "label": info.get("label") or metric,
+        "decimals": info.get("decimals", 1),
+        "module_id": info.get("module_id", 0),
+        "table": info.get("table_name") or "samples",
         "points": pts,
         "current": round(current, 3),
         "baseline": round(baseline, 3),
@@ -123,22 +122,31 @@ def trend(device_id: str, metric: str, hours: int = 24) -> dict[str, Any]:
 def finding(device_id: str) -> dict[str, Any] | None:
     """该设备最近 24h 最值得说的一句话。"""
     best = None
-    for m in metrics.for_device(device_id):
-        t = trend(device_id, m.key, 24)
+    for row in catalog.for_device(device_id):
+        t = trend(device_id, row["metric"], 24)
         if not t["points"]:
             continue
-        score = max(abs(t["delta"]), abs(t["slope"]) * 10)
+        pct = (t["delta"] / t["baseline"] * 100) if t["baseline"] else 0.0
+        z_max = max((abs(p["z"]) for p in t["points"]), default=0.0)
+        # 相对变化与统计显著性取大的那个：绝对值大小不该决定谁上榜
+        score = max(abs(pct), z_max * 5)
         if best is None or score > best["score"]:
-            best = {"score": score, **t}
-    if not best:
+            best = {"score": score, "pct": pct, "z_max": z_max, **t}
+    # 都在基线附近就直说，不硬凑一条
+    if not best or best["score"] < 2:
         return None
     d = best["delta"]
     direction = "高于" if d >= 0 else "低于"
     dec = best["decimals"]
-    text = (f"{best['label']}近 24 h 平均 {best['current']:.{dec}f}"
-            f"{best['unit']}，{direction} 7 天同段基线 {abs(d):.{dec}f}")
+    ddec = max(dec, 1)   # 变化量至少保留一位，别把 -0.4 显示成 0
+    head = f"{best['label']}近 24 h 平均 {best['current']:.{dec}f}{best['unit']}"
+    if abs(best["pct"]) >= 1:
+        body = f"，{direction} 7 天同段基线 {abs(d):.{ddec}f}（{best['pct']:+.1f}%）"
+    else:
+        body = "，与 7 天同段基线基本持平"
+    text = f"{head}{body}，峰值偏离 {best['z_max']:.1f}σ"
     return {"text": text, "metric": best["metric"], "delta": d,
-            "label": best["label"], "unit": best["unit"]}
+            "label": best["label"], "unit": best["unit"], "pct": best["pct"]}
 
 
 def build_report() -> dict[str, Any]:
@@ -224,9 +232,9 @@ def overview() -> dict[str, Any]:
             "ticks": ticks, "fill": round(sum(ticks) / len(ticks) * 100),
             "k": min([a["k"] for a in latest] or [0]),
             "metrics": [{
-                "metric": a["metric"], "label": metrics.label(d["device_id"], a["metric"]),
-                "mean": a["mean"], "unit": metrics.unit(d["device_id"], a["metric"]),
-                "decimals": metrics.decimals(d["device_id"], a["metric"]),
+                "metric": a["metric"], "label": catalog.label(d["device_id"], a["metric"]),
+                "mean": a["mean"], "unit": catalog.unit(d["device_id"], a["metric"]),
+                "decimals": catalog.decimals(d["device_id"], a["metric"]),
                 "z": a["z"], "k": a["k"], "module_id": a["module_id"],
             } for a in latest],
         })

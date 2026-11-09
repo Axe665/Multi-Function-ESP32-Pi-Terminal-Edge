@@ -7,8 +7,8 @@ import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import ValidationError
 
-from . import (analysis, cloudpush, config, ingest, mdns, metrics,
-               models, mqtt, scheduler, security, sim, store)
+from . import (analysis, catalog, cloudpush, config, ingest, mdns, models,
+               mqtt, scheduler, security, sim, store)
 
 router = APIRouter(prefix="/api/v1")
 
@@ -33,6 +33,18 @@ def ingest_guard(authorization: str | None = Header(default=None),
 
 admin = [Depends(admin_guard)]
 device = [Depends(ingest_guard)]
+
+
+def _module_list(device_id: str, module_ids: list[int]) -> list[dict[str, Any]]:
+    """设备装了哪些模块：module_id 来自 status，名字取 catalog 里的 package_id。"""
+    seen: dict[int, dict[str, Any]] = {}
+    for mid in module_ids or []:
+        seen[mid] = {"module_id": mid, "package_id": "", "name": ""}
+    for row in catalog.for_device(device_id):
+        mid = row["module_id"]
+        entry = seen.setdefault(mid, {"module_id": mid, "package_id": "", "name": ""})
+        entry["package_id"] = entry["package_id"] or (row.get("package_id") or "")
+    return list(seen.values())
 
 
 def _raw_hits(node: Any, path: str = "") -> list[str]:
@@ -147,18 +159,24 @@ def overview() -> dict[str, Any]:
     return analysis.overview()
 
 
+@router.get("/metrics", dependencies=admin)
+def metric_catalog() -> list[dict[str, Any]]:
+    """端上报过的所有指标 —— 前端下拉框的数据源，没有写死的列表。"""
+    return catalog.all_labels()
+
+
 @router.get("/devices", dependencies=admin)
 def devices() -> list[dict[str, Any]]:
     out = []
     for d in store.devices():
         latest = store.latest_aggregates(d["device_id"])
         out.append({**d,
-                    "module_list": [metrics.MODULES[m] for m in d["modules"] if m in metrics.MODULES],
+                    "module_list": _module_list(d["device_id"], d["modules"]),
                     "metrics": [{
                         "metric": a["metric"],
-                        "label": metrics.label(d["device_id"], a["metric"]),
-                        "unit": metrics.unit(d["device_id"], a["metric"]),
-                        "decimals": metrics.decimals(d["device_id"], a["metric"]),
+                        "label": catalog.label(d["device_id"], a["metric"]),
+                        "unit": catalog.unit(d["device_id"], a["metric"]),
+                        "decimals": catalog.decimals(d["device_id"], a["metric"]),
                         "module_id": a["module_id"], "mean": a["mean"], "z": a["z"],
                         "k": a["k"], "ts": a["ts_from"],
                     } for a in latest]})
@@ -172,10 +190,11 @@ def device_detail(device_id: str) -> dict[str, Any]:
         raise HTTPException(404, "设备不存在")
     return {
         "device": d,
-        "modules": [metrics.MODULES[m] for m in d["modules"] if m in metrics.MODULES],
-        "metrics": [{"key": m.key, "label": m.label, "unit": m.unit,
-                     "decimals": m.decimals, "module_id": m.module_id, "table": m.table}
-                    for m in metrics.for_device(device_id)],
+        "modules": _module_list(device_id, d["modules"]),
+        "metrics": [{"key": m["metric"], "label": m["label"], "unit": m["unit"],
+                     "decimals": m["decimals"], "module_id": m["module_id"],
+                     "table": m["table_name"]}
+                    for m in catalog.for_device(device_id)],
         "finding": analysis.finding(device_id),
         "batches": store.batches(device_id, 12),
         "advice": store.advice(device_id, limit=8),
@@ -187,20 +206,20 @@ def device_series(device_id: str, metric: str,
                   hours: int = Query(default=24, ge=1, le=168)) -> dict[str, Any]:
     if not store.device(device_id):
         raise HTTPException(404, "设备不存在")
-    if not metrics.get(device_id, metric):
+    if not catalog.get(device_id, metric):
         raise HTTPException(404, "这台设备没有这个指标")
     return analysis.trend(device_id, metric, hours)
 
 
 @router.get("/heatmap", dependencies=admin)
 def heatmap(device: str, metric: str, days: int = Query(default=7, ge=1, le=30)) -> dict[str, Any]:
-    if not metrics.get(device, metric):
+    if not catalog.get(device, metric):
         raise HTTPException(404, "这台设备没有这个指标")
     since = store.now_ms() - days * 86_400_000
     cells = store.heatmap(device, metric, since)
     return {
-        "metric": metric, "label": metrics.label(device, metric),
-        "unit": metrics.unit(device, metric),
+        "metric": metric, "label": catalog.label(device, metric),
+        "unit": catalog.unit(device, metric),
         "days": days, "cells": cells,
         "k_min": min([c["n"] for c in cells] or [0]),
     }
@@ -227,7 +246,7 @@ def batches(device: str | None = None,
 @router.get("/anomalies", dependencies=admin)
 def anomalies(days: int = Query(default=7, ge=1, le=30)) -> list[dict[str, Any]]:
     rows = store.anomalies(store.now_ms() - days * 86_400_000, 60)
-    return [{**r, "label": metrics.label(r["device_id"], r["metric"])} for r in rows]
+    return [{**r, "label": catalog.label(r["device_id"], r["metric"])} for r in rows]
 
 
 # ---------------------------------------------------------------- 命令与上云

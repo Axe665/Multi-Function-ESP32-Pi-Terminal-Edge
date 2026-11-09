@@ -48,6 +48,20 @@ CREATE TABLE IF NOT EXISTS aggregates (
 );
 CREATE INDEX IF NOT EXISTS ix_agg_metric ON aggregates(device_id, metric, ts_from);
 
+CREATE TABLE IF NOT EXISTS catalog (
+  device_id  TEXT NOT NULL,
+  metric     TEXT NOT NULL,
+  module_id  INTEGER NOT NULL,
+  package_id TEXT,
+  label      TEXT,
+  unit       TEXT,
+  table_name TEXT,
+  decimals   INTEGER NOT NULL DEFAULT 1,
+  first_seen INTEGER NOT NULL,
+  last_seen  INTEGER NOT NULL,
+  PRIMARY KEY (device_id, metric)
+);
+
 CREATE TABLE IF NOT EXISTS advice (
   id         INTEGER PRIMARY KEY,
   device_id  TEXT NOT NULL,
@@ -192,6 +206,15 @@ def upsert_device(device_id: str, name: str, scene: str, fw: str,
                  modules_json=excluded.modules_json""",
             (device_id, name, scene, fw, json.dumps(modules), cert_fp, now_ms()),
         )
+
+
+def ensure_device(device_id: str) -> None:
+    """第一次见到的设备就登记，模块与场景留空，等 status 主题补。"""
+    with connect() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO devices(device_id, name, scene, modules_json, last_seen, paired_at) "
+            "VALUES(?,?,?,?,NULL,?)",
+            (device_id, device_id, "unknown", "[]", now_ms()))
 
 
 def touch_device(device_id: str, ts: int) -> None:

@@ -27,21 +27,26 @@ class AnalysisTest(unittest.TestCase):
                 p.unlink()
         store.init_db()
         from edge import sim
-        cls.stats = sim.generate(1)
+        cls.stats = sim.generate(1, seed=20261109)
 
     def test_seed_wrote_batches(self):
         self.assertGreater(self.stats["batches"], 0)
         self.assertGreaterEqual(len(store.devices()), 3)
 
     def test_trend_uses_aggregates(self):
-        t = analysis.trend("mt-3b-01", "systolic", 24)
+        from edge import catalog
+        dev = store.devices()[0]["device_id"]
+        metric = catalog.metrics_of(dev)[0]
+        t = analysis.trend(dev, metric, 24)
         self.assertGreater(len(t["points"]), 10)
         self.assertGreater(t["baseline"], 0)
         self.assertGreater(t["k"], 0)
 
     def test_heatmap_buckets(self):
-        cells = store.heatmap("mt-3b-01", "systolic",
-                              store.now_ms() - 2 * 86_400_000)
+        from edge import catalog
+        dev = store.devices()[0]["device_id"]
+        metric = catalog.metrics_of(dev)[0]
+        cells = store.heatmap(dev, metric, store.now_ms() - 2 * 86_400_000)
         keys = {(c["dow"], c["hour"]) for c in cells}
         self.assertEqual(len(keys), len(cells), "同一时段不应重复成格")
 

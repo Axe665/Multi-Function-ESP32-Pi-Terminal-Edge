@@ -220,7 +220,7 @@ export function heatmap(host, cells, opts = {}) {
   scale.style.marginTop = "12px";
   scale.innerHTML = HEAT_LEVELS.map((a) => `<span><i style="background:${mix("#16181b", "#e8b45c", a)}"></i></span>`).join("")
     + `<span>${fmtNum(min, decimals)} → ${fmtNum(max, decimals)} ${unit}</span>
-       <span><i style="background:#101214;box-shadow:inset 0 0 0 1px #262b31"></i>该时段没有窗口</span>`;
+       <span><i style="background:#101214;border:1px solid #262b31"></i>该时段没有窗口</span>`;
   wrap.append(scale);
   host.replaceChildren(wrap);
 }

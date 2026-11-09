@@ -35,6 +35,13 @@ class Aggregate(Strict):
     slope: float = 0.0
     z: float = 0.0
     k: int = Field(ge=1)
+    # 以下都可选：端不报就由边按 metric 名自己兜底。
+    # 端报了，边就能在换模块时自动登记新指标（catalog）。
+    label: str = Field(default="", max_length=32)
+    unit: str = Field(default="", max_length=16)
+    table: Literal["samples", "readings", "measurements"] = "samples"
+    package_id: str = Field(default="", max_length=64)
+    decimals: int = Field(default=1, ge=0, le=4)
 
     @model_validator(mode="after")
     def _k_le_subjects(self):
@@ -101,6 +108,10 @@ class DailyAggregate(Strict):
     slope: float
     z: float
     k: int
+    module_id: int = 0
+    label: str = ""
+    unit: str = ""
+    table: str = "samples"
 
 
 class ReportAdvice(Strict):

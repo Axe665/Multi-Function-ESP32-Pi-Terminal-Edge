@@ -14,7 +14,7 @@ try:
 except ImportError:  # pragma: no cover - 精简部署里可以不装
     mqtt = None  # type: ignore[assignment]
 
-from . import config, ingest, store
+from . import catalog, config, ingest, store
 
 TELEMETRY = "orpi/v1/{dev}/telemetry"
 STATUS = "orpi/v1/{dev}/status"
@@ -113,12 +113,29 @@ class MqttIngest:
                        json.dumps(ingest.ack_payload(result)), qos=1)
 
     def _status(self, device_id: str, body: dict[str, Any]) -> None:
+        """status 里带模块清单：可以是 [83, 80]，也可以是带 capabilities 的对象。"""
+        store.ensure_device(device_id)
         store.touch_device(device_id, store.now_ms())
         modules = body.get("modules")
-        if isinstance(modules, list):
-            with store.connect() as conn:
-                conn.execute("UPDATE devices SET modules_json=? WHERE device_id=?",
-                             (json.dumps(modules), device_id))
+        if not isinstance(modules, list):
+            return
+        ids: list[int] = []
+        for m in modules:
+            if isinstance(m, dict):
+                mid = int(m.get("module_id", 0))
+                ids.append(mid)
+                for metric in m.get("metrics") or []:
+                    catalog.upsert(device_id, str(metric["metric"]), mid,
+                                   str(m.get("package_id", "")),
+                                   str(metric.get("label", "")),
+                                   str(metric.get("unit", "")),
+                                   str(metric.get("table", "samples")),
+                                   int(metric.get("decimals", 1)))
+            elif isinstance(m, int):
+                ids.append(m)
+        with store.connect() as conn:
+            conn.execute("UPDATE devices SET modules_json=? WHERE device_id=?",
+                         (json.dumps(sorted(set(ids))), device_id))
 
     # ---------------------------------------------------------------- 下行
 

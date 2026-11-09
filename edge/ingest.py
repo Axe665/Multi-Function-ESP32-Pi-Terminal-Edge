@@ -9,7 +9,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from . import config, models, store
+from . import catalog, config, models, store
 
 
 class IngestError(Exception):
@@ -58,7 +58,12 @@ def process(body: dict[str, Any]) -> dict[str, Any]:
 
     agg = [a.model_dump() for a in msg.aggregates]
     adv = [a.model_dump() for a in msg.advice]
+    # 端上报了什么就登记什么：换模块不需要改边
+    for a in msg.aggregates:
+        catalog.upsert(msg.device_id, a.metric, a.module_id, a.package_id,
+                       a.label, a.unit, a.table, a.decimals)
     bid = batch_id(msg.device_id, msg.window.from_, msg.window.to)
+    store.ensure_device(msg.device_id)
     accepted = store.insert_batch(msg.device_id, bid, msg.window.from_,
                                   msg.window.to, body, agg, adv)
     store.touch_device(msg.device_id, msg.window.to)
