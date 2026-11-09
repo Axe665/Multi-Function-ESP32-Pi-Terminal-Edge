@@ -6,3 +6,5 @@ data/
 
 # broker 私钥不进仓库
 docker/mosquitto/certs/
+
+docker/cloud-certs/

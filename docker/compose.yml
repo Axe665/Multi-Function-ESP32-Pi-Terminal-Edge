@@ -11,6 +11,11 @@ x-edge: &edge
   volumes:
     - edge_data:/app/data
     - ./mosquitto/certs:/app/certs:ro
+    - ./cloud-certs:/app/cloud-certs:ro
+  networks:
+    - default
+    # 云的默认网络，用来解析 caddy:8443
+    - backbone
   environment: &edge-env
     EDGE_ID: ${EDGE_ID:-edge-lab-01}
     EDGE_NAME: ${EDGE_NAME:-实验室边节点}
@@ -19,7 +24,11 @@ x-edge: &edge
     EDGE_MQTT_CA: /app/certs/ca.crt
     EDGE_MQTT_CERT: /app/certs/edge.crt
     EDGE_MQTT_KEY: /app/certs/edge.key
-    EDGE_CLOUD_URL: ${EDGE_CLOUD_URL:-}
+    # 云侧 mTLS 入口（文档 §5.8）：证书由 cloud-ca 签发
+    EDGE_CLOUD_URL: ${EDGE_CLOUD_URL:-https://caddy:8443}
+    EDGE_CLOUD_CA: /app/cloud-certs/cloud-ca.crt
+    EDGE_CLOUD_CERT: /app/cloud-certs/edge.crt
+    EDGE_CLOUD_KEY: /app/cloud-certs/edge.key
     EDGE_CLOUD_TOKEN: ${EDGE_CLOUD_TOKEN:-}
     EDGE_INGEST_TOKEN: ${EDGE_INGEST_TOKEN:-}
     EDGE_ADMIN_TOKEN: ${EDGE_ADMIN_TOKEN:-}
@@ -104,3 +113,9 @@ volumes:
   edge_data:
   mqtt_data:
   caddy_data:
+
+networks:
+  # 云仓的默认网络；先起云再起边
+  backbone:
+    external: true
+    name: mt-backbone

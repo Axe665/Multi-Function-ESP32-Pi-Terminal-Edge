@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
-import httpx
+
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import ValidationError
 
@@ -303,32 +303,13 @@ def report_preview() -> dict[str, Any]:
 
 @router.post("/report/cloud", dependencies=admin)
 def report_cloud() -> dict[str, Any]:
-    payload = analysis.build_report()
-    # 契约自检：发给云之前先用同一份模型验一遍
-    models.EdgeReport.model_validate(payload)
-    store.enqueue_report(payload["report_id"], payload)
-
-    if not config.CLOUD_URL:
-        return {"queued": True, "report_id": payload["report_id"],
-                "cloud": "not_configured", "detail": "未配置 EDGE_CLOUD_URL，报表留在发件箱"}
-    try:
-        # trust_env=False：边→云是内网调用，不能踩到宿主机上的 HTTP_PROXY
-        headers = ({"Authorization": f"Bearer {config.CLOUD_TOKEN}"}
-                   if config.CLOUD_TOKEN else {})
-        with httpx.Client(timeout=8, trust_env=False) as c:
-            r = c.post(f"{config.CLOUD_URL}/api/v1/ingest/edge-report",
-                       json=payload, headers=headers)
-        if r.status_code >= 400:
-            store.mark_sent(payload["report_id"], f"HTTP {r.status_code}: {r.text[:120]}")
-            return {"queued": True, "report_id": payload["report_id"],
-                    "cloud": f"http_{r.status_code}", "detail": r.text[:200]}
-        store.mark_sent(payload["report_id"], None)
-        return {"queued": False, "report_id": payload["report_id"], "cloud": "ok",
-                "bytes": len(r.content)}
-    except (httpx.HTTPError, ValueError) as e:
-        store.mark_sent(payload["report_id"], str(e))
-        return {"queued": True, "report_id": payload["report_id"],
-                "cloud": "unreachable", "detail": str(e)[:200]}
+    """手动上报：和定时任务走同一条路径（cloudpush.push_now），别维护两份。"""
+    out = cloudpush.push_now()
+    body = {"queued": out["queued"], "report_id": out["report_id"],
+            "cloud": out["status"], "detail": (out.get("detail") or "")[:200]}
+    if out.get("bytes"):
+        body["bytes"] = out["bytes"]
+    return body
 
 
 @router.get("/health", dependencies=admin)

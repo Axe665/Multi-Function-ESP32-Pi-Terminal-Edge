@@ -1,6 +1,8 @@
 """边 → 云的投递：手动触发和定时任务共用这一条路径。"""
 from __future__ import annotations
 
+import ssl
+
 import httpx
 
 from . import config, models, store
@@ -17,8 +19,11 @@ def send(payload: dict) -> dict:
     # trust_env=False：边→云是内网调用，不能踩到宿主机上的 HTTP_PROXY
     client_kwargs: dict = {"timeout": 8, "trust_env": False}
     if config.CLOUD_CA and config.CLOUD_CERT and config.CLOUD_KEY:
-        client_kwargs["verify"] = config.CLOUD_CA
-        client_kwargs["cert"] = (config.CLOUD_CERT, config.CLOUD_KEY)
+        # httpx 0.28 的 cert=(cert,key) 在这个组合下不会真的发出客户端证书，
+        # 直接构造 SSLContext 最稳（文档 §5.8 的 mTLS 就靠它）
+        ctx = ssl.create_default_context(cafile=config.CLOUD_CA)
+        ctx.load_cert_chain(config.CLOUD_CERT, config.CLOUD_KEY)
+        client_kwargs["verify"] = ctx
 
     try:
         with httpx.Client(**client_kwargs) as c:
