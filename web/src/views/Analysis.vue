@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { api, fmtTime } from '../api'
 import PageHeader from '../components/PageHeader.vue'
 import ChartBox from '../components/ChartBox.vue'
+import { chartTokens, useTheme } from '../lib/theme'
 import 'echarts-wordcloud'
 
 const devices = ref([])
@@ -13,6 +14,8 @@ const heat = ref(null)
 const words = ref([])
 const anomalies = ref([])
 const error = ref('')
+const { theme } = useTheme()
+const tk = computed(() => chartTokens(theme.value))
 
 const days = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
 const hours = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'))
@@ -60,16 +63,17 @@ const anomalyOption = computed(() => {
     },
     xAxis: {
       type: 'time',
+      axisLine: { lineStyle: { color: tk.value.split } },
       axisLabel: {
-        fontSize: 10,
+        fontSize: 10, color: tk.value.axis,
         formatter: (v) => { const d = new Date(v); return `${d.getMonth() + 1}/${d.getDate()}` },
       },
     },
-    yAxis: { type: 'category', data: devs, axisLabel: { fontSize: 11 } },
+    yAxis: { type: 'category', data: devs, axisLabel: { fontSize: 11, color: tk.value.axis } },
     series: [{
       type: 'scatter',
       symbolSize: (v) => 8 + Math.min(18, Math.abs(v[2]) * 4),
-      itemStyle: { color: '#386a20', opacity: 0.75 },
+      itemStyle: { color: tk.value.line, opacity: 0.8 },
       data: rows.map((a, i) => [a.ts_from, devs.indexOf(a.device_id), a.z, a.label]),
     }],
   }
@@ -89,14 +93,17 @@ const heatOption = computed(() => {
       position: 'top',
       formatter: (p) => `${days[p.value[1]]} ${hours[p.value[0]]}:00<br/>${p.value[2]} ${heat.value?.unit || ''}`,
     },
-    xAxis: { type: 'category', data: hours, splitArea: { show: false }, axisLabel: { fontSize: 10 } },
-    yAxis: { type: 'category', data: days, splitArea: { show: false } },
+    xAxis: { type: 'category', data: hours, splitArea: { show: false },
+             axisLine: { lineStyle: { color: tk.value.split } },
+             axisLabel: { fontSize: 10, color: tk.value.axis } },
+    yAxis: { type: 'category', data: days, splitArea: { show: false },
+             axisLabel: { color: tk.value.axis } },
     visualMap: {
       min: lo, max: hi, calculable: false, orient: 'horizontal', left: 'center', bottom: 0,
-      inRange: { color: ['#e3e6dc', '#9cd67e', '#386a20'] },
-      textStyle: { fontSize: 10 },
+      inRange: { color: tk.value.heat },
+      textStyle: { fontSize: 10, color: tk.value.axis },
     },
-    series: [{ type: 'heatmap', data, itemStyle: { borderColor: '#fbfdf6', borderWidth: 1 } }],
+    series: [{ type: 'heatmap', data, itemStyle: { borderColor: tk.value.border, borderWidth: 1 } }],
   }
 })
 
@@ -109,29 +116,38 @@ function drillWord(p) {
   pickedAdvice.value = allAdvice.value.filter((a) => (a.text || '').includes(p.name)).slice(0, 8)
 }
 
-const wordOption = computed(() => ({
-  tooltip: {
-    formatter: (p) => {
-      const w = words.value.find((x) => x.word === p.name)
-      return `${p.name}<br/>出现 ${w?.count ?? p.value} 次，覆盖 ${w?.df ?? '—'} 天<br/>点一下看原文`
-    },
-  },
-  series: [
-    {
-      type: 'wordCloud',
-      shape: 'square',
-      left: 0, top: 0, right: 0, bottom: 0,
-      sizeRange: [13, 34],
-      gridSize: 11,
-      rotationRange: [0, 0],
-      textStyle: {
-        fontFamily: 'Roboto, Noto Sans SC, sans-serif',
-        color: () => `hsl(${112 + Math.random() * 34}, ${38 + Math.random() * 18}%, ${24 + Math.random() * 12}%)`,
+const wordOption = computed(() => {
+  // 在 computed 里取一次 token：color 回调执行时 Vue 已经不再追踪依赖
+  const word = tk.value.word
+  return {
+    tooltip: {
+      formatter: (p) => {
+        const w = words.value.find((x) => x.word === p.name)
+        return `${p.name}<br/>出现 ${w?.count ?? p.value} 次，覆盖 ${w?.df ?? '—'} 天<br/>点一下看原文`
       },
-      data: words.value.slice(0, 40).map((w) => ({ name: w.word, value: w.score ?? w.count })),
     },
-  ],
-}))
+    series: [
+      {
+        type: 'wordCloud',
+        shape: 'square',
+        left: 0, top: 0, right: 0, bottom: 0,
+        sizeRange: [15, 36],
+        gridSize: 11,
+        rotationRange: [0, 0],
+        textStyle: {
+          fontFamily: 'Roboto, Noto Sans SC, sans-serif',
+          fontWeight: 500,
+          color: () => {
+            const [s0, s1] = word.sat
+            const [l0, l1] = word.light
+            return `hsl(${112 + Math.random() * 34}, ${s0 + Math.random() * (s1 - s0)}%, ${l0 + Math.random() * (l1 - l0)}%)`
+          },
+        },
+        data: words.value.slice(0, 40).map((w) => ({ name: w.word, value: w.score ?? w.count })),
+      },
+    ],
+  }
+})
 </script>
 
 <template>

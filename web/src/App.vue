@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
+import { useTheme } from './lib/theme'
 
 const route = useRoute()
 const drawer = ref(false)
@@ -28,12 +29,7 @@ onMounted(async () => {
   } catch { /* 自检不可达时不挂横幅 */ }
 })
 
-const theme = ref(document.documentElement.dataset.theme || 'light')
-function toggleTheme() {
-  theme.value = theme.value === 'dark' ? 'light' : 'dark'
-  document.documentElement.dataset.theme = theme.value
-  localStorage.setItem('mt-theme', theme.value)
-}
+const { theme, toggleTheme } = useTheme()
 </script>
 
 <template>

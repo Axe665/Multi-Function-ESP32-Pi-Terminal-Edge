@@ -231,13 +231,19 @@ def device_detail(device_id: str) -> dict[str, Any]:
     d = store.device(device_id)
     if not d:
         raise HTTPException(404, "设备不存在")
+    latest = {a["metric"]: a for a in store.latest_aggregates(device_id)}
+    metrics = []
+    for m in catalog.for_device(device_id):
+        a = latest.get(m["metric"], {})
+        metrics.append({"metric": m["metric"], "key": m["metric"], "label": m["label"],
+                        "unit": m["unit"], "decimals": m["decimals"],
+                        "module_id": m["module_id"], "table": m["table_name"],
+                        "mean": a.get("mean"), "z": a.get("z"), "k": a.get("k")})
     return {
         "device": d,
         "modules": _module_list(device_id, d["modules"]),
-        "metrics": [{"key": m["metric"], "label": m["label"], "unit": m["unit"],
-                     "decimals": m["decimals"], "module_id": m["module_id"],
-                     "table": m["table_name"]}
-                    for m in catalog.for_device(device_id)],
+        "metrics": metrics,
+        "k_min": min([m["k"] for m in metrics if m.get("k")] or [0]),
         "finding": analysis.finding(device_id),
         "batches": store.batches(device_id, 12),
         "advice": store.advice(device_id, limit=8),

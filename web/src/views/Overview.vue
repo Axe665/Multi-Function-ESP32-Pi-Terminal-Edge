@@ -196,8 +196,9 @@ const kpis = () => {
   gap: var(--space-2);
   padding: 4px 14px;
   border-radius: var(--md-shape-full);
-  background: color-mix(in srgb, var(--md-inverse-surface) 72%, transparent);
-  color: var(--md-inverse-on-surface);
+  background: color-mix(in srgb, var(--md-surface-container-highest) 90%, transparent);
+  border: 1px solid var(--md-card-border);
+  color: var(--md-on-surface-variant);
   font: var(--md-label-medium);
   pointer-events: none;
 }
@@ -205,10 +206,14 @@ const kpis = () => {
   white-space: nowrap;
 }
 .flow-stage--ring {
+  color: #8a5a00;
+}
+[data-theme='dark'] .flow-stage--ring {
   color: #ffd98a;
 }
+
 .flow-arrow {
-  color: color-mix(in srgb, var(--md-inverse-on-surface) 60%, transparent);
+  color: color-mix(in srgb, var(--md-on-surface-variant) 70%, transparent);
 }
 .section-head {
   display: flex;

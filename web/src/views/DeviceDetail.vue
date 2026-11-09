@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { api, fmtNum, fmtTime } from '../api'
 import PageHeader from '../components/PageHeader.vue'
 import ChartBox from '../components/ChartBox.vue'
+import { chartTokens, useTheme } from '../lib/theme'
 
 const route = useRoute()
 const detail = ref(null)
@@ -11,6 +12,8 @@ const series = ref(null)
 const batches = ref([])
 const metric = ref('')
 const error = ref('')
+const { theme } = useTheme()
+const tk = computed(() => chartTokens(theme.value))
 
 const id = computed(() => route.params.id)
 
@@ -46,22 +49,22 @@ const option = computed(() => {
     xAxis: {
       type: 'category',
       data: pts.map((p) => fmtTime(p.ts)),
-      axisLine: { lineStyle: { color: '#c3c8bb' } },
-      axisLabel: { color: '#74796d', fontSize: 11 },
+      axisLine: { lineStyle: { color: tk.value.split } },
+      axisLabel: { color: tk.value.axis, fontSize: 11 },
     },
     yAxis: {
       type: 'value',
       scale: true,
-      splitLine: { lineStyle: { color: '#e3e6dc' } },
-      axisLabel: { color: '#74796d', fontSize: 11 },
+      splitLine: { lineStyle: { color: tk.value.split } },
+      axisLabel: { color: tk.value.axis, fontSize: 11 },
     },
     series: [
       {
         type: 'line',
         smooth: true,
         symbol: 'none',
-        lineStyle: { width: 2, color: '#386a20' },
-        areaStyle: { color: 'rgba(56,106,32,0.10)' },
+        lineStyle: { width: 2, color: tk.value.line },
+        areaStyle: { color: tk.value.area },
         data: pts.map((p) => p.mean),
       },
     ],
@@ -70,7 +73,7 @@ const option = computed(() => {
 </script>
 
 <template>
-  <PageHeader :title="detail?.device?.name || '设备'" :sub="detail ? `${detail.device.device_id}，${detail.device.scene}，最小 k ${detail.device.k || '—'}` : ''">
+  <PageHeader :title="detail?.device?.name || '设备'" :sub="detail ? `${detail.device.device_id}，${detail.device.scene}，最小 k ${detail.k_min || '—'}` : ''">
     <RouterLink class="md-btn md-btn--text" to="/devices">返回列表</RouterLink>
   </PageHeader>
 
