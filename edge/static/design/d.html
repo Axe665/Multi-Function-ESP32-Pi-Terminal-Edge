@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>边节点 · 概念 D · 玻璃核心</title>
+<style>
+  :root { --bg:#05070a; --ink:#f3f2ec; --dim:#8e918c; --hot:#ffb35c; --line:#191d21; }
+  @font-face { font-family:"Archivo"; src:url("/fonts/archivo.woff2") format("woff2"); font-weight:400 600; font-display:swap; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; background:var(--bg); color:var(--ink); }
+  body { font-family:"Archivo","Noto Sans SC",system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
+  .wrap { position:relative; z-index:2; padding:0 clamp(20px,5vw,72px); }
+
+  header { display:flex; align-items:center; justify-content:space-between; padding:26px 0;
+    font-size:13px; color:var(--dim); position:relative; z-index:3; }
+  .brand { display:flex; align-items:center; gap:10px; color:var(--ink); }
+  .brand svg { width:20px; height:20px; fill:none; stroke:var(--hot); stroke-width:1.4; stroke-linecap:round; }
+  header nav { display:flex; gap:22px; }
+  header nav a { color:var(--dim); text-decoration:none; }
+  header nav a:hover { color:var(--ink); }
+
+  /* 3D 舞台：整屏固定，内容从上面滚过去 */
+  #stage { position:fixed; inset:0; z-index:0; }
+  #stage canvas { display:block; width:100%; height:100%; }
+  .veil { position:fixed; inset:0; z-index:1; pointer-events:none;
+    background:radial-gradient(120% 80% at 62% 45%, transparent 20%, rgba(5,7,10,.55) 62%, var(--bg) 100%); }
+
+  .hero { min-height:calc(100vh - 88px); display:flex; align-items:center; }
+  .hero-copy { position:relative; z-index:2; max-width:min(600px, 46vw); }
+  .kicker { font-size:12px; letter-spacing:.16em; color:var(--hot); margin-bottom:22px; }
+  h1 { margin:0; font-size:clamp(38px,5.6vw,92px); line-height:.94; letter-spacing:-0.045em; font-weight:500; }
+  h1 em { font-style:normal; color:var(--hot); }
+  .sub { margin:26px 0 0; font-size:clamp(15px,1.35vw,19px); line-height:1.65; color:var(--dim); max-width:38ch; }
+  .sub b { color:var(--ink); font-weight:500; }
+  .acts { margin-top:36px; display:flex; gap:12px; flex-wrap:wrap; }
+  .btn { height:46px; display:inline-flex; align-items:center; gap:9px; padding:0 22px;
+    border-radius:999px; text-decoration:none; font-size:14px; border:1px solid #2a2f35; color:var(--ink); }
+  .btn.solid { background:var(--hot); border-color:var(--hot); color:#120d05; font-weight:500; }
+  .btn:hover { border-color:var(--hot); }
+
+  /* 滚动区 */
+  .sheet { position:relative; z-index:2; margin-top:40vh; padding-bottom:120px;
+    background:linear-gradient(180deg, transparent, rgba(5,7,10,.92) 14%, var(--bg) 30%); }
+  .band { display:grid; grid-template-columns:repeat(3,1fr); gap:0; border-top:1px solid var(--line); margin-top:70px; }
+  .band div { padding:26px 0 30px 24px; border-left:1px solid var(--line); }
+  .band div:first-child { border-left:0; padding-left:0; }
+  .band small { display:block; font-size:12px; color:var(--dim); margin-bottom:8px; }
+  .band b { font-size:clamp(30px,3.4vw,46px); font-weight:400; letter-spacing:-0.03em; font-variant-numeric:tabular-nums; }
+
+  .devs { margin-top:86px; display:grid; grid-template-columns:repeat(3,1fr); gap:18px; }
+  .dev { border:1px solid var(--line); border-radius:16px; padding:20px;
+    background:rgba(10,13,16,.72); backdrop-filter:blur(8px); }
+  .dev h3 { margin:0 0 2px; font-size:15px; font-weight:500; }
+  .dev .id { font-size:11.5px; color:var(--dim); font-variant-numeric:tabular-nums; }
+  .dev ul { list-style:none; margin:14px 0 0; padding:0; font-size:13px; }
+  .dev li { display:flex; justify-content:space-between; padding:8px 0; border-top:1px solid #14181c; font-variant-numeric:tabular-nums; }
+  .dev li span { color:var(--dim); }
+
+  .foot { margin-top:120px; padding:26px 0 40px; border-top:1px solid var(--line);
+    display:flex; justify-content:space-between; font-size:12px; color:var(--dim); }
+
+  @media (max-width:900px) {
+    .hero-copy { max-width:100%; }
+    .band, .devs { grid-template-columns:1fr; }
+    .band div { border-left:0; padding-left:0; border-top:1px solid var(--line); }
+    .veil { background:radial-gradient(100% 70% at 50% 30%, transparent 10%, rgba(5,7,10,.75) 70%, var(--bg)); }
+  }
+</style>
+<script type="importmap">
+{ "imports": {
+    "three": "/vendor/three/build/three.module.js",
+    "three/addons/": "/vendor/three/addons/"
+} }
+</script>
+</head>
+<body>
+
+
+
+<div id="stage"><canvas id="c"></canvas></div>
+<div class="veil"></div>
+
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <svg viewBox="0 0 20 20"><path d="M4 3v14M4 6h7M4 13h7M11 6v7"/><circle cx="16" cy="6" r="1.6"/><circle cx="16" cy="13" r="1.6"/></svg>
+      Modular Terminal
+    </div>
+    <nav><a href="#devs">设备</a><a href="#gate">闸门</a></nav>
+  </header>
+
+  <section class="hero">
+    <div class="hero-copy">
+      <p class="kicker">EDGE · 5 分钟窗口 · K ≥ 5</p>
+      <h1>数据汇进这颗核<br><em>人留在外面</em></h1>
+      <p class="sub">
+        三块板子的假名聚合在这里合成一条时间线。
+        <b>凑不满五个人的桶，连这颗核都进不来。</b>
+      </p>
+      <div class="acts">
+        <a class="btn solid" href="#devs">看三块板子</a>
+        <a class="btn" href="/design/b.html">换一颗核 →</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="sheet" id="gate">
+    <div class="band">
+      <div><small>在线终端</small><b id="k1">—</b></div>
+      <div><small>24 小时批次</small><b id="k2">—</b></div>
+      <div><small>被拦在核外</small><b id="k3">—</b></div>
+    </div>
+
+    <div class="devs" id="devs"></div>
+
+    <div class="foot"><span>edge-lab-01 · 实验边节点</span><span>原始数据不出端</span></div>
+  </section>
+</div>
+
+<script type="module">
+import * as THREE from "three";
+import { boot, studioEnv } from "./core.js";
+
+const fmt = (n, d = 0) => Number(n).toLocaleString("zh-CN", { minimumFractionDigits: d, maximumFractionDigits: d });
+
+const data = await fetch("/api/v1/overview").then((r) => r.json()).catch(() => null);
+document.getElementById("k1").textContent = data ? `${data.devices_online} / ${data.devices_total}` : "—";
+document.getElementById("k2").textContent = data ? fmt(data.batches_24h) : "—";
+document.getElementById("k3").textContent = data ? fmt(data.suppressed_buckets) : "—";
+if (data) {
+  document.getElementById("devs").innerHTML = data.lanes.map((l) => `
+    <article class="dev">
+      <h3>${l.name.split("·")[0].trim()}</h3>
+      <div class="id">${l.device_id} · 模块 ${l.modules.join("/")}</div>
+      <ul>${l.metrics.map((m) => `<li><span>${m.label}</span><b>${fmt(m.mean, m.decimals)} ${m.unit}</b></li>`).join("")}</ul>
+    </article>`).join("");
+}
+
+boot({
+  canvas: document.getElementById("c"),
+  bloom: 0.55, radius: 0.4, threshold: 0.55,
+  build({ renderer, scene, camera }) {
+    renderer.setClearAlpha(1);
+    scene.background = new THREE.Color(0x05070a);
+    scene.fog = new THREE.FogExp2(0x05070a, 0.028);
+
+    const env = studioEnv(renderer, THREE);
+    scene.environment = env;
+
+    // 核心：折射玻璃 + 内部发光线框
+    const core = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(1.28, 1),
+      new THREE.MeshPhysicalMaterial({
+        color: 0xe8f1ff, metalness: 0, roughness: 0.04, transmission: 1,
+        thickness: 2.2, ior: 1.5, clearcoat: 0.8, clearcoatRoughness: 0.06,
+        iridescence: 0.7, iridescenceIOR: 1.35,
+        envMapIntensity: 1.1, transparent: true, opacity: 1,
+      })
+    );
+    core.position.set(2.35, 0.1, 0);
+    scene.add(core);
+
+    // 内核：折射需要里面有东西才看得出来
+    const inner = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(0.34, 2),
+      new THREE.MeshBasicMaterial({ color: 0xffbf72 })
+    );
+    inner.position.set(2.35, 0.1, 0);
+    scene.add(inner);
+    const innerGlow = new THREE.Mesh(
+      new THREE.SphereGeometry(0.62, 24, 24),
+      new THREE.MeshBasicMaterial({ color: 0xffb35c, transparent: true, opacity: 0.10 })
+    );
+    innerGlow.position.set(2.35, 0.1, 0);
+    scene.add(innerGlow);
+
+    // 玻璃里嵌三圈细环：折射需要利落的线，才看得出是玻璃
+    for (let i = 0; i < 3; i++) {
+      const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(0.62 + i * 0.16, 0.008, 8, 96),
+        new THREE.MeshBasicMaterial({ color: 0xdff1ff })
+      );
+      ring.rotation.set(0.7 * i, 0.9 * i, 0.4 * i);
+      ring.position.set(2.35, 0.1, 0);
+      scene.add(ring);
+    }
+
+    const wire = new THREE.LineSegments(
+      new THREE.EdgesGeometry(new THREE.IcosahedronGeometry(1.29, 1)),
+      new THREE.LineBasicMaterial({ color: 0xffb35c, transparent: true, opacity: 0.35 })
+    );
+    core.add(wire);
+
+    // 三块板子：绕核心转的三个节点 + 汇入的粒子流
+    const nodes = [];
+    const lanes = data ? data.lanes.slice(0, 3) : [0, 1, 2].map(() => ({ online: true }));
+    const NODE_COUNT = Math.max(1, lanes.length);
+
+    lanes.forEach((lane, i) => {
+      const a = (i / NODE_COUNT) * Math.PI * 2;
+      const g = new THREE.Group();
+      const dot = new THREE.Mesh(
+        new THREE.SphereGeometry(0.085, 20, 20),
+        new THREE.MeshBasicMaterial({ color: lane.online === false ? 0x39423c : 0x7be0b0 })
+      );
+      const halo = new THREE.Mesh(
+        new THREE.SphereGeometry(0.2, 20, 20),
+        new THREE.MeshBasicMaterial({ color: 0x7be0b0, transparent: true, opacity: 0.12 })
+      );
+      g.add(dot, halo);
+      g.userData = { angle: a, radius: 3.1 + (i % 2) * 0.5, tilt: 0.22 * (i - 1) };
+      scene.add(g);
+      nodes.push(g);
+    });
+
+    // 粒子流：每条节点 → 核心
+    const PER = 260;
+    const total = PER * NODE_COUNT;
+    const pos = new Float32Array(total * 3);
+    const seed = new Float32Array(total);
+    for (let i = 0; i < total; i++) seed[i] = Math.random();
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    const pts = new THREE.Points(geo, new THREE.PointsMaterial({
+      color: 0xffc98a, size: 0.028, transparent: true, opacity: 0.9,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    }));
+    scene.add(pts);
+
+    // 环绕的细环
+    const ringMat = new THREE.LineBasicMaterial({ color: 0x2b3a34, transparent: true, opacity: 0.5 });
+    for (const r of [3.1, 3.6]) {
+      const g = new THREE.BufferGeometry().setFromPoints(
+        Array.from({ length: 128 }, (_, i) => {
+          const a = (i / 128) * Math.PI * 2;
+          return new THREE.Vector3(2.35 + Math.cos(a) * r, 0.1, Math.sin(a) * r);
+        })
+      );
+      scene.add(new THREE.LineLoop(g, ringMat));
+    }
+
+    const camTarget = new THREE.Vector3(1.05, 0, 0);
+    camera.position.set(-0.9, 0.9, 7.8);
+
+    return (t) => {
+      core.rotation.y = t * 0.16;
+      inner.rotation.y = -t * 0.35;
+      core.rotation.x = Math.sin(t * 0.21) * 0.12;
+      wire.rotation.y = -t * 0.05;
+
+      nodes.forEach((g, i) => {
+        const { angle, radius, tilt } = g.userData;
+        const a = angle + t * 0.22;
+        g.position.set(2.35 + Math.cos(a) * radius, 0.1 + Math.sin(a * 1.6) * tilt, Math.sin(a) * radius);
+      });
+
+      // 粒子沿二次贝塞尔飞向核心
+      const arr = geo.attributes.position.array;
+      for (let n = 0; n < NODE_COUNT; n++) {
+        const from = nodes[n].position;
+        for (let i = 0; i < PER; i++) {
+          const k = (n * PER + i) * 3;
+          const p = (seed[n * PER + i] + t * 0.35) % 1;
+          const e = p * p;
+          const mid = 1 - e;
+          // 控制点把流线微微抬起
+          const cx = from.x * 0.5, cy = from.y * 0.5 + 0.9, cz = from.z * 0.5;
+          arr[k] = mid * mid * from.x + 2 * mid * e * cx;
+          arr[k + 1] = mid * mid * from.y + 2 * mid * e * cy;
+          arr[k + 2] = mid * mid * from.z + 2 * mid * e * cz;
+        }
+      }
+      geo.attributes.position.needsUpdate = true;
+
+      camera.position.x = Math.sin(t * 0.1) * 0.6 - 0.9;
+      camera.position.y = 0.9 + Math.sin(t * 0.13) * 0.2;
+      camera.lookAt(camTarget);
+    };
+  },
+});
+</script>
+</body>
+</html>

@@ -57,71 +57,72 @@
 <body>
 <div class="wrap">
   <header>
-    <h1>三个方向，选一个</h1>
-    <span>edge-lab-01 · 真实数据</span>
+    <h1>三个 3D 方向</h1>
+    <span>edge-lab-01 · three.js · 真实数据</span>
   </header>
   <p class="lede">
-    同一份实时数据，三种完全不同的版式。<b>都不是现在这个仪表盘</b>——按产品官网的方式重新组织。
-    点缩略图进全屏，或直接开单页。
+    three.js + 泛光后处理，全部读实时数据。三个都能滚、都能动，<b>不是视频，也不是效果图</b>。
+    点缩略图进全屏。上一轮的平面版式留在 <a href="/design/a.html" style="color:inherit">a</a> /
+    <a href="/design/b.html" style="color:inherit">b</a> / <a href="/design/c.html" style="color:inherit">c</a>。
   </p>
 
   <div class="grid">
     <article class="card">
       <div class="shot">
-        <iframe src="/design/a.html" title="方向 A 预览" loading="lazy"></iframe>
-        <a href="/design/a.html" target="_blank" aria-label="打开方向 A"></a>
+        <iframe src="/design/d.html?still=1" title="概念 D 预览" loading="lazy"></iframe>
+        <a href="/design/d.html" target="_blank" aria-label="打开概念 D"></a>
         <span class="hint">打开全屏 →</span>
       </div>
       <div class="body">
-        <span class="tag">方向 A</span>
-        <h2>一句话即版式</h2>
-        <p>把整个系统压成两行大字，字中间嵌一个会动的环。安静、克制，靠字号和留白撑住。</p>
+        <span class="tag">概念 D</span>
+        <h2>玻璃核心</h2>
+        <p>一颗真实折射的玻璃二十面体，三台设备绕着它转，粒子流从节点飞进核里。</p>
         <ul>
-          <li><b>气质</b> 设计工作室的产品页</li>
-          <li><b>标签</b> 8.4vw 字号 · 嵌入画布 · 编号列表</li>
+          <li><b>技术</b> MeshPhysicalMaterial 透射 + 环境贴图 + Bloom</li>
+          <li><b>数据</b> 节点在线状态驱动颜色，流线密度跟批次</li>
         </ul>
-        <a class="open" href="/design/a.html" target="_blank">打开 →</a>
+        <a class="open" href="/design/d.html" target="_blank">打开 →</a>
       </div>
     </article>
 
     <article class="card">
       <div class="shot">
-        <iframe src="/design/b.html" title="方向 B 预览" loading="lazy"></iframe>
-        <a href="/design/b.html" target="_blank" aria-label="打开方向 B"></a>
+        <iframe src="/design/e.html?still=1" title="概念 E 预览" loading="lazy"></iframe>
+        <a href="/design/e.html" target="_blank" aria-label="打开概念 E"></a>
         <span class="hint">打开全屏 →</span>
       </div>
       <div class="body">
-        <span class="tag">方向 B</span>
-        <h2>一个母题：那道环</h2>
-        <p>k≥5 变成一圈 118vh 的刻度环，被视口裁掉一半。所有元素都从圆形里长出来。</p>
+        <span class="tag">概念 E</span>
+        <h2>数据地形</h2>
+        <p>三台机器的 24 小时序列铺成三条脊，相机贴着地形往前飞。</p>
         <ul>
-          <li><b>气质</b> 有攻击性的产品发布页</li>
-          <li><b>标签</b> 巨型裁切 · 弧形数据 · 薄荷绿</li>
+          <li><b>技术</b> 12 万个点 + 自定义着色器 + 体积雾 + Bloom</li>
+          <li><b>数据</b> 每条脊的高度就是该指标的均值序列</li>
         </ul>
-        <a class="open" href="/design/b.html" target="_blank">打开 →</a>
+        <a class="open" href="/design/e.html" target="_blank">打开 →</a>
       </div>
     </article>
 
     <article class="card">
       <div class="shot">
-        <iframe src="/design/c.html" title="方向 C 预览" loading="lazy"></iframe>
-        <a href="/design/c.html" target="_blank" aria-label="打开方向 C"></a>
+        <iframe src="/design/f.html?still=1" title="概念 F 预览" loading="lazy"></iframe>
+        <a href="/design/f.html" target="_blank" aria-label="打开概念 F"></a>
         <span class="hint">打开全屏 →</span>
       </div>
       <div class="body">
-        <span class="tag">方向 C</span>
-        <h2>纯字排</h2>
-        <p>一张都不画。数字排成规格表，像实验室的检测报告。最冒险的一个，也最不像仪表盘。</p>
+        <span class="tag">概念 F</span>
+        <h2>粒子树</h2>
+        <p>树干是边，三根主枝是三台板子，末梢每粒是一个 5 分钟窗口，风一吹整棵树在动。</p>
         <ul>
-          <li><b>气质</b> 瑞士排版 / 技术白皮书</li>
-          <li><b>标签</b> 无图 · 长表 · 一个朱红</li>
+          <li><b>技术</b> GPU 顶点着色器摆动 + 闪烁 + 加性混合</li>
+          <li><b>数据</b> 枝数 = 设备数，每秒都在呼吸</li>
         </ul>
-        <a class="open" href="/design/c.html" target="_blank">打开 →</a>
+        <a class="open" href="/design/f.html" target="_blank">打开 →</a>
       </div>
     </article>
   </div>
 
-  <footer>选好之后我把边和云两个应用整套重做，包括各个功能页。</footer>
+  <footer>选定一个，我把边与云两个应用的全部页面都按它重做，并补完架构文档里的剩余任务。</footer>
 </div>
 
 <script>

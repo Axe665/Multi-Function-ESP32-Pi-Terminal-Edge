@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>边节点 · 概念 F · 粒子树</title>
+<style>
+  :root { --bg:#07080b; --ink:#f4f1ea; --dim:#8d8a82; --leaf:#c8f06a; --line:#1a1c20; }
+  @font-face { font-family:"Archivo"; src:url("/fonts/archivo.woff2") format("woff2"); font-weight:400 600; font-display:swap; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; background:var(--bg); color:var(--ink); }
+  body { font-family:"Archivo","Noto Sans SC",system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
+  .wrap { position:relative; z-index:2; padding:0 clamp(20px,5vw,72px); }
+
+  header { display:flex; align-items:center; justify-content:space-between; padding:26px 0; font-size:13px; color:var(--dim); }
+  .brand { display:flex; align-items:center; gap:10px; color:var(--ink); }
+  .brand svg { width:20px; height:20px; fill:none; stroke:var(--leaf); stroke-width:1.4; stroke-linecap:round; }
+  header nav { display:flex; gap:22px; }
+  header nav a { color:var(--dim); text-decoration:none; }
+  header nav a:hover { color:var(--ink); }
+
+  #stage { position:fixed; inset:0; z-index:0; }
+  #stage canvas { width:100%; height:100%; display:block; }
+  .veil { position:fixed; inset:0; z-index:1; pointer-events:none;
+    background:linear-gradient(100deg, rgba(7,8,11,.95) 0%, rgba(7,8,11,.86) 36%, rgba(7,8,11,.3) 60%, transparent 80%); }
+
+  .hero { min-height:calc(100vh - 90px); display:flex; align-items:center; }
+  .hero-copy { max-width:min(620px,48vw); }
+  .kicker { font-size:12px; letter-spacing:.18em; color:var(--leaf); margin-bottom:22px; }
+  h1 { margin:0; font-size:clamp(42px,6.4vw,100px); line-height:.95; letter-spacing:-0.045em; font-weight:500; }
+  h1 em { font-style:normal; color:var(--leaf); }
+  .sub { margin:24px 0 0; font-size:clamp(15px,1.3vw,18px); line-height:1.65; color:var(--dim); max-width:36ch; }
+  .sub b { color:var(--ink); font-weight:500; }
+  .acts { margin-top:34px; display:flex; gap:12px; }
+  .btn { height:44px; display:inline-flex; align-items:center; padding:0 20px; border-radius:999px;
+    border:1px solid #2a2e26; color:var(--ink); text-decoration:none; font-size:14px; }
+  .btn.solid { background:var(--leaf); border-color:var(--leaf); color:#0d1206; font-weight:500; }
+
+  .sheet { position:relative; z-index:2; padding:18vh 0 110px;
+    background:linear-gradient(180deg, transparent, rgba(7,8,11,.92) 14%, var(--bg) 32%); }
+  .band { display:grid; grid-template-columns:repeat(3,1fr); border-top:1px solid var(--line); }
+  .band div { padding:24px 0 28px 22px; border-left:1px solid var(--line); }
+  .band div:first-child { border-left:0; padding-left:0; }
+  .band small { display:block; font-size:12px; color:var(--dim); margin-bottom:6px; }
+  .band b { font-size:clamp(28px,3.2vw,44px); font-weight:400; letter-spacing:-0.03em; font-variant-numeric:tabular-nums; }
+
+  .branches { margin-top:64px; display:grid; grid-template-columns:repeat(3,1fr); gap:1px; background:var(--line); }
+  .br { background:var(--bg); padding:22px; }
+  .br h3 { margin:0 0 3px; font-size:15px; font-weight:500; }
+  .br .id { font-size:11.5px; color:var(--dim); }
+  .br p { margin:12px 0 0; font-size:13px; line-height:1.6; color:var(--dim); }
+  .br p b { color:var(--ink); font-weight:500; font-variant-numeric:tabular-nums; }
+
+  .foot { margin-top:96px; padding:24px 0 40px; border-top:1px solid var(--line);
+    display:flex; justify-content:space-between; font-size:12px; color:var(--dim); }
+
+  @media (max-width:900px) {
+    .hero-copy { max-width:100%; }
+    .band, .branches { grid-template-columns:1fr; }
+    .band div { border-left:0; padding-left:0; border-top:1px solid var(--line); }
+  }
+</style>
+<script type="importmap">
+{ "imports": {
+    "three": "/vendor/three/build/three.module.js",
+    "three/addons/": "/vendor/three/addons/"
+} }
+</script>
+</head>
+<body>
+
+<div id="stage"><canvas id="c"></canvas></div>
+<div class="veil"></div>
+
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <svg viewBox="0 0 20 20"><path d="M4 3v14M4 6h7M4 13h7M11 6v7"/><circle cx="16" cy="6" r="1.6"/><circle cx="16" cy="13" r="1.6"/></svg>
+      Modular Terminal
+    </div>
+    <nav><a href="#sheet">读数</a><a href="/design/">换一个</a></nav>
+  </header>
+
+  <section class="hero">
+    <div class="hero-copy">
+      <p class="kicker">EDGE · 假名聚合 · K ≥ 5</p>
+      <h1>每一片叶子<br>都是<em>五个人</em>的均值</h1>
+      <p class="sub">
+        树干是边节点，三根主枝是三台板子，末梢的粒子是逐个 5 分钟窗口。
+        <b>少于五个人的窗口，不会长出来。</b>
+      </p>
+      <div class="acts">
+        <a class="btn solid" href="#sheet">看数字</a>
+        <a class="btn" href="/design/e.html">看地形 →</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="sheet" id="sheet">
+    <div class="band">
+      <div><small>在线终端</small><b id="k1">—</b></div>
+      <div><small>24 小时窗口</small><b id="k2">—</b></div>
+      <div><small>没能长出来</small><b id="k3">—</b></div>
+    </div>
+    <div class="branches" id="branches"></div>
+    <div class="foot"><span>体积与亮度都来自真实数据</span><span>原始数据不出端</span></div>
+  </section>
+</div>
+
+<script type="module">
+import * as THREE from "three";
+import { boot } from "./core.js";
+
+const fmt = (n, d = 0) => Number(n).toLocaleString("zh-CN", { minimumFractionDigits: d, maximumFractionDigits: d });
+const o = await fetch("/api/v1/overview").then((r) => r.json()).catch(() => null);
+
+if (o) {
+  document.getElementById("k1").textContent = `${o.devices_online} / ${o.devices_total}`;
+  document.getElementById("k2").textContent = fmt(o.batches_24h);
+  document.getElementById("k3").textContent = fmt(o.suppressed_buckets);
+  document.getElementById("branches").innerHTML = o.lanes.map((l) => `
+    <div class="br">
+      <h3>${l.name.split("·")[0].trim()}</h3>
+      <div class="id">${l.device_id} · 模块 ${l.modules.join("/")}</div>
+      <p>到达率 <b>${l.fill}%</b> · 最小 k <b>${l.k}</b> · 指标 <b>${l.metrics.length}</b> 个</p>
+    </div>`).join("");
+}
+
+const lanes = o ? o.lanes.slice(0, 3) : [{}, {}, {}];
+const COLORS = [0xc8f06a, 0x7be0b0, 0xffb35c];
+
+boot({
+  canvas: document.getElementById("c"),
+  bloom: 0.5, radius: 0.45, threshold: 0.35, fov: 42,
+  build({ renderer, scene, camera }) {
+    renderer.setClearAlpha(1);
+    scene.background = new THREE.Color(0x07080b);
+    scene.fog = new THREE.FogExp2(0x07080b, 0.032);
+
+    /* ---------- 生成树的点集 ---------- */
+    const pos = [], col = [], seed = [], size = [];
+    const c = new THREE.Color();
+    const push = (x, y, z, hex, s) => {
+      pos.push(x, y, z);
+      c.setHex(hex);
+      col.push(c.r, c.g, c.b);
+      seed.push(Math.random());
+      size.push(s);
+    };
+
+    // 树干
+    for (let i = 0; i < 2600; i++) {
+      const t = Math.random();
+      const y = -3.4 + t * 3.4;
+      const r = 0.16 * (1 - t * 0.55);
+      const a = Math.random() * Math.PI * 2;
+      push(Math.cos(a) * r * Math.random(), y, Math.sin(a) * r * Math.random(),
+        0xd8c9a8, 0.9 + Math.random() * 0.6);
+    }
+
+    // 三根主枝 + 末梢纤维
+    const LANES = Math.max(1, lanes.length);
+    for (let b = 0; b < LANES; b++) {
+      const baseA = (b / LANES) * Math.PI * 2;
+      const hex = COLORS[b % COLORS.length];
+      for (let f = 0; f < 34; f++) {
+        const a = baseA + (f / 34 - 0.5) * 0.85;
+        const lift = 2.3 + (f % 5) * 0.22;
+        const reach = 2.4 + (f % 7) * 0.18;
+        const steps = 46;
+        for (let s = 0; s < steps; s++) {
+          const t = s / steps;
+          const r = Math.pow(t, 0.72) * reach;
+          const y = Math.pow(t, 0.55) * lift;
+          const x = Math.cos(a) * r + Math.sin(t * 9 + f) * 0.1 * t;
+          const z = Math.sin(a) * r + Math.cos(t * 7 + f) * 0.1 * t;
+          push(x, y, z, hex, 0.7 + Math.random() * 0.8);
+          if (Math.random() < 0.55) {
+            push(x + (Math.random() - 0.5) * 0.16, y + Math.random() * 0.1,
+              z + (Math.random() - 0.5) * 0.16, hex, 0.5 + Math.random() * 0.5);
+          }
+        }
+      }
+    }
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute("aColor", new THREE.Float32BufferAttribute(col, 3));
+    geo.setAttribute("aSeed", new THREE.Float32BufferAttribute(seed, 1));
+    geo.setAttribute("aSize", new THREE.Float32BufferAttribute(size, 1));
+
+    const mat = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      uniforms: { uTime: { value: 0 }, uPixelRatio: { value: Math.min(devicePixelRatio || 1, 2) } },
+      vertexShader: /* glsl */`
+        attribute vec3 aColor; attribute float aSeed; attribute float aSize;
+        uniform float uTime; uniform float uPixelRatio;
+        varying vec3 vColor; varying float vAlpha;
+        void main() {
+          vec3 p = position;
+          // 越靠上摆得越厉害，像被风带着
+          float sway = smoothstep(-3.0, 4.5, p.y) * 0.22;
+          p.x += sin(uTime * 0.9 + aSeed * 6.28 + p.y * 0.6) * sway;
+          p.z += cos(uTime * 0.7 + aSeed * 6.28 + p.y * 0.5) * sway;
+          vec4 mv = modelViewMatrix * vec4(p, 1.0);
+          gl_Position = projectionMatrix * mv;
+          gl_PointSize = aSize * 26.0 * uPixelRatio / max(1.0, -mv.z);
+          vColor = aColor;
+          float twinkle = 0.55 + 0.45 * sin(uTime * 1.7 + aSeed * 20.0);
+          vAlpha = twinkle * clamp(1.0 - (-mv.z - 4.0) / 16.0, 0.15, 1.0);
+        }`,
+      fragmentShader: /* glsl */`
+        varying vec3 vColor; varying float vAlpha;
+        void main() {
+          vec2 d = gl_PointCoord - 0.5;
+          float r = length(d);
+          if (r > 0.5) discard;
+          float edge = smoothstep(0.5, 0.05, r);
+          gl_FragColor = vec4(vColor * edge, vAlpha * edge);
+        }`,
+    });
+
+    scene.add(new THREE.Points(geo, mat));
+
+    // 底部的一圈地面光
+    const floor = new THREE.Mesh(
+      new THREE.RingGeometry(0.4, 6.2, 64),
+      new THREE.MeshBasicMaterial({ color: 0x14180f, transparent: true, opacity: 0.35, side: THREE.DoubleSide })
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -3.42;
+    scene.add(floor);
+
+    camera.position.set(0.4, 0.4, 10.6);
+
+    return (t) => {
+      mat.uniforms.uTime.value = t;
+      const a = t * 0.13;
+      camera.position.x = Math.sin(a) * 1.1;
+      camera.position.z = 10.6 + Math.cos(a) * 0.8;
+      camera.position.y = 0.2 + Math.sin(t * 0.19) * 0.6;
+      camera.lookAt(0, 0.2, 0);
+      floor.rotation.z = t * 0.05;
+    };
+  },
+});
+</script>
+</body>
+</html>

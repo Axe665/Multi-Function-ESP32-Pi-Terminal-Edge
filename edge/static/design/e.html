@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>边节点 · 概念 E · 数据地形</title>
+<style>
+  :root { --bg:#04060a; --ink:#eef2f6; --dim:#8794a0; --cool:#62d0ff; --line:#151c23; }
+  @font-face { font-family:"Archivo"; src:url("/fonts/archivo.woff2") format("woff2"); font-weight:400 600; font-display:swap; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; background:var(--bg); color:var(--ink); }
+  body { font-family:"Archivo","Noto Sans SC",system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
+  .wrap { position:relative; z-index:2; padding:0 clamp(20px,5vw,72px); }
+
+  header { display:flex; align-items:center; justify-content:space-between; padding:26px 0; font-size:13px; color:var(--dim); }
+  .brand { display:flex; align-items:center; gap:10px; color:var(--ink); }
+  .brand svg { width:20px; height:20px; fill:none; stroke:var(--cool); stroke-width:1.4; stroke-linecap:round; }
+  header nav { display:flex; gap:22px; }
+  header nav a { color:var(--dim); text-decoration:none; }
+  header nav a:hover { color:var(--ink); }
+
+  #stage { position:fixed; inset:0; z-index:0; }
+  #stage canvas { width:100%; height:100%; display:block; }
+  .veil { position:fixed; inset:0; z-index:1; pointer-events:none;
+    background:linear-gradient(100deg, rgba(4,6,10,.94) 0%, rgba(4,6,10,.82) 34%, rgba(4,6,10,.25) 58%, transparent 78%); }
+
+  .hero { min-height:calc(100vh - 90px); display:flex; flex-direction:column; justify-content:center; }
+  .kicker { font-size:12px; letter-spacing:.18em; color:var(--cool); margin-bottom:20px; }
+  h1 { margin:0; font-size:clamp(44px,7.6vw,120px); line-height:.9; letter-spacing:-0.05em; font-weight:400; }
+  h1 b { font-weight:600; }
+  .sub { margin:24px 0 0; font-size:clamp(15px,1.3vw,18px); line-height:1.6; color:var(--dim); max-width:40ch; }
+  .acts { margin-top:34px; display:flex; gap:12px; }
+  .btn { height:44px; display:inline-flex; align-items:center; padding:0 20px; border-radius:999px;
+    border:1px solid #23303a; color:var(--ink); text-decoration:none; font-size:14px; }
+  .btn.solid { background:var(--cool); border-color:var(--cool); color:#041016; font-weight:500; }
+
+  .sheet { position:relative; z-index:2; padding:16vh 0 120px;
+    background:linear-gradient(180deg, transparent, rgba(4,6,10,.9) 12%, var(--bg) 34%); }
+  .band { display:grid; grid-template-columns:repeat(4,1fr); border-top:1px solid var(--line); }
+  .band div { padding:24px 0 28px 22px; border-left:1px solid var(--line); }
+  .band div:first-child { border-left:0; padding-left:0; }
+  .band small { display:block; font-size:12px; color:var(--dim); margin-bottom:6px; }
+  .band b { font-size:clamp(26px,2.8vw,40px); font-weight:400; letter-spacing:-0.03em; font-variant-numeric:tabular-nums; }
+
+  .legend { margin-top:52px; display:flex; gap:26px; flex-wrap:wrap; font-size:13px; color:var(--dim); }
+  .legend span { display:inline-flex; align-items:center; gap:8px; }
+  .legend i { width:16px; height:3px; border-radius:2px; display:inline-block; }
+
+  .foot { margin-top:96px; padding:24px 0 40px; border-top:1px solid var(--line);
+    display:flex; justify-content:space-between; font-size:12px; color:var(--dim); }
+
+  @media (max-width:900px) {
+    .band { grid-template-columns:repeat(2,1fr); }
+    .band div:nth-child(3) { border-left:0; padding-left:0; }
+  }
+</style>
+<script type="importmap">
+{ "imports": {
+    "three": "/vendor/three/build/three.module.js",
+    "three/addons/": "/vendor/three/addons/"
+} }
+</script>
+</head>
+<body>
+
+<div id="stage"><canvas id="c"></canvas></div>
+<div class="veil"></div>
+
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <svg viewBox="0 0 20 20"><path d="M4 3v14M4 6h7M4 13h7M11 6v7"/><circle cx="16" cy="6" r="1.6"/><circle cx="16" cy="13" r="1.6"/></svg>
+      Modular Terminal
+    </div>
+    <nav><a href="#sheet">读数</a><a href="/design/">换一个</a></nav>
+  </header>
+
+  <section class="hero">
+    <p class="kicker">EDGE-LAB-01 · 24 小时 · 5 分钟一格</p>
+    <h1>三台机器的<br><b>一天</b>，铺成地形</h1>
+    <p class="sub">每一粒点是一个 5 分钟窗口。起伏就是它们的均值，颜色是偏离基线的程度。凑不满五个人的窗口不在这片地形里。</p>
+    <div class="acts">
+      <a class="btn solid" href="#sheet">读数字</a>
+      <a class="btn" href="/design/d.html">看另一颗核 →</a>
+    </div>
+  </section>
+
+  <section class="sheet" id="sheet">
+    <div class="band">
+      <div><small>在线终端</small><b id="k1">—</b></div>
+      <div><small>24 小时批次</small><b id="k2">—</b></div>
+      <div><small>被拦下的桶</small><b id="k3">—</b></div>
+      <div><small>待上云</small><b id="k4">—</b></div>
+    </div>
+    <div class="legend" id="legend"></div>
+    <div class="foot"><span>每条脊 = 一台终端的一条指标</span><span>原始数据不出端</span></div>
+  </section>
+</div>
+
+<script type="module">
+import * as THREE from "three";
+import { boot } from "./core.js";
+
+const fmt = (n, d = 0) => Number(n).toLocaleString("zh-CN", { minimumFractionDigits: d, maximumFractionDigits: d });
+const COLORS = [0x62d0ff, 0x7be0b0, 0xffb35c];
+
+const overview = await fetch("/api/v1/overview").then((r) => r.json()).catch(() => null);
+if (overview) {
+  document.getElementById("k1").textContent = `${overview.devices_online} / ${overview.devices_total}`;
+  document.getElementById("k2").textContent = fmt(overview.batches_24h);
+  document.getElementById("k3").textContent = fmt(overview.suppressed_buckets);
+  document.getElementById("k4").textContent = `${overview.pending_reports} 份`;
+}
+
+/* 取三台设备各自的第一条指标序列；拿不到就用正弦兜底，页面不至于空 */
+const lanes = overview ? overview.lanes.slice(0, 3) : [];
+const series = await Promise.all(lanes.map(async (l) => {
+  const m = l.metrics[0];
+  if (!m) return { label: l.device_id, points: [], unit: "" };
+  const s = await fetch(`/api/v1/devices/${encodeURIComponent(l.device_id)}/series?metric=${encodeURIComponent(m.metric)}&hours=24`)
+    .then((r) => r.json()).catch(() => null);
+  return { label: m.label, unit: m.unit, device: l.device_id, points: s ? s.points : [] };
+}));
+
+const legend = document.getElementById("legend");
+legend.innerHTML = series.map((s, i) =>
+  `<span><i style="background:#${COLORS[i].toString(16).padStart(6, "0")}"></i>${s.device} · ${s.label}</span>`).join("");
+
+/* 把每条序列归一化到 0..1 */
+function normalize(points) {
+  if (!points.length) return Array.from({ length: 96 }, (_, i) => 0.5 + 0.5 * Math.sin(i / 7));
+  const vals = points.map((p) => p.mean);
+  const min = Math.min(...vals), max = Math.max(...vals);
+  const span = max - min || 1;
+  const out = vals.map((v) => (v - min) / span);
+  // 重采样到固定长度，地形宽度才一致
+  const N = 160;
+  return Array.from({ length: N }, (_, i) => out[Math.round((i / (N - 1)) * (out.length - 1))]);
+}
+
+const ridges = series.map((s, i) => ({ color: COLORS[i], data: normalize(s.points) }));
+
+boot({
+  canvas: document.getElementById("c"),
+  bloom: 0.42, radius: 0.45, threshold: 0.35, fov: 52,
+  build({ renderer, scene, camera }) {
+    renderer.setClearAlpha(1);
+    scene.background = new THREE.Color(0x04060a);
+    scene.fog = new THREE.FogExp2(0x04060a, 0.021);
+
+    // 地形：每条脊一层点阵，一共 3 层
+    const COLS = 160, ROWS = 26, GAP = 2.6;
+    const total = COLS * ROWS * ridges.length;
+    const pos = new Float32Array(total * 3);
+    const col = new Float32Array(total * 3);
+    const base = new Float32Array(total);   // 原始高度，用于呼吸
+
+    const c = new THREE.Color();
+    let k = 0;
+    ridges.forEach((ridge, ri) => {
+      const z0 = (ri - (ridges.length - 1) / 2) * GAP;
+      for (let x = 0; x < COLS; x++) {
+        const h = ridge.data[x];
+        for (let z = 0; z < ROWS; z++) {
+          const px = (x / (COLS - 1) - 0.5) * 78;
+          const pz = z0 + (z / (ROWS - 1) - 0.5) * 2.0;
+          const py = h * 4.2 + Math.sin(z * 0.9 + x * 0.2) * 0.05;
+          pos[k * 3] = px; pos[k * 3 + 1] = py; pos[k * 3 + 2] = pz;
+          c.setHex(ridge.color).multiplyScalar(0.35 + h * 0.95);
+          col[k * 3] = c.r; col[k * 3 + 1] = c.g; col[k * 3 + 2] = c.b;
+          base[k] = py;
+          k++;
+        }
+      }
+    });
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    const points = new THREE.Points(geo, new THREE.PointsMaterial({
+      size: 0.055, vertexColors: true, transparent: true, opacity: 0.95,
+      blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true,
+    }));
+    scene.add(points);
+
+    // 地面网格（很淡，只给空间感）
+    const grid = new THREE.GridHelper(120, 60, 0x14202b, 0x0b1219);
+    grid.position.y = -0.4;
+    scene.add(grid);
+
+    camera.position.set(0, 9, 30);
+
+    return (t, { camera }) => {
+      // 相机沿着地形缓慢前推 + 轻微侧移
+      const cycle = (t * 0.06) % 1;
+      camera.position.z = 30 - cycle * 30;
+      camera.position.x = Math.sin(t * 0.17) * 5.5;
+      camera.position.y = 8.5 + Math.sin(t * 0.23) * 1.2;
+      camera.lookAt(Math.sin(t * 0.12) * 3, 2.2, camera.position.z - 16);
+
+      // 点阵随数据轻微呼吸，像活的
+      const p = geo.attributes.position.array;
+      for (let i = 0; i < base.length; i += 7) {
+        p[i * 3 + 1] = base[i] + Math.sin(t * 1.1 + i * 0.05) * 0.045;
+      }
+      geo.attributes.position.needsUpdate = true;
+      grid.position.z = camera.position.z - 16;
+    };
+  },
+});
+</script>
+</body>
+</html>
