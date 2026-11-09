@@ -10,9 +10,13 @@ from . import config, models, store
 
 def send(payload: dict) -> dict:
     """返回 {ok, status, detail}。失败不抛异常，交给发件箱退避。"""
-    if not config.CLOUD_URL:
+    url = config.CLOUD_URL
+    if not url:
+        from . import mdns
+        url = mdns.mdns.discover_cloud() or ""
+    if not url:
         return {"ok": False, "status": "not_configured",
-                "detail": "未配置 EDGE_CLOUD_URL，报表留在发件箱"}
+                "detail": "没有配置 EDGE_CLOUD_URL，mDNS 也没发现 _orpi-cloud._tcp，报表留在发件箱"}
     models.EdgeReport.model_validate(payload)  # 出站前用同一份契约再验一次
 
     headers = {"Authorization": f"Bearer {config.CLOUD_TOKEN}"} if config.CLOUD_TOKEN else {}
@@ -27,7 +31,7 @@ def send(payload: dict) -> dict:
 
     try:
         with httpx.Client(**client_kwargs) as c:
-            r = c.post(f"{config.CLOUD_URL}/api/v1/ingest/edge-report",
+            r = c.post(f"{url}/api/v1/ingest/edge-report",
                        json=payload, headers=headers)
     except (httpx.HTTPError, ValueError) as e:
         return {"ok": False, "status": "unreachable", "detail": str(e)[:200]}

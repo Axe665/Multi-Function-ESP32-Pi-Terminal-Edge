@@ -142,6 +142,39 @@ def renew_cert(device_id: str, body: dict[str, Any]) -> dict[str, Any]:
         raise HTTPException(400, str(e))
 
 
+@router.post("/devices/{device_id}/wifi-config", dependencies=admin)
+def wifi_config(device_id: str, body: dict[str, Any]) -> dict[str, Any]:
+    """给无头终端生成 wpa_supplicant.conf（文档 §5.7.5）。
+
+    PSK 只在这次请求里出现：不落库、不进日志、审计只记设备与 SSID 长度。
+    """
+    if not store.device(device_id):
+        raise HTTPException(404, "设备不存在")
+    ssid = str(body.get("ssid") or "")
+    psk = str(body.get("psk") or "")
+    country = str(body.get("country") or "CN").upper()[:2]
+    if not 1 <= len(ssid) <= 32:
+        raise HTTPException(400, "SSID 长度必须是 1–32")
+    if not 8 <= len(psk) <= 63:
+        raise HTTPException(400, "WPA2 口令长度必须是 8–63")
+    if not country.isalpha():
+        raise HTTPException(400, "country 必须是两位字母国家码")
+    content = (
+        f"country={country}\n"
+        "ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev\n"
+        "update_config=1\n\n"
+        "network={\n"
+        f'    ssid="{ssid}"\n'
+        f'    psk="{psk}"\n'
+        "    key_mgmt=WPA-PSK\n"
+        "}\n"
+    )
+    store.audit_action("admin", "device.wifi_config", device_id,
+                       {"ssid_len": len(ssid), "country": country})
+    return {"filename": f"wpa_supplicant-{device_id}.conf", "content": content,
+            "note": "复制到 U 盘根目录，终端启动时读取；口令不做服务端保存"}
+
+
 @router.post("/devices/{device_id}/revoke", dependencies=admin)
 def revoke(device_id: str) -> dict[str, Any]:
     n = security.revoke(device_id, "admin")
@@ -213,11 +246,16 @@ def device_detail(device_id: str) -> dict[str, Any]:
 
 @router.get("/devices/{device_id}/series", dependencies=admin)
 def device_series(device_id: str, metric: str,
-                  hours: int = Query(default=24, ge=1, le=168)) -> dict[str, Any]:
+                  hours: int = Query(default=24, ge=1, le=168),
+                  from_: int | None = Query(default=None, alias="from"),
+                  to: int | None = Query(default=None)) -> dict[str, Any]:
+    """文档 §5.5 写的是 from/to；本机页面用 hours 更方便，两种都收。"""
     if not store.device(device_id):
         raise HTTPException(404, "设备不存在")
     if not catalog.get(device_id, metric):
         raise HTTPException(404, "这台设备没有这个指标")
+    if from_ and to and to > from_:
+        return analysis.trend_range(device_id, metric, from_, to)
     return analysis.trend(device_id, metric, hours)
 
 

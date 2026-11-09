@@ -9,6 +9,9 @@ const certs = ref([])
 const codes = ref([])
 const error = ref('')
 const picked = ref('')
+const wifi = ref({ ssid: '', psk: '', country: 'CN' })
+const wifiOut = ref(null)
+const wifiOpen = ref(false)
 const { toast } = useSnack()
 
 const linkLabel = { wifi: 'Wi-Fi', ethernet: '有线', offline: '离线', unknown: '未知' }
@@ -34,6 +37,16 @@ async function pair() {
     const r = await api(`/devices/${encodeURIComponent(picked.value)}/pair`, { method: 'POST' })
     toast(`配对码 ${r.code}，${Math.round(r.ttl_s / 60)} 分钟内有效`)
     await load()
+  } catch (e) {
+    toast(`生成失败：${e.message}`)
+  }
+}
+
+async function makeWifi() {
+  try {
+    wifiOut.value = await api(`/devices/${encodeURIComponent(picked.value)}/wifi-config`,
+      { method: 'POST', body: wifi.value })
+    toast('已生成配置，复制到 U 盘根目录')
   } catch (e) {
     toast(`生成失败：${e.message}`)
   }
@@ -119,9 +132,22 @@ onMounted(load)
           <tr v-if="!certs.length"><td colspan="3" class="md-muted">还没有签发过证书。</td></tr>
         </tbody>
       </table>
+      <div v-if="wifiOpen" class="wifi">
+        <div class="section-head"><h3>给无头终端生成 WiFi 配置</h3></div>
+        <div class="wifi-grid">
+          <input v-model="wifi.ssid" class="md-field" placeholder="SSID" aria-label="SSID" />
+          <input v-model="wifi.psk" class="md-field" type="password" placeholder="WPA2 口令（8–63）" aria-label="WiFi 口令" />
+          <input v-model="wifi.country" class="md-field" maxlength="2" aria-label="国家码" />
+          <button class="md-btn" :disabled="!wifi.ssid || !wifi.psk" @click="makeWifi">生成</button>
+        </div>
+        <p class="md-muted small">口令只在这次请求里用，不落库也不进审计。</p>
+        <pre v-if="wifiOut" class="conf">{{ wifiOut.content }}</pre>
+      </div>
+
       <div class="links">
         <a class="md-btn md-btn--outline" href="/api/v1/ca.crt" target="_blank" rel="noopener">下载 CA</a>
         <a class="md-btn md-btn--outline" href="/api/v1/crl.pem" target="_blank" rel="noopener">下载 CRL</a>
+        <button class="md-btn md-btn--outline" @click="wifiOpen = !wifiOpen">WiFi 配置</button>
       </div>
       <p class="md-muted small hint">
         证书 365 天有效，到期前 30 天标红；续期由终端提交 CSR 调 /devices/{id}/renew，边不代签。
@@ -174,6 +200,14 @@ onMounted(load)
 .hint { margin-top: var(--space-3); font: var(--md-body-small); }
 .codes { margin-top: var(--space-4); }
 .code { font-size: 15px; letter-spacing: 0.08em; }
+.wifi { margin-top: var(--space-4); border-top: 1px solid var(--md-surface-container-highest); padding-top: var(--space-3); }
+.wifi-grid { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-top: var(--space-2); }
+.wifi-grid .md-field { flex: 1; min-width: 120px; }
+.conf {
+  margin-top: var(--space-3); padding: var(--space-3);
+  background: var(--md-surface-container-high); border-radius: var(--md-shape-xs);
+  font: var(--md-body-small); white-space: pre-wrap; overflow-wrap: anywhere;
+}
 .small { font: var(--md-body-small); }
 @media (max-width: 900px) {
   .duo { grid-template-columns: minmax(0, 1fr); }

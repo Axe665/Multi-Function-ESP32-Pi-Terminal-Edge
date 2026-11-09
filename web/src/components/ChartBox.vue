@@ -5,6 +5,7 @@ import * as echarts from 'echarts'
 const props = defineProps({
   option: { type: Object, default: () => ({}) },
   height: { type: String, default: '280px' },
+  onClick: { type: Function, default: null },
 })
 
 const host = ref(null)
@@ -19,6 +20,7 @@ function apply() {
 onMounted(() => {
   chart = echarts.init(host.value, null, { renderer: 'canvas' })
   apply()
+  if (props.onClick) chart.on('click', (p) => props.onClick(p))
   observer = new ResizeObserver(() => chart && chart.resize())
   observer.observe(host.value)
 })

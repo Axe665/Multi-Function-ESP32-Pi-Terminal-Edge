@@ -442,13 +442,27 @@ def rebuild_word_freq(terms: dict[str, dict[str, int]]) -> None:
 
 
 def wordcloud(days: int, today: str) -> list[dict[str, Any]]:
+    """词频 + TF-IDF：跨天出现越多权重越低，避免"建议""设备"这类词占满屏。"""
+    import math
+
+    since = today if days <= 0 else _shift_day(today, -(days - 1))
     with connect() as conn:
         rows = conn.execute(
-            "SELECT word, SUM(count) AS count FROM word_freq WHERE day>=? "
-            "GROUP BY word ORDER BY count DESC LIMIT 40",
-            (today if days <= 0 else _shift_day(today, -(days - 1)),),
-        ).fetchall()
-    return [dict(r) for r in rows]
+            "SELECT word, SUM(count) AS count, COUNT(DISTINCT day) AS df "
+            "FROM word_freq WHERE day>=? GROUP BY word ORDER BY count DESC LIMIT 120",
+            (since,)).fetchall()
+        span = conn.execute(
+            "SELECT COUNT(DISTINCT day) AS n FROM word_freq WHERE day>=?", (since,)).fetchone()
+    n_days = max(1, int(span["n"] if span else 1))
+    out = []
+    for r in rows:
+        tf = float(r["count"])
+        df = max(1, int(r["df"]))
+        score = tf * (math.log((n_days + 1) / (df + 1)) + 1.0)
+        out.append({"word": r["word"], "count": int(tf), "df": df,
+                    "score": round(score, 1)})
+    out.sort(key=lambda x: -x["score"])
+    return out[:40]
 
 
 def _shift_day(day: str, delta: int) -> str:

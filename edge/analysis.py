@@ -119,6 +119,18 @@ def trend(device_id: str, metric: str, hours: int = 24) -> dict[str, Any]:
     }
 
 
+def trend_range(device_id: str, metric: str, start_ms: int, end_ms: int) -> dict[str, Any]:
+    """文档 §5.5 的 from/to 形式：按跨度自动选步长。"""
+    span = max(1, end_ms - start_ms)
+    step = 3 * config.WINDOW_MS if span <= 86_400_000 else 3_600_000
+    pts = store.series(device_id, metric, start_ms, end_ms, step)
+    info = catalog.get(device_id, metric) or {}
+    return {"metric": metric, "label": info.get("label", metric),
+            "unit": info.get("unit", ""), "table": info.get("table_name", ""),
+            "decimals": info.get("decimals", 1), "module_id": info.get("module_id", 0),
+            "points": pts}
+
+
 def finding(device_id: str) -> dict[str, Any] | None:
     """该设备最近 24h 最值得说的一句话。"""
     best = None

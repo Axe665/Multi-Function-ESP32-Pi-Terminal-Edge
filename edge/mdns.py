@@ -18,6 +18,7 @@ from . import config, security
 
 EDGE_TYPE = "_orpi-edge._tcp.local."
 DEVICE_TYPE = "_orpi-device._tcp.local."
+CLOUD_TYPE = "_orpi-cloud._tcp.local."
 
 
 def edge_txt(port: int = 8001) -> dict[bytes, bytes]:
@@ -69,11 +70,34 @@ class _DeviceListener(ServiceListener):
         self.found.pop(dev, None)
 
 
+class _CloudListener(ServiceListener):
+    """发现云节点：拿到地址后拼 https://host:port，静态配置仍然优先。"""
+
+    def __init__(self) -> None:
+        self.url: str | None = None
+
+    def add_service(self, zc, type_, name) -> None:
+        info = zc.get_service_info(type_, name, timeout=800)
+        if not info:
+            return
+        addresses = [socket.inet_ntoa(a) for a in info.addresses]
+        if not addresses:
+            return
+        self.url = f"https://{addresses[0]}:{info.port or 8443}"
+
+    def update_service(self, *args) -> None:
+        pass
+
+    def remove_service(self, *args) -> None:
+        pass
+
+
 class Mdns:
     def __init__(self) -> None:
         self.zc: Any = None
         self.info: Any = None
         self.error: str | None = None
+        self.cloud_url: str | None = None
 
     def start(self) -> bool:
         if Zeroconf is None or not config.MDNS_ENABLED:
@@ -90,6 +114,8 @@ class Mdns:
                 server=f"{config.EDGE_ID}.local.",
             )
             self.zc.register_service(self.info)
+            # 文档 §5.8：云地址优先 mDNS 发现，静态地址兜底
+            ServiceBrowser(self.zc, CLOUD_TYPE, _CloudListener())
             self.error = None
             return True
         except Exception as e:  # noqa: BLE001 —— 组播被禁用时不能拖垮服务
@@ -113,6 +139,18 @@ class Mdns:
         time.sleep(timeout)
         browser.cancel()
         return list(found.values())
+
+    def discover_cloud(self, timeout: float = 1.0) -> str | None:
+        """同步找一次云；找不到返回 None（调用方继续用静态地址）。"""
+        if not self.zc:
+            return None
+        listener = _CloudListener()
+        browser = ServiceBrowser(self.zc, CLOUD_TYPE, listener)
+        import time
+        time.sleep(timeout)
+        browser.cancel()
+        self.cloud_url = listener.url
+        return listener.url
 
     def status(self) -> dict[str, Any]:
         return {

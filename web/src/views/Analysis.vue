@@ -32,9 +32,10 @@ async function loadHeat() {
 onMounted(async () => {
   try {
     await loadDevices()
-    ;[words.value, anomalies.value] = await Promise.all([
+    ;[words.value, anomalies.value, allAdvice.value] = await Promise.all([
       api('/wordcloud?days=7').then((r) => r.words || []),
       api('/anomalies?days=7').catch(() => []),
+      api('/advice?limit=100').catch(() => []),
     ])
     await loadHeat()
   } catch (e) {
@@ -48,6 +49,25 @@ watch(device, (v) => {
   metric.value = metrics.value[0]?.metric || ''
 })
 watch([device, metric], loadHeat)
+
+const anomalyOption = computed(() => {
+  const rows = anomalies.value.filter((a) => a.device_id === device.value)
+  const devs = [...new Set(rows.map((a) => a.device_id))]
+  return {
+    grid: { left: 8, right: 16, top: 16, bottom: 24, containLabel: true },
+    tooltip: {
+      formatter: (p) => `${p.value[3]}<br/>${fmtTime(p.value[0])} · z ${p.value[2]}`,
+    },
+    xAxis: { type: 'time', axisLabel: { fontSize: 10 } },
+    yAxis: { type: 'category', data: devs, axisLabel: { fontSize: 11 } },
+    series: [{
+      type: 'scatter',
+      symbolSize: (v) => 8 + Math.min(18, Math.abs(v[2]) * 4),
+      itemStyle: { color: '#386a20', opacity: 0.75 },
+      data: rows.map((a, i) => [a.ts_from, devs.indexOf(a.device_id), a.z, a.label]),
+    }],
+  }
+})
 
 const heatOption = computed(() => {
   const cells = heat.value?.cells || []
@@ -74,8 +94,22 @@ const heatOption = computed(() => {
   }
 })
 
+const picked = ref('')
+const pickedAdvice = ref([])
+const allAdvice = ref([])
+
+function drillWord(p) {
+  picked.value = p.name
+  pickedAdvice.value = allAdvice.value.filter((a) => (a.text || '').includes(p.name)).slice(0, 8)
+}
+
 const wordOption = computed(() => ({
-  tooltip: { formatter: (p) => `${p.name}：${p.value}` },
+  tooltip: {
+    formatter: (p) => {
+      const w = words.value.find((x) => x.word === p.name)
+      return `${p.name}<br/>出现 ${w?.count ?? p.value} 次 · 覆盖 ${w?.df ?? '—'} 天<br/>点一下看原文`
+    },
+  },
   series: [
     {
       type: 'wordCloud',
@@ -87,7 +121,7 @@ const wordOption = computed(() => ({
         fontFamily: 'Roboto, Noto Sans SC, sans-serif',
         color: () => `hsl(${105 + Math.random() * 40}, ${25 + Math.random() * 20}%, ${28 + Math.random() * 22}%)`,
       },
-      data: words.value.slice(0, 40).map((w) => ({ name: w.word, value: w.count })),
+      data: words.value.slice(0, 40).map((w) => ({ name: w.word, value: w.score ?? w.count })),
     },
   ],
 }))
@@ -113,13 +147,37 @@ const wordOption = computed(() => ({
     <ChartBox :option="heatOption" height="300px" />
   </section>
 
+  <section class="md-card timeline">
+    <div class="section-head">
+      <h2>异常时间轴</h2>
+      <span class="md-muted">|z| ≥ 2.5 · 点越大越偏</span>
+    </div>
+    <ChartBox :option="anomalyOption" height="220px" />
+  </section>
+
   <div class="duo">
     <section class="md-card">
       <div class="section-head">
         <h2>词云</h2>
         <span class="md-muted">最近 7 天建议文本 · 词典分词</span>
       </div>
-      <ChartBox :option="wordOption" height="260px" />
+      <ChartBox :option="wordOption" height="260px" :on-click="drillWord" />
+      <div v-if="picked" class="drill">
+        <div class="section-head">
+          <h3>「{{ picked }}」相关的建议</h3>
+          <button class="md-btn md-btn--text" @click="picked = ''">收起</button>
+        </div>
+        <div class="md-list">
+          <div v-for="a in pickedAdvice" :key="a.id" class="md-list-row">
+            <span class="md-chip" :class="a.risk === 'alert' ? 'md-chip--alert' : 'md-chip--warn'">{{ a.risk }}</span>
+            <div class="md-grow">
+              <div>{{ a.text }}</div>
+              <div class="md-muted small">{{ a.device_id }} · {{ fmtTime(a.created_at) }}</div>
+            </div>
+          </div>
+          <p v-if="!pickedAdvice.length" class="md-muted">没有包含这个词的建议。</p>
+        </div>
+      </div>
       <p class="md-muted small">
         词云只反映建议文本的用词频次，不代表严重程度；严重程度看右侧的异常窗口。
       </p>
@@ -154,6 +212,8 @@ const wordOption = computed(() => ({
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4);
   margin-top: var(--space-4); align-items: start;
 }
+.timeline { margin-top: var(--space-4); }
+.drill { margin-top: var(--space-3); border-top: 1px solid var(--md-surface-container-highest); padding-top: var(--space-3); }
 .small { font: var(--md-body-small); }
 @media (max-width: 900px) {
   .duo { grid-template-columns: minmax(0, 1fr); }

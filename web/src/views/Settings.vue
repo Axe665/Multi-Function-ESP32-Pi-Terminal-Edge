@@ -10,6 +10,8 @@ const outbox = ref([])
 const overview = ref(null)
 const preview = ref(null)
 const privacy = ref(null)
+const certs = ref([])
+const paired = ref(0)
 const error = ref('')
 const busy = ref(false)
 const { toast } = useSnack()
@@ -24,6 +26,9 @@ async function load() {
       api('/overview').catch(() => null),
       api('/privacy').catch(() => null),
     ])
+    const [c, d] = await Promise.all([api('/certs').catch(() => []), api('/discovery').catch(() => null)])
+    certs.value = c
+    paired.value = (d?.devices || []).filter((x) => x.paired).length
     preview.value = await api('/report/preview').catch(() => null)
   } catch (e) {
     error.value = e.message
@@ -123,6 +128,21 @@ const cloud = () => [
     </section>
   </div>
 
+  <section class="md-card access-summary">
+    <div class="section-head">
+      <h2>证书与设备接入</h2>
+      <RouterLink class="md-btn md-btn--text" to="/access">去接入页</RouterLink>
+    </div>
+    <div class="md-list">
+      <div class="md-list-row"><div class="md-grow">已配对设备</div><span class="md-mono">{{ paired }}</span></div>
+      <div class="md-list-row"><div class="md-grow">签发证书</div><span class="md-mono">{{ certs.length }}</span></div>
+      <div class="md-list-row">
+        <div class="md-grow">30 天内到期</div>
+        <span class="md-mono">{{ certs.filter((c) => c.expiring).length }}</span>
+      </div>
+    </div>
+  </section>
+
   <section class="md-card report">
     <div class="section-head">
       <h2>这份报表会发什么</h2>
@@ -177,8 +197,9 @@ const cloud = () => [
 <style scoped>
 .error { color: var(--md-error); margin-bottom: var(--space-3); }
 .duo {
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-4); align-items: start;
+  display: grid; grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  max-width: 760px;
 }
 .form { display: flex; flex-direction: column; gap: var(--space-3); margin: var(--space-3) 0; }
 .form label { display: flex; flex-direction: column; gap: 4px; font: var(--md-label-medium); color: var(--md-on-surface-variant); }
@@ -187,6 +208,7 @@ const cloud = () => [
 .small { font: var(--md-body-small); }
 .hint { margin-top: var(--space-3); }
 .report { margin-top: var(--space-4); }
+.access-summary { margin-top: var(--space-4); }
 .outbox { margin-top: var(--space-4); }
 @media (max-width: 900px) {
   .duo { grid-template-columns: minmax(0, 1fr); }

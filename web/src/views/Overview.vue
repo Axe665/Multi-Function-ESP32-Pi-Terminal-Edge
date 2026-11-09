@@ -6,6 +6,7 @@ import PageHeader from '../components/PageHeader.vue'
 import KpiRow from '../components/KpiRow.vue'
 
 const o = ref(null)
+const advice = ref([])
 const error = ref('')
 const flowHost = ref(null)
 let flow = null
@@ -13,6 +14,7 @@ let flow = null
 const load = async () => {
   try {
     o.value = await api('/overview')
+    advice.value = await api('/advice?limit=6').catch(() => [])
     error.value = ''
     if (flow && o.value) {
       flow.setData({
@@ -99,6 +101,25 @@ const kpis = () => {
           </div>
         </dl>
       </article>
+    </div>
+  </section>
+
+  <section class="md-card advice">
+    <div class="section-head">
+      <h2>今日建议流</h2>
+      <span class="md-muted">最近 6 条 · 共 {{ o?.advice_24h ?? 0 }}</span>
+    </div>
+    <div class="md-list">
+      <div v-for="a in advice" :key="a.id" class="md-list-row">
+        <span class="md-chip" :class="a.risk === 'alert' ? 'md-chip--alert' : 'md-chip--warn'">
+          {{ a.risk === 'alert' ? '告警' : '关注' }}
+        </span>
+        <div class="md-grow">
+          <div>{{ a.text }}</div>
+          <div class="md-muted small">{{ a.device_id }} · {{ fmtTime(a.created_at) }}</div>
+        </div>
+      </div>
+      <p v-if="!advice.length" class="md-muted">今天还没有建议。</p>
     </div>
   </section>
 

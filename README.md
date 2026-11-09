@@ -95,17 +95,19 @@ HTTPS  POST /ingest/telemetry                                   ← 兜底通道
 
 | 能力 | 说明 | 验证方式 |
 |---|---|---|
-| MQTT + mTLS 接入 | QoS1、`telemetry/status/ack/cmd` 四个主题、retained status、ACK 回执 | `tests/test_mqtt.py` 用真实报文跑通假 broker |
+| MQTT + mTLS 接入 | QoS1、`telemetry/advice/status/ack/cmd` 五个主题、retained status、ACK 回执 | `tests/test_mqtt.py` 跑假 broker；compose 里真 mosquitto 做过 mTLS 握手（TLSv1.3，身份 edge-lab-01） |
 | 边 CA / 设备证书 | CN=deviceId、OU=mt-device、365 天、ECDSA P-256 | `tests/test_security.py` |
 | 配对码 | 6 位 / 10 分钟 / 一次性 / 绑定公钥指纹 / 5 次失败锁 10 分钟 | 同上 |
 | 吊销与 CRL | 吊销后 `verify()` 失败，CRL 可下载 | 同上 |
-| mDNS | 广播 `_orpi-edge._tcp`、发现 `_orpi-device._tcp`，TXT 只放 ID/型号/版本/端口/CA 指纹 | `edge/mdns.py`；组播不可用时自动退化 |
+| mDNS | 广播 `_orpi-edge._tcp`、发现 `_orpi-device._tcp` 与 `_orpi-cloud._tcp`（云地址优先发现、静态兜底） | `edge/mdns.py`；组播不可用时自动退化 |
 | 定时上云 | 每小时生成报表 + 到期队列投递 | `tests/test_scheduler.py` |
 | 退避与保留期 | 1/5/30 分钟、2 小时；按天清理过期聚合 | 同上 |
 | 隐私闸门 | k<5 抑制、原始字段整份 422、min/max/subject 不出端 | `tests/test_contracts.py` |
 | 证书校验 | 出站前用同一份契约再验一次 | `cloudpush.send` |
 | 指标目录 | 端报什么就登记什么，前端下拉框动态生成 | `edge/catalog.py` + `/api/v1/metrics` |
 | 磁盘加密 | 设 `EDGE_DB_KEY` 时强制走 SQLCipher，没驱动就拒绝启动 | `store._driver` |
+| 词频 TF-IDF | jieba 分词 + 停用词，按天重算，查询时用 TF-IDF 加权（跨天高频词降权） | `/api/v1/wordcloud`，页面点词下钻到建议原文 |
+| WiFi 配置生成 | 管理员给无头终端生成 `wpa_supplicant.conf`；口令只在请求里出现，不落库、审计只记长度 | `POST /api/v1/devices/{id}/wifi-config` |
 
 ## 隐私边界
 
@@ -131,6 +133,8 @@ HTTPS  POST /ingest/telemetry                                   ← 兜底通道
 | GET | `/api/v1/crl.pem` | 吊销列表 |
 | GET | `/api/v1/certs` | 已签发证书 |
 | POST | `/api/v1/devices/{id}/revoke` | 吊销某台设备的全部证书 |
+| POST | `/api/v1/devices/{id}/renew` | 设备带 CSR 换新证书（旧证书到期自然失效） |
+| POST | `/api/v1/devices/{id}/wifi-config` | 给无头终端生成 `wpa_supplicant.conf` |
 | POST | `/api/v1/certs/verify` | 校验一张证书 |
 
 ## 契约
@@ -171,12 +175,13 @@ MQTT 真实报文往返、退避序列与保留期清理。
 
 | 方案里的东西 | 现状 |
 |---|---|
-| SQLCipher 默认开启 | 代码支持（`EDGE_DB_KEY`，缺驱动则拒绝启动），但本机未装 `pysqlcipher3`，只验证了失败路径 |
-| mosquitto 的 ACL 真正生效 | 配置与 ACL 文件已给，但本机没有 mosquitto，未做过端到端握手 |
-| 证书自动续期 | 只签发与吊销；到期前 30 天的续期任务未实现 |
+| SQLCipher 默认开启 | 代码支持（`EDGE_DB_KEY`，缺驱动则拒绝启动），但镜像里没装 `pysqlcipher3`，只验证了"缺驱动就拒绝启动"这条路径 |
+| mosquitto 的逐设备 ACL | 已用真 broker 验证边自己的客户端证书；"每台设备只能读写自己前缀"还需要一台真终端证书才能验 |
+| 证书自动续期 | 刻意不做边代签：续期由终端提交 CSR 调 `/devices/{id}/renew`，边只负责 30 天提醒 |
 | 多边组网 | 单边单云，不支持一个边管多个云 |
+| mDNS 云发现的实际解析 | 代码路径已就位（`_orpi-cloud._tcp`），容器网络里没有组播，只在单测里覆盖 |
 
-演示数据由 `edge/sim.py` 生成（3 台设备 × 10 个用户 × 7 天 × 5 分钟），
+演示数据由 `edge/sim.py` 生成（3 台设备 × 7 天 × 5 分钟窗口，`n_subjects` 取 6–10），
 **不是真实测量**；接真机前请清掉 `data/`。
 
 ## 目录
