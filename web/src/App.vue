@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useTheme } from './lib/theme'
+import BrandMark from './components/BrandMark.vue'
 
 const route = useRoute()
 const drawer = ref(false)
@@ -36,7 +37,7 @@ const { theme, toggleTheme } = useTheme()
   <div class="shell">
     <aside class="rail" aria-label="主导航">
       <div class="brand">
-        <span class="brand-mark" aria-hidden="true"></span>
+        <BrandMark />
         <div>
           <div class="brand-name">Modular Terminal</div>
           <div class="brand-sub">边节点</div>
@@ -96,14 +97,6 @@ const { theme, toggleTheme } = useTheme()
   align-items: center;
   gap: var(--space-3);
   padding: 0 var(--space-2);
-}
-.brand-mark {
-  width: 22px;
-  height: 22px;
-  border-radius: var(--md-shape-sm);
-  /* 单色方块：品牌标记不靠渐变 */
-  background: var(--md-primary);
-  box-shadow: inset 0 0 0 5px var(--md-primary-container);
 }
 .brand-name {
   font: var(--md-title-small);

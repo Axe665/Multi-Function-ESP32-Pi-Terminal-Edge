@@ -119,7 +119,7 @@ const kpis = () => {
 
   <section class="md-card advice">
     <div class="section-head">
-      <h2>今日建议流</h2>
+      <h2>最近建议</h2>
       <span class="md-muted">最近 6 条，共 {{ o?.advice_24h ?? 0 }}</span>
     </div>
     <div class="md-list">
@@ -132,13 +132,13 @@ const kpis = () => {
           <div class="md-muted small">{{ a.device_id }}，{{ fmtTime(a.created_at) }}</div>
         </div>
       </div>
-      <p v-if="!advice.length" class="md-muted">今天还没有建议。</p>
+      <p v-if="!advice.length" class="md-muted">今天没有建议。</p>
     </div>
   </section>
 
   <section class="md-card">
     <div class="section-head">
-      <h2>24 h 里最值得说的三件事</h2>
+      <h2>近 24 小时的变化</h2>
       <span class="md-muted">相对 7 天同段基线</span>
     </div>
     <div class="md-list">
@@ -151,7 +151,7 @@ const kpis = () => {
           {{ f.pct > 0 ? '+' : '' }}{{ fmtNum(f.pct, 1) }}%
         </span>
       </div>
-      <p v-if="!o?.findings?.length" class="md-muted empty">还没有足够的数据生成结论。</p>
+      <p v-if="!o?.findings?.length" class="md-muted empty">数据不足，暂不生成结论。</p>
     </div>
     <p class="md-muted small hint">
       比较口径：每个指标取最近 24 h 均值，对照同设备前 7 天同一时段的均值。

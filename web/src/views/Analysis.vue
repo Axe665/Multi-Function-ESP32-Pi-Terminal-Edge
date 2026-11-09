@@ -123,7 +123,7 @@ const wordOption = computed(() => {
     tooltip: {
       formatter: (p) => {
         const w = words.value.find((x) => x.word === p.name)
-        return `${p.name}<br/>出现 ${w?.count ?? p.value} 次，覆盖 ${w?.df ?? '—'} 天<br/>点一下看原文`
+        return `${p.name}<br/>出现 ${w?.count ?? p.value} 次，覆盖 ${w?.df ?? '—'} 天<br/>点击查看原文`
       },
     },
     series: [
@@ -151,7 +151,7 @@ const wordOption = computed(() => {
 </script>
 
 <template>
-  <PageHeader title="分析" sub="24 h × 7 天的时段矩阵、建议词云和异常窗口。全部数字来自聚合表重算。">
+  <PageHeader title="分析" sub="24 h × 7 天时段矩阵、建议词云和异常窗口。数字按聚合表重算。">
     <select v-model="device" class="md-field" aria-label="设备">
       <option v-for="d in devices" :key="d.device_id" :value="d.device_id">{{ d.name }}</option>
     </select>
@@ -202,7 +202,7 @@ const wordOption = computed(() => {
         </div>
       </div>
       <p class="md-muted small">
-        词云只反映建议文本的用词频次，不代表严重程度；严重程度看右侧的异常窗口。
+        词云只统计建议文本的用词频次，不表示严重程度；严重程度见右侧异常窗口。
       </p>
     </section>
 

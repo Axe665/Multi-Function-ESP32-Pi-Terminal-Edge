@@ -140,7 +140,7 @@ onMounted(load)
           <input v-model="wifi.country" class="md-field" maxlength="2" aria-label="国家码" />
           <button class="md-btn" :disabled="!wifi.ssid || !wifi.psk" @click="makeWifi">生成</button>
         </div>
-        <p class="md-muted small">口令只在这次请求里用，不落库也不进审计。</p>
+        <p class="md-muted small">口令只在本次请求中使用，不落库，不写审计。</p>
         <pre v-if="wifiOut" class="conf">{{ wifiOut.content }}</pre>
       </div>
 

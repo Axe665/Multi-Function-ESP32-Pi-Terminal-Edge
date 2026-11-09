@@ -106,14 +106,14 @@ const cloud = () => [
       <button class="md-btn" :disabled="busy || !settings" @click="save">保存</button>
       <p class="md-muted small hint">
         失败按 1 / 5 / 30 分钟、2 小时退避；报表最多保留 7 天。
-        上报节奏决定自动打包的间隔，保留天数只影响本机聚合与发件箱。
+        上报节奏决定自动打包间隔；保留天数影响本机聚合与发件箱。
       </p>
     </section>
 
     <section class="md-card">
       <div class="section-head">
         <h2>隐私计数</h2>
-        <span class="md-muted">只升不降</span>
+        <span class="md-muted">只增不减</span>
       </div>
       <div class="md-list">
         <div class="md-list-row"><div class="md-grow">k 门槛</div><span class="md-mono">{{ privacy?.k_min ?? '—' }}</span></div>
@@ -145,7 +145,7 @@ const cloud = () => [
 
   <section class="md-card report">
     <div class="section-head">
-      <h2>这份报表会发什么</h2>
+      <h2>报表预览</h2>
       <span class="md-muted">
         {{ preview ? `report_id ${preview.report_id} 前 8 行` : '预览不可用' }}
       </span>
