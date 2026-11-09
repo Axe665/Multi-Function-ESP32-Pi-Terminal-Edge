@@ -1,11 +1,13 @@
-# 边仓 vendor 的端侧契约
+# 端侧契约（orpi.telemetry.v1）
 #
-# 消费方（本仓）不修改这里的副本。要改就回端仓提 PR，
-# 再跑 scripts/sync_contracts.py --update terminal 重新拉取。
-
+# 按「谁产生谁拥有」的原则，owner 是终端仓。端仓目前还没有 contracts/ 目录，
+# 所以这份副本暂时由本仓维护；端仓发布后改成 tag 引用并跑 --update。
+#
+# TODO(端仓): 发布 contracts/wire/telemetry.v1.json + examples 后，
+#             把 tag 改成 contracts/terminal/v1.0.0，这里只留引用。
 repo: https://github.com/Axe665/Multi-Function-ESP32-Pi-Terminal
-path: contracts/manifest/data-schema.v1.json + contracts/wire/telemetry.v1.json
-tag: contracts/terminal/v1.0.0
+path: contracts/wire/telemetry.v1.json（端仓尚未发布）
+tag: 暂无（本仓代为维护）
 synced: 2026-11-09
 
 files:
