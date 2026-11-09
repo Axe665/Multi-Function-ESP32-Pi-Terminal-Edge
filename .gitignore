@@ -8,3 +8,7 @@ data/
 docker/mosquitto/certs/
 
 docker/cloud-certs/
+
+web/node_modules/
+web/dist/
+node_modules/
