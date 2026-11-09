@@ -53,7 +53,7 @@ const kpis = () => {
 </script>
 
 <template>
-  <PageHeader title="总览" :sub="`${o?.edge_name || '边节点'} · 3 台终端 · 5 分钟聚合窗口 · k≥5 才入库`">
+  <PageHeader title="总览" :sub="`${o?.edge_name || '边节点'}，3 台终端，5 分钟聚合窗口，k≥5 才入库`">
     <button class="md-btn md-btn--tonal" @click="load">刷新</button>
     <RouterLink class="md-btn" to="/settings">上云设置</RouterLink>
   </PageHeader>
@@ -72,13 +72,22 @@ const kpis = () => {
         {{ o?.cloud_ok ? '云端可达' : '云端未连' }}
       </span>
     </div>
-    <canvas ref="flowHost" class="flow-canvas"></canvas>
+    <div class="flow-wrap">
+      <canvas ref="flowHost" class="flow-canvas"></canvas>
+      <div class="flow-legend" aria-hidden="true">
+        <span class="flow-stage">终端</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-stage flow-stage--ring">k≥5 聚合环</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-stage">云端</span>
+      </div>
+    </div>
   </section>
 
   <section class="md-card lanes">
     <div class="section-head">
       <h2>链路</h2>
-      <span class="md-muted">最近 24 个 5 分钟窗口 · 实心格为已收到</span>
+      <span class="md-muted">最近 24 个 5 分钟窗口，实心格为已收到</span>
     </div>
     <div class="lane-grid">
       <article v-for="lane in o?.lanes || []" :key="lane.device_id" class="lane">
@@ -96,7 +105,7 @@ const kpis = () => {
         </div>
         <div class="lane-meta">
           <span>最近上报 {{ fmtTime(lane.last_seen) }}</span>
-          <span>最小 k {{ lane.k }} · {{ lane.fill }}% 到达</span>
+          <span>最小 k {{ lane.k }}，{{ lane.fill }}% 到达</span>
         </div>
         <dl class="lane-metrics">
           <div v-for="m in lane.metrics.slice(0, 4)" :key="m.metric">
@@ -111,7 +120,7 @@ const kpis = () => {
   <section class="md-card advice">
     <div class="section-head">
       <h2>今日建议流</h2>
-      <span class="md-muted">最近 6 条 · 共 {{ o?.advice_24h ?? 0 }}</span>
+      <span class="md-muted">最近 6 条，共 {{ o?.advice_24h ?? 0 }}</span>
     </div>
     <div class="md-list">
       <div v-for="a in advice" :key="a.id" class="md-list-row">
@@ -120,7 +129,7 @@ const kpis = () => {
         </span>
         <div class="md-grow">
           <div>{{ a.text }}</div>
-          <div class="md-muted small">{{ a.device_id }} · {{ fmtTime(a.created_at) }}</div>
+          <div class="md-muted small">{{ a.device_id }}，{{ fmtTime(a.created_at) }}</div>
         </div>
       </div>
       <p v-if="!advice.length" class="md-muted">今天还没有建议。</p>
@@ -136,7 +145,7 @@ const kpis = () => {
       <div v-for="f in o?.findings || []" :key="f.metric" class="md-list-row">
         <div class="md-grow">
           <div>{{ f.text }}</div>
-          <div class="md-muted small">{{ f.label }} · {{ f.delta > 0 ? '+' : '' }}{{ fmtNum(f.delta, 2) }}{{ f.unit }}</div>
+          <div class="md-muted small">{{ f.label }}，{{ f.delta > 0 ? '+' : '' }}{{ fmtNum(f.delta, 2) }}{{ f.unit }}</div>
         </div>
         <span class="md-chip" :class="Math.abs(f.pct) > 3 ? 'md-chip--warn' : ''">
           {{ f.pct > 0 ? '+' : '' }}{{ fmtNum(f.pct, 1) }}%
@@ -166,13 +175,40 @@ const kpis = () => {
   gap: var(--space-3);
   margin-bottom: var(--space-3);
 }
+.flow-wrap {
+  position: relative;
+}
 .flow-canvas {
   width: 100%;
-  height: 240px;
+  height: 260px;
   display: block;
   border-radius: var(--md-shape-sm);
   /* 流场是加色混合的粒子，配一块反色底才有对比（M3 的 inverse surface） */
   background: var(--md-inverse-surface);
+}
+.flow-legend {
+  position: absolute;
+  left: 50%;
+  bottom: var(--space-3);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 4px 14px;
+  border-radius: var(--md-shape-full);
+  background: color-mix(in srgb, var(--md-inverse-surface) 72%, transparent);
+  color: var(--md-inverse-on-surface);
+  font: var(--md-label-medium);
+  pointer-events: none;
+}
+.flow-stage {
+  white-space: nowrap;
+}
+.flow-stage--ring {
+  color: #ffd98a;
+}
+.flow-arrow {
+  color: color-mix(in srgb, var(--md-inverse-on-surface) 60%, transparent);
 }
 .section-head {
   display: flex;

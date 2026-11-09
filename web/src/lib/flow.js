@@ -14,10 +14,10 @@ void main() {
   vec2 d = gl_PointCoord - 0.5;
   float r = length(d);
   if (r > 0.5) discard;
-  float edge = smoothstep(0.5, 0.12, r);
-  // 琥珀为主，汇入环时偏白热
-  vec3 cold = vec3(0.42, 0.35, 0.24);
-  vec3 warm = vec3(0.93, 0.72, 0.40);
+  float edge = smoothstep(0.5, 0.10, r);
+  // 琥珀为主，汇入环时偏白热；亮度整体抬高，深色底上才看得见
+  vec3 cold = vec3(0.62, 0.55, 0.40);
+  vec3 warm = vec3(1.0, 0.86, 0.55);
   vec3 c = mix(cold, warm, vWarm);
   outColor = vec4(c * edge, vAlpha * edge);
 }`;
@@ -62,9 +62,9 @@ void main() {
   gl_Position = uProj * view;
 
   float depth = clamp(1.0 - (-view.z - 1.6) / 4.5, 0.0, 1.0);
-  gl_PointSize = (1.1 + 2.4 * depth) * uEmitters[int(clamp(e, 0.0, 2.0))];
+  gl_PointSize = (2.4 + 4.6 * depth) * uEmitters[int(clamp(e, 0.0, 2.0))];
   vWarm = swirl * (0.55 + 0.45 * uAlerts);
-  vAlpha = (1.0 - dead) * em * (0.10 + 0.55 * depth) * smoothstep(0.0, 0.08, ph) * (1.0 - smoothstep(0.92, 1.0, ph));
+  vAlpha = (1.0 - dead) * em * (0.26 + 0.68 * depth) * smoothstep(0.0, 0.06, ph) * (1.0 - smoothstep(0.94, 1.0, ph));
 }`;
 
 const RING_VS = `#version 300 es
@@ -77,16 +77,16 @@ out float vA;
 void main() {
   vec3 p = vec3(aPos.x * (0.5 + 0.02 * uPulse), aPos.y * (0.5 + 0.02 * uPulse), 0.0);
   gl_Position = uProj * uView * vec4(p, 1.0);
-  vA = 0.55 + 0.45 * uPulse;
+  vA = 0.75 + 0.25 * uPulse;
 }`;
 
 const RING_FS = `#version 300 es
 precision highp float;
 in float vA;
 out vec4 outColor;
-void main() { outColor = vec4(0.91, 0.71, 0.36, vA); }`;
+void main() { outColor = vec4(1.0, 0.82, 0.46, vA); }`;
 
-const COUNT = 14000;
+const COUNT = 16000;
 
 export function createFlow(canvas, opts = {}) {
   const gl = canvas.getContext("webgl2", {
@@ -131,7 +131,7 @@ export function createFlow(canvas, opts = {}) {
   const ringBuf = buffer(gl, ring);
 
   const state = {
-    speed: 0.075, cull: 0.12, alerts: 0.2,
+    speed: 0.12, cull: 0.12, alerts: 0.2,
     emitters: [1, 1, 1],
   };
 
@@ -200,7 +200,7 @@ export function createFlow(canvas, opts = {}) {
   return {
     setData(d) {
       const batches = Math.max(1, d.batches || 1);
-      state.speed = 0.05 + Math.min(0.09, batches / 9000);
+      state.speed = 0.10 + Math.min(0.10, batches / 9000);
       state.cull = Math.min(0.6, (d.suppressed || 0) / (batches * 3));
       state.alerts = Math.min(1, (d.alerts || 0) / 20);
       state.emitters = [0, 1, 2].map((i) => (d.online && d.online[i] ? 1 : 0.12));

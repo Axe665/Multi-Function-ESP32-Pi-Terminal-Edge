@@ -59,6 +59,26 @@ class AnalysisTest(unittest.TestCase):
             sum(r["n_samples"] for r in rep["telemetry_daily"]),
             sum(r["n_samples"] for r in daily))
 
+    def test_anomalies_need_consecutive_windows(self):
+        dev = store.devices()[0]["device_id"]
+        base = store.now_ms() - 2 * 3600_000
+        step = config.WINDOW_MS
+        rows = [
+            ("consecutive", base, 3.1), ("consecutive", base + step, 2.8),
+            ("isolated", base + 2 * step, 4.2),
+        ]
+        with store.connect() as conn:
+            for metric, ts, z in rows:
+                conn.execute(
+                    """INSERT OR REPLACE INTO aggregates
+                       (device_id, metric, module_id, ts_from, ts_to, n_subjects,
+                        n_samples, mean, slope, z, k)
+                       VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+                    (dev, metric, 1, ts, ts + step, 9, 360, 20.0, 0.1, z, 9))
+        found = {r["metric"] for r in store.anomalies(base - 1)}
+        self.assertIn("consecutive", found)
+        self.assertNotIn("isolated", found)
+
     def test_overview_counts_agree(self):
         o = analysis.overview()
         self.assertEqual(o["devices_total"], len(o["lanes"]))

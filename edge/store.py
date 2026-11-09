@@ -161,7 +161,8 @@ def connect():
     conn = driver.connect(str(config.DB_PATH), timeout=10)
     if config.DB_KEY:
         conn.execute(f"PRAGMA key='{config.DB_KEY.replace(chr(39), '')}'")
-    conn.row_factory = sqlite3.Row
+    # sqlcipher3 的 Row 与 sqlite3.Row 不通用，跟着驱动走
+    conn.row_factory = driver.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
     try:
@@ -439,13 +440,24 @@ def advice(device_id: str | None = None, risk: str | None = None,
 
 
 def anomalies(since_ms: int, limit: int = 40) -> list[dict[str, Any]]:
+    """文档 §5.4：稳健 z + 连续窗口。只有相邻两个窗口都越界才算异常。"""
     with connect() as conn:
         rows = conn.execute(
             """SELECT device_id, metric, ts_from, z, mean FROM aggregates
-               WHERE ts_from>=? AND ABS(z)>=2.5 ORDER BY ts_from DESC LIMIT ?""",
-            (since_ms, limit),
-        ).fetchall()
-    return [dict(r) for r in rows]
+               WHERE ts_from>=? ORDER BY device_id, metric, ts_from""",
+            (since_ms,)).fetchall()
+    out: list[dict[str, Any]] = []
+    prev: dict[tuple[str, str], Any] = {}
+    for r in rows:
+        key = (r["device_id"], r["metric"])
+        p = prev.get(key)
+        if abs(r["z"]) >= 2.5 and p is not None and abs(p["z"]) >= 2.5 \
+                and r["ts_from"] - p["ts_from"] <= 2 * config.WINDOW_MS:
+            out.append({**dict(r), "windows": 2,
+                        "ts_to": r["ts_from"] + config.WINDOW_MS})
+        prev[key] = r
+    out.sort(key=lambda x: -x["ts_from"])
+    return out[:limit]
 
 
 # ---------------------------------------------------------------- 词频

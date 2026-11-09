@@ -56,9 +56,15 @@ const anomalyOption = computed(() => {
   return {
     grid: { left: 8, right: 16, top: 16, bottom: 24, containLabel: true },
     tooltip: {
-      formatter: (p) => `${p.value[3]}<br/>${fmtTime(p.value[0])} · z ${p.value[2]}`,
+      formatter: (p) => `${p.value[3]}<br/>${fmtTime(p.value[0])}，z ${p.value[2]}`,
     },
-    xAxis: { type: 'time', axisLabel: { fontSize: 10 } },
+    xAxis: {
+      type: 'time',
+      axisLabel: {
+        fontSize: 10,
+        formatter: (v) => { const d = new Date(v); return `${d.getMonth() + 1}/${d.getDate()}` },
+      },
+    },
     yAxis: { type: 'category', data: devs, axisLabel: { fontSize: 11 } },
     series: [{
       type: 'scatter',
@@ -107,7 +113,7 @@ const wordOption = computed(() => ({
   tooltip: {
     formatter: (p) => {
       const w = words.value.find((x) => x.word === p.name)
-      return `${p.name}<br/>出现 ${w?.count ?? p.value} 次 · 覆盖 ${w?.df ?? '—'} 天<br/>点一下看原文`
+      return `${p.name}<br/>出现 ${w?.count ?? p.value} 次，覆盖 ${w?.df ?? '—'} 天<br/>点一下看原文`
     },
   },
   series: [
@@ -115,11 +121,12 @@ const wordOption = computed(() => ({
       type: 'wordCloud',
       shape: 'square',
       left: 0, top: 0, right: 0, bottom: 0,
-      sizeRange: [13, 30],
+      sizeRange: [13, 34],
+      gridSize: 11,
       rotationRange: [0, 0],
       textStyle: {
         fontFamily: 'Roboto, Noto Sans SC, sans-serif',
-        color: () => `hsl(${105 + Math.random() * 40}, ${25 + Math.random() * 20}%, ${28 + Math.random() * 22}%)`,
+        color: () => `hsl(${112 + Math.random() * 34}, ${38 + Math.random() * 18}%, ${24 + Math.random() * 12}%)`,
       },
       data: words.value.slice(0, 40).map((w) => ({ name: w.word, value: w.score ?? w.count })),
     },
@@ -142,7 +149,7 @@ const wordOption = computed(() => ({
   <section class="md-card">
     <div class="section-head">
       <h2>时段热力图</h2>
-      <span class="md-muted">{{ heat?.label }}（{{ heat?.unit }}） · 色深 = 该时段均值</span>
+      <span class="md-muted">{{ heat?.label }}（{{ heat?.unit }}），色深 = 该时段均值</span>
     </div>
     <ChartBox :option="heatOption" height="300px" />
   </section>
@@ -150,7 +157,7 @@ const wordOption = computed(() => ({
   <section class="md-card timeline">
     <div class="section-head">
       <h2>异常时间轴</h2>
-      <span class="md-muted">|z| ≥ 2.5 · 点越大越偏</span>
+      <span class="md-muted">连续 2 个窗口 |z| ≥ 2.5，点越大越偏</span>
     </div>
     <ChartBox :option="anomalyOption" height="220px" />
   </section>
@@ -159,9 +166,9 @@ const wordOption = computed(() => ({
     <section class="md-card">
       <div class="section-head">
         <h2>词云</h2>
-        <span class="md-muted">最近 7 天建议文本 · 词典分词</span>
+        <span class="md-muted">最近 7 天建议文本，词典分词</span>
       </div>
-      <ChartBox :option="wordOption" height="260px" :on-click="drillWord" />
+      <ChartBox :option="wordOption" height="300px" :on-click="drillWord" />
       <div v-if="picked" class="drill">
         <div class="section-head">
           <h3>「{{ picked }}」相关的建议</h3>
@@ -172,7 +179,7 @@ const wordOption = computed(() => ({
             <span class="md-chip" :class="a.risk === 'alert' ? 'md-chip--alert' : 'md-chip--warn'">{{ a.risk }}</span>
             <div class="md-grow">
               <div>{{ a.text }}</div>
-              <div class="md-muted small">{{ a.device_id }} · {{ fmtTime(a.created_at) }}</div>
+              <div class="md-muted small">{{ a.device_id }}，{{ fmtTime(a.created_at) }}</div>
             </div>
           </div>
           <p v-if="!pickedAdvice.length" class="md-muted">没有包含这个词的建议。</p>
@@ -186,13 +193,13 @@ const wordOption = computed(() => ({
     <section class="md-card">
       <div class="section-head">
         <h2>异常窗口</h2>
-        <span class="md-muted">|z| ≥ 2.5 · 最近 {{ anomalies.length }} 条</span>
+        <span class="md-muted">连续 2 个窗口 |z| ≥ 2.5，最近 {{ anomalies.length }} 条</span>
       </div>
       <div class="md-list">
         <div v-for="(a, i) in anomalies.slice(0, 6)" :key="i" class="md-list-row">
           <div class="md-grow">
             <div>{{ a.label }}</div>
-            <div class="md-muted small">{{ a.device_id }} · z {{ a.z }} · 均值 {{ a.mean }}</div>
+            <div class="md-muted small">{{ a.device_id }}，z {{ a.z }}，均值 {{ a.mean }}</div>
           </div>
           <span class="md-mono md-muted">{{ fmtTime(a.ts_from) }}</span>
         </div>

@@ -147,7 +147,7 @@ const cloud = () => [
     <div class="section-head">
       <h2>这份报表会发什么</h2>
       <span class="md-muted">
-        {{ preview ? `report_id ${preview.report_id} · 前 8 行` : '预览不可用' }}
+        {{ preview ? `report_id ${preview.report_id} 前 8 行` : '预览不可用' }}
       </span>
     </div>
     <table v-if="preview?.sample?.length" class="md-table">

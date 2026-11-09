@@ -6,3 +6,6 @@ cryptography>=42
 paho-mqtt>=2.0
 zeroconf>=0.130
 jieba>=0.42
+
+# SQLCipher 驱动（预编译 wheel；设 EDGE_DB_KEY 时启用）
+sqlcipher3-binary>=0.5

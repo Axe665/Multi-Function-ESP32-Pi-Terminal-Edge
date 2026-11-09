@@ -70,7 +70,7 @@ const option = computed(() => {
 </script>
 
 <template>
-  <PageHeader :title="detail?.device?.name || '设备'" :sub="detail ? `${detail.device.device_id} · ${detail.device.scene} · 最小 k ${detail.device.k || '—'}` : ''">
+  <PageHeader :title="detail?.device?.name || '设备'" :sub="detail ? `${detail.device.device_id}，${detail.device.scene}，最小 k ${detail.device.k || '—'}` : ''">
     <RouterLink class="md-btn md-btn--text" to="/devices">返回列表</RouterLink>
   </PageHeader>
 
@@ -94,7 +94,7 @@ const option = computed(() => {
       <div v-for="m in detail.metrics" :key="m.metric" class="md-list-row">
         <div class="md-grow">
           <div>{{ m.label }}</div>
-          <div class="md-muted small">module {{ m.module_id }} · {{ m.table }} · k {{ m.k }}</div>
+          <div class="md-muted small">module {{ m.module_id }}，{{ m.table }}，k {{ m.k }}</div>
         </div>
         <span class="md-mono">{{ fmtNum(m.mean, m.decimals) }} {{ m.unit }}</span>
       </div>
@@ -104,7 +104,7 @@ const option = computed(() => {
   <section class="md-card batches" v-if="batches.length">
     <div class="section-head">
       <h2>最近批次</h2>
-      <span class="md-muted">只存聚合 · 不含逐条原始记录</span>
+      <span class="md-muted">只存聚合，不含逐条原始记录</span>
     </div>
     <table class="md-table">
       <thead><tr><th>窗口</th><th class="num">指标</th><th class="num">最小 k</th><th class="num">建议</th><th class="num">收到</th></tr></thead>

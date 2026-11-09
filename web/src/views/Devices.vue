@@ -65,7 +65,7 @@ const linkLabel = { wifi: 'Wi-Fi', ethernet: '有线', offline: '离线', unknow
   <section class="md-card batches">
     <div class="section-head">
       <h2>最近批次</h2>
-      <span class="md-muted">聚合窗口 · 不含逐条明细</span>
+      <span class="md-muted">聚合窗口，不含逐条明细</span>
     </div>
     <table class="md-table">
       <thead>

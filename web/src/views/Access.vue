@@ -81,7 +81,7 @@ onMounted(load)
           <tr v-for="d in devices" :key="d.device_id">
             <td>
               <strong>{{ d.device_id }}</strong>
-              <div class="md-muted small">{{ d.scene || '—' }} · {{ d.source === 'mdns' ? 'mDNS' : '已登记' }}</div>
+              <div class="md-muted small">{{ d.scene || '—' }}，{{ d.source === 'mdns' ? 'mDNS' : '已登记' }}</div>
             </td>
             <td>{{ d.model || '—' }}</td>
             <td class="md-mono">{{ d.fw || '—' }}</td>
@@ -164,7 +164,7 @@ onMounted(load)
       <div v-for="c in codes.slice(0, 5)" :key="c.code" class="md-list-row">
         <div class="md-grow">
           <div class="md-mono code">{{ c.code }}</div>
-          <div class="md-muted small">{{ c.device_id || '—' }} · {{ c.attempts }} 次尝试</div>
+          <div class="md-muted small">{{ c.device_id || '—' }}，{{ c.attempts }} 次尝试</div>
         </div>
         <span class="md-chip" :class="c.used_at ? 'md-chip--ok' : c.locked_until ? 'md-chip--alert' : 'md-chip--warn'">
           {{ c.used_at ? '已使用' : c.locked_until ? '已锁定' : '待使用' }}
