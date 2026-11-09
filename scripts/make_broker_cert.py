@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -23,7 +24,14 @@ def main() -> None:
     (out / "broker.crt").write_text(bundle["cert_pem"])
     (out / "broker.key").write_text(bundle["key_pem"])
     (out / "broker.key").chmod(0o600)
-    print(f"已签发 {name} 的 broker 证书 → {out}")
+
+    # 边自己也要能连 broker：CN 必须与 ACL 里的用户名一致
+    edge_id = os.environ.get("EDGE_ID", "edge-lab-01")
+    client = security.issue_edge_client(edge_id)
+    (out / "edge.crt").write_text(client["cert_pem"])
+    (out / "edge.key").write_text(client["key_pem"])
+    (out / "edge.key").chmod(0o600)
+    print(f"已签发 {name} 的 broker 证书与 {edge_id} 的客户端证书 → {out}")
 
 
 if __name__ == "__main__":

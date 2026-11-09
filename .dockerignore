@@ -1,0 +1,10 @@
+# 构建上下文只留代码：数据、截图、测试都不进镜像
+data/
+docs/
+tests/
+docker/
+.git/
+.env
+__pycache__/
+*.py[cod]
+.taste-skill/

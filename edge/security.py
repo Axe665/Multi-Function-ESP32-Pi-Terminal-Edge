@@ -252,6 +252,36 @@ def _csr_fingerprint(csr_pem: str) -> str:
             serialization.PublicFormat.SubjectPublicKeyInfo)).hexdigest()[:16]
 
 
+def issue_edge_client(name: str) -> dict[str, Any]:
+    """边节点自己连 broker 用的客户端证书（CN 要与 ACL 里的用户名一致）。"""
+    ca_crt, ca_key = ensure_ca()
+    key = ec.generate_private_key(ec.SECP256R1())
+    now = _now()
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(x509.Name([
+            x509.NameAttribute(NameOID.COMMON_NAME, name),
+            x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, "mt-edge"),
+        ]))
+        .issuer_name(ca_crt.subject)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - dt.timedelta(minutes=5))
+        .not_valid_after(now + dt.timedelta(days=365))
+        .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+        .add_extension(x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.CLIENT_AUTH]),
+                       critical=False)
+        .sign(ca_key, hashes.SHA256())
+    )
+    return {
+        "cert_pem": cert.public_bytes(serialization.Encoding.PEM).decode(),
+        "key_pem": key.private_bytes(
+            serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption()).decode(),
+        "ca_pem": ca_crt.public_bytes(serialization.Encoding.PEM).decode(),
+    }
+
+
 def device_certs() -> list[dict[str, Any]]:
     """证书清单，带剩余天数 —— 到期前 30 天要提醒续期。"""
     now = store.now_ms()
