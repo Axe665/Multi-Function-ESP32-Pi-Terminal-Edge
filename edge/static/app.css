@@ -178,6 +178,7 @@ h3 { margin: 0; font-size: 14px; font-weight: 600; }
 }
 .kpi { padding: 14px 20px 15px; border-left: 1px solid var(--border); min-width: 0; }
 .kpi:first-child { border-left: 0; }
+.kpis.five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .kpi-label { font-size: 12px; color: var(--faint); }
 .kpi-value {
   margin-top: 3px; font-size: 26px; line-height: 1.15; font-weight: 400;

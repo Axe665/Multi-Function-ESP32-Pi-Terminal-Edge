@@ -90,7 +90,7 @@ async function viewOverview() {
       </div>
     </div>`).join("") : `<div class="empty">最近 24 h 三条链路都在基线附近，没有需要单独说明的变化。</div>`;
 
-  const advice = await api("/api/v1/advice?limit=6").catch(() => []);
+  const advice = await api("/api/v1/advice?limit=5").catch(() => []);
   const adviceRows = advice.length ? advice.map((a) => `
     <div class="list-row">
       <span class="pill pill-${a.risk}">${riskLabel[a.risk]}</span>
@@ -184,13 +184,13 @@ async function viewOverview() {
       </div>
     </div>
 
-    <div class="row split" style="align-items:stretch">
+    <div class="row split" style="align-items:start">
       <section class="panel fill">
         <div class="panel-head"><h2>24 h 里最值得说的三件事</h2><span class="meta">相对 7 天同段基线</span></div>
         <div class="list findings">${findings}</div>
         <p class="hint grow-block" style="margin:16px 0 0">比较口径：每个指标取最近 24 h 均值，对照同设备前 7 天同一时段的均值。</p>
       </section>
-      ${panel("建议流", `最近 6 条 · 共 ${o.advice_24h}`, `<div class="list">${adviceRows}</div>`)}
+      ${panel("建议流", `最近 5 条 · 共 ${o.advice_24h}`, `<div class="list">${adviceRows}</div>`)}
     </div>`;
 
   const flow = createFlow(document.getElementById("flow"));
@@ -237,8 +237,10 @@ async function viewDevices() {
     <div class="row"><section class="panel">${skeleton(3)}</section></div>`;
 
   let devs;
+  let batches = [];
   try {
     devs = await api("/api/v1/devices");
+    batches = await api("/api/v1/batches?limit=8").catch(() => []);
   } catch (e) {
     main.querySelector(".panel").innerHTML = errBox(`读不到设备列表：${e.message}`);
     return;
@@ -262,7 +264,7 @@ async function viewDevices() {
       <div><h1>设备</h1><p class="sub">三台终端：一台带屏跑完整 QML，两台无头只上报数据。</p></div>
       <div class="title-actions"><span class="stamp">${devs.filter((d) => d.online).length} / ${devs.length} 在线</span></div>
     </div>
-    <div class="row split" style="align-items:stretch">
+    <div class="row split" style="align-items:start">
       <section class="panel fill">
         <div class="panel-head"><h2>已接入</h2><span class="meta">${devs.length} 台</span></div>
         <table class="table responsive">
@@ -287,6 +289,25 @@ async function viewDevices() {
         <p class="hint" style="margin:14px 0 0">
           模块清单来自终端的 status 主题；新模块第一次上报时自动登记，不需要改边。</p>
         <a class="btn btn-sm" href="#/access" style="margin-top:16px">去接入页配对</a>
+      </section>
+    </div>
+
+    <div class="row">
+      <section class="panel">
+        <div class="panel-head"><h2>最近批次</h2>
+          <span class="meta">聚合窗口 · 不含逐条明细</span></div>
+        <table class="table responsive">
+          <thead><tr><th>设备</th><th>窗口</th><th class="num">指标</th><th class="num">最小 k</th>
+            <th class="num">建议</th><th class="num">收到</th></tr></thead>
+          <tbody>${batches.map((b) => `<tr>
+            <td class="mono">${esc(b.device_id)}</td>
+            <td>${fmtTime(b.ts_from)} – ${fmtTime(b.ts_to)}</td>
+            <td class="num">${b.metrics}</td>
+            <td class="num">${b.k_min}</td>
+            <td class="num">${b.advice || "—"}</td>
+            <td class="num">${fmtTime(b.received_at)}</td>
+          </tr>`).join("") || `<tr><td colspan="6" class="dash">还没有收到批次。</td></tr>`}</tbody>
+        </table>
       </section>
     </div>`;
 }
@@ -430,8 +451,10 @@ async function viewAnalysis() {
   main.innerHTML = `<div class="title-row"><div><h1>分析</h1><p class="sub">读取中…</p></div></div>`;
 
   let devs;
+  let batches = [];
   try {
     devs = await api("/api/v1/devices");
+    batches = await api("/api/v1/batches?limit=8").catch(() => []);
   } catch (e) {
     main.innerHTML = `<div class="title-row"><div><h1>分析</h1></div></div><div class="row">${errBox(`读不到设备：${e.message}`)}</div>`;
     return;
@@ -501,7 +524,7 @@ async function viewAnalysis() {
       const total = w.words.reduce((n, x) => n + x.count, 0) || 1;
       document.getElementById("cloud-top").innerHTML = `<table class="table">
         <thead><tr><th>词</th><th class="num">出现</th><th class="num">占比</th></tr></thead>
-        <tbody>${w.words.slice(0, 5).map((x) => `<tr>
+        <tbody>${w.words.slice(0, 6).map((x) => `<tr>
           <td>${esc(x.word)}</td>
           <td class="num">${fmtNum(x.count)}</td>
           <td class="num muted">${((x.count / total) * 100).toFixed(1)}%</td>
@@ -568,8 +591,7 @@ async function viewAccess() {
   main.innerHTML = `
     <div class="title-row">
       <div><h1>接入</h1>
-        <p class="sub">mDNS 发现、一次性配对码、设备证书与吊销列表。终端广播 <span class="mono">_orpi-device._tcp</span>，
-        边广播 <span class="mono">_orpi-edge._tcp</span>。</p></div>
+        <p class="sub">mDNS 发现、一次性配对码、证书与吊销；组播不可用时退化为登记清单。</p></div>
       <div class="title-actions"><span class="stamp">CA ${esc(disc?.edge?.ca_fp || "—")}</span></div>
     </div>
 
@@ -586,7 +608,7 @@ async function viewAccess() {
         <div class="kpi-note">CRL 可下载</div></div>
     </div>
 
-    <div class="row split" style="align-items:stretch">
+    <div class="row split" style="align-items:start">
       <section class="panel fill">
         <div class="panel-head"><h2>发现的设备</h2><span class="meta">${devices.length} 台</span></div>
         <table class="table responsive">
@@ -601,8 +623,15 @@ async function viewAccess() {
             <td class="num">${d.paired ? "" : `<button class="btn btn-sm" data-pair="${esc(d.device_id)}">生成配对码</button>`}</td>
           </tr>`).join("") || `<tr><td colspan="6" class="dash">没有发现任何终端。</td></tr>`}</tbody>
         </table>
+        <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
+          <select class="control" id="pair-device" aria-label="选择要配对的设备" style="flex:1;min-width:160px">
+            ${devices.map((d) => `<option value="${esc(d.device_id)}">${esc(d.device_id)}${d.paired ? "（已配对，将签发新码）" : ""}</option>`).join("") || `<option>没有设备</option>`}
+          </select>
+          <button class="btn" id="pair-btn">生成配对码</button>
+        </div>
         <p class="hint grow-block" style="margin:14px 0 0" id="pair-hint">
-          配对码 6 位、10 分钟有效，绑定设备公钥指纹，一次性使用；同一设备 5 次失败锁 10 分钟。</p>
+          配对码 6 位、10 分钟有效，绑定设备公钥指纹，一次性使用；同一设备 5 次失败锁 10 分钟。
+          终端广播 <span class="mono">_orpi-device._tcp</span>，边广播 <span class="mono">_orpi-edge._tcp</span>。</p>
       </section>
 
       ${panel("证书", `${certs.length} 张`, `<table class="table">
@@ -616,7 +645,10 @@ async function viewAccess() {
       <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
         <a class="btn btn-sm" href="/api/v1/ca.crt" target="_blank" rel="noopener">下载 CA</a>
         <a class="btn btn-sm" href="/api/v1/crl.pem" target="_blank" rel="noopener">下载 CRL</a>
-      </div>`)}
+      </div>
+      <p class="hint" style="margin:14px 0 0">
+        证书 365 天有效，到期前 30 天在列表标红。续期由终端提交 CSR 调
+        <span class="mono">/devices/{id}/renew</span>，边不代签。</p>`)}
     </div>
 
     <div class="row">
@@ -629,6 +661,19 @@ async function viewAccess() {
         </div>`).join("") || `<div class="empty">还没有生成过配对码。</div>`}
       </div>`)}
     </div>`;
+
+  $("pair-btn")?.addEventListener("click", async (ev) => {
+    const id = $("pair-device").value;
+    ev.currentTarget.disabled = true;
+    try {
+      const r = await api(`/api/v1/devices/${encodeURIComponent(id)}/pair`, { method: "POST" });
+      $("pair-hint").textContent = `配对码 ${r.code}，${r.ttl_s / 60} 分钟内有效，已绑定该设备的公钥指纹。`;
+      route(true);
+    } catch (e) {
+      toast(`生成失败：${e.message}`);
+      ev.currentTarget.disabled = false;
+    }
+  });
 
   main.querySelectorAll("[data-pair]").forEach((btn) =>
     btn.addEventListener("click", async () => {
@@ -676,7 +721,28 @@ async function viewCloud() {
         <div class="kpi-note">最近一次 ${sent[0] ? fmtTime(sent[0].sent_at, true) : "—"}</div></div>
     </div>
 
-    <div class="row split">
+    <div class="kpis five">
+      <div class="kpi"><div class="kpi-label">设备清单</div>
+        <div class="kpi-value">${preview ? preview.counts.devices : "—"}</div>
+        <div class="kpi-note">台</div></div>
+      <div class="kpi"><div class="kpi-label">日聚合</div>
+        <div class="kpi-value">${preview ? preview.counts.telemetry_daily : "—"}</div>
+        <div class="kpi-note">行 · 只含 mean/slope/z</div></div>
+      <div class="kpi"><div class="kpi-label">建议文本</div>
+        <div class="kpi-value">${preview ? preview.counts.advice : "—"}</div>
+        <div class="kpi-note">条 · 已过脱敏</div></div>
+      <div class="kpi"><div class="kpi-label">词频</div>
+        <div class="kpi-value">${preview ? preview.counts.word_freq : "—"}</div>
+        <div class="kpi-note">行</div></div>
+      <div class="kpi"><div class="kpi-label">隐私计数</div>
+        <div class="kpi-value" style="font-size:16px">抑制 ${preview ? preview.privacy.suppressed_buckets : "—"}
+          · 拦截 ${preview ? preview.privacy.raw_rejected : "—"}</div>
+        <div class="kpi-note">k&lt;5 与原始字段</div></div>
+    </div>
+    <p class="hint" style="margin:12px 0 0">报表结构在出端前做二次脱敏：min/max、subject 与 userId 在端侧已剥离，
+      载荷里出现原始字段会被云侧拒收并告警。</p>
+
+    <div class="row">
       <section class="panel">
         <div class="panel-head"><h2>发件箱</h2><span class="meta">${outbox.length} 份报表</span></div>
         <table class="table responsive">
@@ -693,14 +759,6 @@ async function viewCloud() {
         </table>
       </section>
 
-      ${panel("报表结构", "出端前二次脱敏", `<dl class="list" style="margin:0;font-size:13px">
-        <div class="list-row"><div class="grow">设备清单</div><span class="muted">${preview ? preview.counts.devices : "—"} 台</span></div>
-        <div class="list-row"><div class="grow">日聚合</div><span class="muted">${preview ? preview.counts.telemetry_daily : "—"} 行</span></div>
-        <div class="list-row"><div class="grow">建议文本</div><span class="muted">${preview ? preview.counts.advice : "—"} 条</span></div>
-        <div class="list-row"><div class="grow">词频</div><span class="muted">${preview ? preview.counts.word_freq : "—"} 行</span></div>
-        <div class="list-row"><div class="grow">隐私计数</div><span class="muted">抑制 ${preview ? preview.privacy.suppressed_buckets : "—"} · 拦截 ${preview ? preview.privacy.raw_rejected : "—"}</span></div>
-      </dl>
-      <p class="hint" style="margin:14px 0 0">min/max、subject 与 userId 在端侧已剥离，边只做二次校验；载荷里出现原始字段会被云侧拒收并告警。</p>`)}
     </div>
 
     <div class="row">
