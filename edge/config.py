@@ -27,6 +27,29 @@ INGEST_TOKEN = _env("EDGE_INGEST_TOKEN")
 ADMIN_TOKEN = _env("EDGE_ADMIN_TOKEN")
 
 K_MIN = int(_env("EDGE_K_MIN", "5"))
+
+# ---- MQTT（端 → 边 的主通道）----
+MQTT_HOST = _env("EDGE_MQTT_HOST")
+MQTT_PORT = int(_env("EDGE_MQTT_PORT", "8883"))
+MQTT_CA = _env("EDGE_MQTT_CA")
+MQTT_CERT = _env("EDGE_MQTT_CERT")
+MQTT_KEY = _env("EDGE_MQTT_KEY")
+MQTT_USER = _env("EDGE_MQTT_USER")
+MQTT_PASS = _env("EDGE_MQTT_PASS")
+MQTT_TLS = _env("EDGE_MQTT_TLS", "1") != "0"
+
+# ---- 边 → 云 的 mTLS ----
+CLOUD_CA = _env("EDGE_CLOUD_CA")
+CLOUD_CERT = _env("EDGE_CLOUD_CERT")
+CLOUD_KEY = _env("EDGE_CLOUD_KEY")
+
+# ---- mDNS 与定时任务 ----
+MDNS_ENABLED = _env("EDGE_MDNS", "1") != "0"
+PUSH_INTERVAL_MS = int(_env("EDGE_PUSH_INTERVAL_MS", str(60 * 60 * 1000)))
+JANITOR_INTERVAL_MS = int(_env("EDGE_JANITOR_INTERVAL_MS", str(6 * 60 * 60 * 1000)))
+
+# 设了就要求 SQLCipher；没有驱动就拒绝启动，不静默降级成明文
+DB_KEY = _env("EDGE_DB_KEY")
 WINDOW_MS = int(_env("EDGE_WINDOW_MS", str(5 * 60 * 1000)))
 KEEP_DAYS = int(_env("EDGE_KEEP_DAYS", "180"))
 

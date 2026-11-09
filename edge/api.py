@@ -1,14 +1,14 @@
 """边节点 HTTP API。设备侧走 /ingest，管理侧给前端用。"""
 from __future__ import annotations
 
-import secrets
 from typing import Any
 
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import ValidationError
 
-from . import analysis, config, metrics, models, sim, store
+from . import (analysis, cloudpush, config, ingest, mdns, metrics,
+               models, mqtt, scheduler, security, sim, store)
 
 router = APIRouter(prefix="/api/v1")
 
@@ -54,60 +54,85 @@ def _raw_hits(node: Any, path: str = "") -> list[str]:
 
 @router.post("/ingest/telemetry", dependencies=device)
 def ingest_telemetry(body: dict[str, Any]) -> dict[str, Any]:
-    hits = _raw_hits(body)
-    if hits:
-        store.bump("raw_rejected")
-        raise HTTPException(
-            422, {"code": "raw_payload_rejected",
-                  "message": "出端载荷不得包含原始字段", "fields": hits[:5]})
-
     try:
-        msg = models.Telemetry.model_validate(body)
-    except ValidationError as e:
-        raise HTTPException(422, {"code": "schema_invalid",
-                                  "errors": e.errors(include_url=False, include_context=False)[:5]})
-
-    if msg.privacy.k < config.K_MIN:
-        store.bump("suppressed_buckets")
-        return {"accepted": False, "code": "k_below_min", "batch_id": None}
-
-    agg = [a.model_dump() for a in msg.aggregates]
-    adv = [a.model_dump() for a in msg.advice]
-    batch_id = _batch_id(msg.device_id, msg.window.from_, msg.window.to)
-    accepted = store.insert_batch(msg.device_id, batch_id, msg.window.from_,
-                                  msg.window.to, body, agg, adv)
-    store.touch_device(msg.device_id, msg.window.to)
-    if msg.privacy.suppressed:
-        store.bump("suppressed_buckets", msg.privacy.suppressed)
-    return {"accepted": accepted, "batch_id": batch_id, "code": "ok" if accepted else "duplicate"}
-
-
-def _batch_id(device_id: str, ts_from: int, ts_to: int) -> str:
-    import hashlib
-    return hashlib.sha256(f"{device_id}{ts_from}{ts_to}".encode()).hexdigest()[:16]
+        return ingest.process(body)
+    except ingest.IngestError as e:
+        detail: dict[str, Any] = {"code": e.code, "message": e.message}
+        if e.fields:
+            detail["fields" if e.code == "raw_payload_rejected" else "errors"] = e.fields
+        raise HTTPException(422, detail)
 
 
 @router.get("/discovery", dependencies=admin)
 def discovery() -> dict[str, Any]:
-    """mDNS 发现的服务记录。演示里由静态清单提供，真机走 _orpi-device._tcp。"""
-    return {
-        "service": "_orpi-device._tcp.local",
-        "edge": {"id": config.EDGE_ID, "port": 8001, "ca_fp": "sha256:9f3c…"},
-        "devices": [{
+    """mDNS 广播 + 已登记设备合并。找不到组播时只返回已登记的。"""
+    seen = {d["device_id"]: d for d in store.devices()}
+    out = []
+    for dev in mdns.mdns.browse(0.6):
+        base = seen.pop(dev["device_id"], None)
+        out.append({**dev, "scene": base["scene"] if base else None,
+                    "paired": bool(base and base["paired_at"]),
+                    "last_seen": base["last_seen"] if base else None})
+    for d in seen.values():
+        out.append({
             "device_id": d["device_id"], "model": d["name"].split("·")[-1].strip(),
-            "fw": d["fw"], "scene": d["scene"], "paired": bool(d["paired_at"]),
-            "last_seen": d["last_seen"],
-        } for d in store.devices()],
-    }
+            "fw": d["fw"], "port": 4580, "address": None, "scene": d["scene"],
+            "paired": bool(d["paired_at"]), "last_seen": d["last_seen"],
+            "source": "registry",
+        })
+    return {"service": mdns.DEVICE_TYPE, "edge": mdns.mdns.status(), "devices": out}
 
 
 @router.post("/devices/{device_id}/pair", dependencies=admin)
 def pair(device_id: str) -> dict[str, Any]:
     if not store.device(device_id):
         raise HTTPException(404, "设备不存在")
-    code = f"{secrets.randbelow(1_000_000):06d}"
-    store.create_pair_code(code, 10 * 60 * 1000)
+    code = security.new_pair_code(device_id)
     return {"device_id": device_id, "code": code, "ttl_s": 600}
+
+
+@router.post("/pair/redeem", dependencies=device)
+def pair_redeem(body: dict[str, Any]) -> dict[str, Any]:
+    """终端拿配对码 + CSR 换证书。失败次数与锁定在这里生效。"""
+    code = str(body.get("code", ""))
+    csr = str(body.get("csr", ""))
+    if not code or not csr:
+        raise HTTPException(400, "需要 code 与 csr")
+    try:
+        return security.redeem(code, csr)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@router.get("/ca.crt", dependencies=admin)
+def ca_crt() -> dict[str, Any]:
+    security.ensure_ca()
+    return {"pem": security.CA_CRT.read_text(), "fingerprint": security.ca_fingerprint()}
+
+
+@router.get("/crl.pem", dependencies=admin)
+def crl() -> dict[str, Any]:
+    return {"pem": security.crl_pem().decode(), "revoked": len(store.revoked())}
+
+
+@router.get("/certs", dependencies=admin)
+def certs() -> list[dict[str, Any]]:
+    return store.device_certs()
+
+
+@router.post("/devices/{device_id}/revoke", dependencies=admin)
+def revoke(device_id: str) -> dict[str, Any]:
+    n = security.revoke(device_id, "admin")
+    store.audit_action("admin", "device.revoke", device_id, {"certs": n})
+    return {"device_id": device_id, "revoked": n, "crl_size": len(store.revoked())}
+
+
+@router.post("/certs/verify", dependencies=admin)
+def verify_cert(body: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return security.verify(str(body.get("pem", "")))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
 
 @router.get("/pair-codes", dependencies=admin)
@@ -127,11 +152,16 @@ def devices() -> list[dict[str, Any]]:
     out = []
     for d in store.devices():
         latest = store.latest_aggregates(d["device_id"])
-        out.append({**d, "metrics": [{
-            "metric": a["metric"], "label": metrics.label(a["metric"]),
-            "unit": metrics.unit(a["metric"]), "decimals": metrics.decimals(a["metric"]),
-            "mean": a["mean"], "z": a["z"], "k": a["k"], "ts": a["ts_from"],
-        } for a in latest]})
+        out.append({**d,
+                    "module_list": [metrics.MODULES[m] for m in d["modules"] if m in metrics.MODULES],
+                    "metrics": [{
+                        "metric": a["metric"],
+                        "label": metrics.label(d["device_id"], a["metric"]),
+                        "unit": metrics.unit(d["device_id"], a["metric"]),
+                        "decimals": metrics.decimals(d["device_id"], a["metric"]),
+                        "module_id": a["module_id"], "mean": a["mean"], "z": a["z"],
+                        "k": a["k"], "ts": a["ts_from"],
+                    } for a in latest]})
     return out
 
 
@@ -142,8 +172,9 @@ def device_detail(device_id: str) -> dict[str, Any]:
         raise HTTPException(404, "设备不存在")
     return {
         "device": d,
+        "modules": [metrics.MODULES[m] for m in d["modules"] if m in metrics.MODULES],
         "metrics": [{"key": m.key, "label": m.label, "unit": m.unit,
-                     "decimals": m.decimals, "module_id": m.module_id}
+                     "decimals": m.decimals, "module_id": m.module_id, "table": m.table}
                     for m in metrics.for_device(device_id)],
         "finding": analysis.finding(device_id),
         "batches": store.batches(device_id, 12),
@@ -156,19 +187,20 @@ def device_series(device_id: str, metric: str,
                   hours: int = Query(default=24, ge=1, le=168)) -> dict[str, Any]:
     if not store.device(device_id):
         raise HTTPException(404, "设备不存在")
-    if metric not in metrics.METRICS:
-        raise HTTPException(404, "未知指标")
+    if not metrics.get(device_id, metric):
+        raise HTTPException(404, "这台设备没有这个指标")
     return analysis.trend(device_id, metric, hours)
 
 
 @router.get("/heatmap", dependencies=admin)
 def heatmap(device: str, metric: str, days: int = Query(default=7, ge=1, le=30)) -> dict[str, Any]:
-    if metric not in metrics.METRICS:
-        raise HTTPException(404, "未知指标")
+    if not metrics.get(device, metric):
+        raise HTTPException(404, "这台设备没有这个指标")
     since = store.now_ms() - days * 86_400_000
     cells = store.heatmap(device, metric, since)
     return {
-        "metric": metric, "label": metrics.label(metric), "unit": metrics.unit(metric),
+        "metric": metric, "label": metrics.label(device, metric),
+        "unit": metrics.unit(device, metric),
         "days": days, "cells": cells,
         "k_min": min([c["n"] for c in cells] or [0]),
     }
@@ -195,7 +227,7 @@ def batches(device: str | None = None,
 @router.get("/anomalies", dependencies=admin)
 def anomalies(days: int = Query(default=7, ge=1, le=30)) -> list[dict[str, Any]]:
     rows = store.anomalies(store.now_ms() - days * 86_400_000, 60)
-    return [{**r, "label": metrics.label(r["metric"])} for r in rows]
+    return [{**r, "label": metrics.label(r["device_id"], r["metric"])} for r in rows]
 
 
 # ---------------------------------------------------------------- 命令与上云
@@ -289,6 +321,12 @@ def health() -> dict[str, Any]:
         "batches": c.get("batches", 0),
         "raw_rejected": c.get("raw_rejected", 0),
         "suppressed_buckets": c.get("suppressed_buckets", 0),
+        "mqtt": mqtt.mqtt_ingest.status(),
+        "mdns": mdns.mdns.status(),
+        "scheduler": {"ticks": scheduler.scheduler.ticks,
+                      "last": scheduler.scheduler.last},
+        "db_cipher": "sqlcipher" if config.DB_KEY else "plain",
+        "ca_fp": security.ca_fingerprint(),
     }
 
 

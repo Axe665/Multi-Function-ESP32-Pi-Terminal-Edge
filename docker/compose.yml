@@ -12,6 +12,12 @@ services:
     environment:
       EDGE_ID: ${EDGE_ID:-edge-lab-01}
       EDGE_NAME: ${EDGE_NAME:-实验室边节点}
+      # 端 → 边 走 MQTT；配了主机就连 broker，连不上不影响 HTTPS 摄取
+      EDGE_MQTT_HOST: ${EDGE_MQTT_HOST:-mosquitto}
+      EDGE_MQTT_PORT: ${EDGE_MQTT_PORT:-8883}
+      EDGE_MQTT_CA: /app/certs/ca.crt
+      EDGE_MQTT_CERT: /app/certs/edge.crt
+      EDGE_MQTT_KEY: /app/certs/edge.key
       EDGE_CLOUD_URL: ${EDGE_CLOUD_URL:-}
       EDGE_CLOUD_TOKEN: ${EDGE_CLOUD_TOKEN:-}
       EDGE_INGEST_TOKEN: ${EDGE_INGEST_TOKEN:-}
@@ -23,3 +29,18 @@ services:
       resources:
         limits:
           memory: 1g
+
+  # 主通道 broker。证书用 scripts/make_broker_cert.py 签，见 mosquitto/mosquitto.conf
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: mt-mqtt
+    restart: unless-stopped
+    ports:
+      - "8883:8883"
+    volumes:
+      - ./mosquitto:/mosquitto/config:ro
+      - ../data/mqtt:/mosquitto/data
+    deploy:
+      resources:
+        limits:
+          memory: 256m

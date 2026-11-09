@@ -6,24 +6,18 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
-import time
 from collections import defaultdict
 from typing import Any
 
 from . import config, metrics, store
 
-# 领域词表。没装 jieba，用受控词表的精确匹配代替分词：
-# shortcut: 词表固定，新增建议模板时要同步加词，换 jieba 后可去掉。
-LEXICON = [
-    "收缩压", "血氧", "晨间", "复测", "基线", "连续偏高", "波动",
-    "室内温度", "相对湿度", "通风", "结露", "co2", "二氧化碳", "换气",
-    "用电负荷", "光伏", "峰谷", "夜间", "午间", "尖峰", "回落",
-    "关注", "建议", "异常", "趋势", "平稳", "偏高", "偏低",
-]
-
 
 def day_of(ms: int) -> str:
     return dt.datetime.fromtimestamp(ms / 1000).strftime("%Y-%m-%d")
+
+
+def _dec(device_id: str, metric: str) -> int:
+    return metrics.decimals(device_id, metric)
 
 
 def daily_aggregates(since_ms: int) -> list[dict[str, Any]]:
@@ -39,8 +33,11 @@ def daily_aggregates(since_ms: int) -> list[dict[str, Any]]:
         buckets[(r["device_id"], r["metric"], day_of(r["ts_from"]))].append(r)
     out = []
     for (dev, met, day), xs in sorted(buckets.items()):
+        m = metrics.get(dev, met)
         out.append({
             "device_id": dev, "day": day, "metric": met,
+            "module_id": m.module_id if m else 0,
+            "table": m.table if m else "samples",
             "n_subjects": max(x["n_subjects"] for x in xs),
             "n_samples": sum(x["n_samples"] for x in xs),
             "mean": round(sum(x["mean"] for x in xs) / len(xs), 3),
@@ -52,8 +49,23 @@ def daily_aggregates(since_ms: int) -> list[dict[str, Any]]:
 
 
 def tokenize(text: str) -> list[str]:
-    low = text.lower()
-    return [w for w in LEXICON if w in low]
+    """jieba 分词 + 停用词；没装 jieba 时退回词典精确匹配。"""
+    try:
+        import jieba
+        words = [w.strip() for w in jieba.lcut(text)]
+    except ImportError:  # pragma: no cover - 只在精简部署里走到
+        words = [w for w in _LEXICON if w in text.lower()]
+    return [w for w in words if len(w) >= 2 and w not in _STOP]
+
+
+_STOP = {
+    "建议", "关注", "需要", "可以", "已经", "当前", "这个", "那个", "一个", "我们",
+    "你们", "他们", "以及", "或者", "因为", "所以", "如果", "并且", "同一", "时段",
+    "出现", "进行", "确认", "观察", "检查", "与", "并", "的", "了", "在", "有",
+}
+
+_LEXICON = ["收缩压", "舒张压", "血压", "脉搏", "温度", "湿度", "光照", "计数",
+            "基线", "晨间", "夜间", "午后", "温室", "盆栽", "通风", "补光", "尖峰"]
 
 
 def rebuild_words() -> None:
@@ -73,14 +85,17 @@ def trend(device_id: str, metric: str, hours: int = 24) -> dict[str, Any]:
     # 24 小时视图按 15 分钟聚合：5 分钟点的窗口噪声太大，折线读不出趋势
     step = 3 * config.WINDOW_MS if hours <= 24 else 3_600_000
     pts = store.series(device_id, metric, now - span, now, step)
-
-    # 7 天同段基线：同一小时窗口的历史均值
     hist = store.series(device_id, metric, now - 7 * 24 * 3_600_000, now - span, 3_600_000)
     baseline = sum(p["mean"] for p in hist) / len(hist) if hist else 0.0
 
+    info = metrics.get(device_id, metric)
     if not pts:
         return {"metric": metric, "points": [], "baseline": baseline, "delta": 0.0,
-                "slope": 0.0, "current": 0.0, "k": 0}
+                "slope": 0.0, "current": 0.0, "k": 0,
+                "unit": info.unit if info else "", "label": info.label if info else metric,
+                "decimals": info.decimals if info else 1,
+                "module_id": info.module_id if info else 0}
+
     current = pts[-1]["mean"]
     n = len(pts)
     xs = list(range(n))
@@ -90,14 +105,16 @@ def trend(device_id: str, metric: str, hours: int = 24) -> dict[str, Any]:
     slope = sum((x - mx) * (p["mean"] - my) for x, p in zip(xs, pts)) / denom
     return {
         "metric": metric,
-        "unit": metrics.unit(metric),
-        "label": metrics.label(metric),
-        "decimals": metrics.decimals(metric),
+        "unit": info.unit if info else "",
+        "label": info.label if info else metric,
+        "decimals": info.decimals if info else 1,
+        "module_id": info.module_id if info else 0,
+        "table": info.table if info else "samples",
         "points": pts,
         "current": round(current, 3),
         "baseline": round(baseline, 3),
         "delta": round(current - baseline, 3),
-        "slope": round(slope * n, 4),  # 每窗口平均变化
+        "slope": round(slope * n, 4),
         "k": min(p["k"] for p in pts),
         "anomalies": [p for p in pts if abs(p["z"]) >= 2.5],
     }
@@ -117,9 +134,11 @@ def finding(device_id: str) -> dict[str, Any] | None:
         return None
     d = best["delta"]
     direction = "高于" if d >= 0 else "低于"
-    text = (f"{best['label']}近 24 h 平均 {best['current']:.{best['decimals']}f}"
-            f"{best['unit']}，{direction} 7 天同段基线 {abs(d):.{best['decimals']}f}")
-    return {"text": text, "metric": best["metric"], "delta": d}
+    dec = best["decimals"]
+    text = (f"{best['label']}近 24 h 平均 {best['current']:.{dec}f}"
+            f"{best['unit']}，{direction} 7 天同段基线 {abs(d):.{dec}f}")
+    return {"text": text, "metric": best["metric"], "delta": d,
+            "label": best["label"], "unit": best["unit"]}
 
 
 def build_report() -> dict[str, Any]:
@@ -131,8 +150,6 @@ def build_report() -> dict[str, Any]:
     adv = store.advice(limit=200, since_ms=since)
     rebuild_words()
 
-    today = day_of(now)
-    words = []
     with store.connect() as conn:
         rows = conn.execute(
             "SELECT day, word, count FROM word_freq WHERE day>=? ORDER BY day, count DESC",
@@ -192,7 +209,6 @@ def overview() -> dict[str, Any]:
     lanes = []
     for d in devs:
         latest = store.latest_aggregates(d["device_id"])
-        # 最近 24 个 5 min 窗口是否收到批次
         with store.connect() as conn:
             got = {r["ts_from"] for r in conn.execute(
                 "SELECT ts_from FROM telemetry WHERE device_id=? AND ts_from>=?",
@@ -204,12 +220,14 @@ def overview() -> dict[str, Any]:
         lanes.append({
             "device_id": d["device_id"], "name": d["name"], "scene": d["scene"],
             "online": d["online"], "last_seen": d["last_seen"],
+            "modules": d["modules"],
             "ticks": ticks, "fill": round(sum(ticks) / len(ticks) * 100),
             "k": min([a["k"] for a in latest] or [0]),
             "metrics": [{
-                "metric": a["metric"], "label": metrics.label(a["metric"]),
-                "mean": a["mean"], "unit": metrics.unit(a["metric"]),
-                "decimals": metrics.decimals(a["metric"]), "z": a["z"], "k": a["k"],
+                "metric": a["metric"], "label": metrics.label(d["device_id"], a["metric"]),
+                "mean": a["mean"], "unit": metrics.unit(d["device_id"], a["metric"]),
+                "decimals": metrics.decimals(d["device_id"], a["metric"]),
+                "z": a["z"], "k": a["k"], "module_id": a["module_id"],
             } for a in latest],
         })
 

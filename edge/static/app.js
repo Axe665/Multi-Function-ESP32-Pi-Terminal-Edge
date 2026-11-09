@@ -1,6 +1,7 @@
 /* 边节点前端：原生 ES 模块，无构建步骤，离线可用。 */
 
 import { line, heatmap, wordcloud, barList, fmtNum, fmtTime } from "./charts.js";
+import { createFlow } from "./flow.js";
 
 const main = document.getElementById("main");
 const navOutbox = document.getElementById("nav-outbox");
@@ -51,6 +52,7 @@ function skeleton(lines = 3) {
 }
 
 const riskLabel = { info: "提示", watch: "关注", alert: "告警" };
+const META_K = () => settingsCache?.k_min ?? 5;
 const RISK_ORDER = { alert: 0, watch: 1, info: 2 };
 
 /* ---------------------------------------------------------------- 总览 */
@@ -75,7 +77,7 @@ async function viewOverview() {
   const findings = o.findings.length ? o.findings.map((f) => `
     <div class="list-row">
       <div class="grow">
-        <div class="finding-metric">${esc(f.metric)}</div>
+        <div class="finding-metric">${esc(f.label || f.metric)}</div>
         <div class="finding-text">${esc(f.text)}</div>
         <div class="finding-delta">较基线
           <b class="${f.delta >= 0 ? "up" : "down"}">${f.delta >= 0 ? "+" : "−"}${fmtNum(Math.abs(f.delta), 1)}</b>
@@ -105,6 +107,22 @@ async function viewOverview() {
         <button class="btn" id="refresh">刷新</button>
         <button class="btn btn-primary" id="push">立即上云</button>
       </div>
+    </div>
+
+    <div class="row">
+      <section class="panel band">
+        <div class="panel-head">
+          <h2>数据流</h2>
+          <span class="meta">三台终端 → 聚合环 → 云端</span>
+        </div>
+        <div class="band-labels">
+          <span>端 · ${o.devices_total} 台终端</span>
+          <span>边 · k≥${META_K()} 聚合环</span>
+          <span>云 · ${o.pending_reports} 份待上传</span>
+        </div>
+        <div class="band-canvas"><canvas id="flow" aria-label="数据流示意：粒子从三台终端汇入聚合环"></canvas></div>
+        <p class="hint" style="margin:10px 0 0">环前熄灭的粒子是被 k 抑制的桶——它们从未离开过终端。</p>
+      </section>
     </div>
 
     <div class="kpis">
@@ -169,6 +187,12 @@ async function viewOverview() {
       </section>
       ${panel("建议流", `最近 6 条 · 共 ${o.advice_24h}`, `<div class="list">${adviceRows}</div>`)}
     </div>`;
+
+  const flow = createFlow(document.getElementById("flow"));
+  flow.setData({
+    batches: o.batches_24h, suppressed: o.suppressed_buckets, alerts: o.alerts_24h,
+    online: o.lanes.map((l) => l.online),
+  });
 
   document.getElementById("refresh").onclick = () => route(true);
   document.getElementById("push").onclick = (e) => pushCloud(e.currentTarget);
@@ -247,6 +271,7 @@ async function viewDevices() {
       <section class="panel">
         <div class="panel-head"><h2>接入与配对</h2><span class="meta">mDNS + 一次性配对码</span></div>
         <div id="discovery">${skeleton(3)}</div>
+        <p class="hint" id="ca-fp" style="margin:10px 0 0"></p>
         <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
           <select class="control" id="pair-device" aria-label="选择要配对的设备" style="flex:1;min-width:150px">
             ${devs.map((d) => `<option value="${esc(d.device_id)}">${esc(d.device_id)}</option>`).join("")}
@@ -260,6 +285,8 @@ async function viewDevices() {
   const disc = await api("/api/v1/discovery").catch(() => null);
   const codes = await api("/api/v1/pair-codes").catch(() => []);
   if (disc) {
+    document.getElementById("ca-fp").textContent =
+      `边 CA 指纹 ${disc.edge.ca_fp} · 终端用 6 位码换 365 天证书`;
     document.getElementById("discovery").innerHTML = `<dl class="list" style="margin:0;font-size:13px">
       <div class="list-row"><div class="grow">广播服务</div><span class="mono">${esc(disc.service)}</span></div>
       ${disc.devices.map((x) => `<div class="list-row">
@@ -304,6 +331,9 @@ async function viewDevice(id) {
         <h1>${esc(dev.name)}</h1>
         <p class="sub"><span class="mono">${esc(dev.device_id)}</span> · ${esc(dev.scene)} · ${esc(dev.fw)}
           ${dev.online ? `· <span class="pill pill-ok">在线</span>` : `· <span class="pill pill-info">离线</span>`}</p>
+        <p class="sub" style="margin-top:4px">模块：
+          ${(d.modules || []).map((m) => `<span class="mono">${m.module_id}</span> ${esc(m.package_id)}
+            <span class="faint">${esc(m.name)}</span>`).join(" · ")}</p>
       </div>
       <div class="title-actions">
         <button class="btn" id="report-now">让终端立即上报</button>
@@ -711,7 +741,11 @@ async function viewSettings() {
     document.getElementById("health").innerHTML = `
       ${[["数据库", h.db], ["设备摄取鉴权", h.ingest_token === "set" ? "已启用" : "未启用（仅本机）"],
          ["管理鉴权", h.admin_token === "set" ? "已启用" : "未启用（仅本机）"],
-         ["边 ID", h.edge_id]].map(([k, v]) => `
+         ["边 ID", h.edge_id],
+         ["MQTT 主通道", h.mqtt?.enabled ? (h.mqtt.connected ? "已连接" : "未连接") : "未启用（走 HTTPS）"],
+         ["mDNS", h.mdns?.enabled ? `广播中 ${h.mdns.service}` : "未启用"],
+         ["定时上云", h.scheduler?.ticks ? `已执行 ${h.scheduler.ticks} 次` : "等待第一次"],
+         ["磁盘加密", h.db_cipher === "sqlcipher" ? "SQLCipher" : "明文（部署到磁盘请用 LUKS）"]].map(([k, v]) => `
         <div class="list-row"><div class="grow">${esc(k)}</div><span class="muted">${esc(v)}</span></div>`).join("")}`;
   } catch (e) {
     document.getElementById("health").innerHTML = errBox(`自检失败：${e.message}`);

@@ -34,13 +34,13 @@ class AnalysisTest(unittest.TestCase):
         self.assertGreaterEqual(len(store.devices()), 3)
 
     def test_trend_uses_aggregates(self):
-        t = analysis.trend("mt-3b-01", "bp.systolic", 24)
+        t = analysis.trend("mt-3b-01", "systolic", 24)
         self.assertGreater(len(t["points"]), 10)
         self.assertGreater(t["baseline"], 0)
         self.assertGreater(t["k"], 0)
 
     def test_heatmap_buckets(self):
-        cells = store.heatmap("mt-3b-01", "bp.systolic",
+        cells = store.heatmap("mt-3b-01", "systolic",
                               store.now_ms() - 2 * 86_400_000)
         keys = {(c["dow"], c["hour"]) for c in cells}
         self.assertEqual(len(keys), len(cells), "同一时段不应重复成格")

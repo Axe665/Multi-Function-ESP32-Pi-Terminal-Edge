@@ -1,0 +1,10 @@
+# 设备证书的 CN = deviceId（use_identity_as_username 把它当成用户名）
+pattern readwrite orpi/v1/%u/telemetry
+pattern readwrite orpi/v1/%u/advice
+pattern readwrite orpi/v1/%u/status
+pattern readwrite orpi/v1/%u/ack
+pattern read  orpi/v1/%u/cmd
+
+# 边自己（CN=edge-lab-01）可以读写全部，用于下发命令与收全量
+user edge-lab-01
+topic readwrite orpi/v1/#

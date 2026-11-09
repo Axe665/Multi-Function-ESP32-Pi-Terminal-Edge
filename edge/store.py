@@ -75,6 +75,15 @@ CREATE TABLE IF NOT EXISTS outbox (
   last_error TEXT
 );
 
+CREATE TABLE IF NOT EXISTS audit (
+  id         INTEGER PRIMARY KEY,
+  actor      TEXT NOT NULL,
+  action     TEXT NOT NULL,
+  target     TEXT NOT NULL,
+  detail     TEXT,
+  created_at INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS counters (
   key   TEXT PRIMARY KEY,
   value INTEGER NOT NULL
@@ -86,11 +95,29 @@ CREATE TABLE IF NOT EXISTS settings (
 );
 
 CREATE TABLE IF NOT EXISTS pair_codes (
-  code      TEXT PRIMARY KEY,
-  device_id TEXT,
-  created_at INTEGER NOT NULL,
-  expires_at INTEGER NOT NULL,
-  used_at   INTEGER
+  code        TEXT PRIMARY KEY,
+  device_id   TEXT,
+  created_at  INTEGER NOT NULL,
+  expires_at  INTEGER NOT NULL,
+  used_at     INTEGER,
+  pubkey_fp   TEXT,
+  attempts    INTEGER NOT NULL DEFAULT 0,
+  locked_until INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS device_certs (
+  serial     TEXT PRIMARY KEY,
+  device_id  TEXT NOT NULL,
+  pubkey_fp  TEXT,
+  issued_at  INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS revoked (
+  serial     TEXT PRIMARY KEY,
+  device_id  TEXT,
+  reason     TEXT,
+  revoked_at INTEGER NOT NULL
 );
 """
 
@@ -99,10 +126,26 @@ def now_ms() -> int:
     return int(time.time() * 1000)
 
 
+def _driver():
+    """设了 EDGE_DB_KEY 就必须用 SQLCipher；没有驱动直接失败，不写明文。"""
+    if not config.DB_KEY:
+        return sqlite3
+    try:
+        from sqlcipher3 import dbapi2 as cipher  # type: ignore
+    except ImportError as e:  # pragma: no cover - 取决于部署环境
+        raise RuntimeError(
+            "EDGE_DB_KEY 已设置但缺少 sqlcipher3 驱动；"
+            "请安装 libsqlcipher-dev + pysqlcipher3，或取消该变量") from e
+    return cipher
+
+
 @contextmanager
 def connect():
     config.ensure_dirs()
-    conn = sqlite3.connect(config.DB_PATH, timeout=10)
+    driver = _driver()
+    conn = driver.connect(str(config.DB_PATH), timeout=10)
+    if config.DB_KEY:
+        conn.execute(f"PRAGMA key='{config.DB_KEY.replace(chr(39), '')}'")
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
@@ -116,6 +159,24 @@ def connect():
 def init_db() -> None:
     with connect() as conn:
         conn.executescript(SCHEMA)
+        _migrate(conn)
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """老库补列：SQLite 没有 ADD COLUMN IF NOT EXISTS。"""
+    def cols(table: str) -> set[str]:
+        return {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
+
+    if "pubkey_fp" not in cols("pair_codes"):
+        conn.execute("ALTER TABLE pair_codes ADD COLUMN pubkey_fp TEXT")
+    if "attempts" not in cols("pair_codes"):
+        conn.execute("ALTER TABLE pair_codes ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0")
+    if "locked_until" not in cols("pair_codes"):
+        conn.execute("ALTER TABLE pair_codes ADD COLUMN locked_until INTEGER")
+    outbox = cols("outbox")
+    if "next_at" not in outbox:
+        conn.execute("ALTER TABLE outbox ADD COLUMN next_at INTEGER")
+        conn.execute("UPDATE outbox SET next_at = created_at WHERE next_at IS NULL")
 
 
 # ---------------------------------------------------------------- 设备
@@ -194,6 +255,21 @@ def bump(key: str, n: int = 1) -> None:
             "ON CONFLICT(key) DO UPDATE SET value = value + excluded.value",
             (key, n),
         )
+
+
+def audit_action(actor: str, action: str, target: str,
+                 detail: dict[str, Any] | None = None) -> None:
+    """审计动作沿用终端仓的写法：小写点分动作 + 结构化 detail。"""
+    with connect() as conn:
+        conn.execute(
+            "INSERT INTO audit(actor, action, target, detail, created_at) VALUES(?,?,?,?,?)",
+            (actor, action, target, json.dumps(detail or {}, ensure_ascii=False), now_ms()))
+
+
+def audit(limit: int = 30) -> list[dict[str, Any]]:
+    with connect() as conn:
+        return [dict(r) for r in conn.execute(
+            "SELECT * FROM audit ORDER BY created_at DESC LIMIT ?", (limit,))]
 
 
 def counters() -> dict[str, int]:
@@ -340,10 +416,11 @@ def _shift_day(day: str, delta: int) -> str:
 # ---------------------------------------------------------------- 发件箱
 
 def enqueue_report(report_id: str, payload: dict[str, Any]) -> None:
+    t = now_ms()
     with connect() as conn:
         conn.execute(
-            "INSERT OR IGNORE INTO outbox(report_id, created_at, payload) VALUES(?,?,?)",
-            (report_id, now_ms(), json.dumps(payload, ensure_ascii=False)),
+            "INSERT OR IGNORE INTO outbox(report_id, created_at, payload, next_at) VALUES(?,?,?,?)",
+            (report_id, t, json.dumps(payload, ensure_ascii=False), t),
         )
 
 
@@ -360,8 +437,8 @@ def mark_sent(report_id: str, error: str | None) -> None:
             conn.execute("UPDATE outbox SET sent_at=?, attempts=attempts+1, last_error=NULL "
                          "WHERE report_id=?", (now_ms(), report_id))
         else:
-            conn.execute("UPDATE outbox SET attempts=attempts+1, last_error=? WHERE report_id=?",
-                         (error[:300], report_id))
+            conn.execute("UPDATE outbox SET attempts=attempts+1, last_error=?, next_at=? "
+                         "WHERE report_id=?", (error[:300], now_ms(), report_id))
 
 
 # ---------------------------------------------------------------- 设置
@@ -395,14 +472,98 @@ def set_settings(patch: dict[str, Any]) -> dict[str, Any]:
 
 # ---------------------------------------------------------------- 配对码
 
-def create_pair_code(code: str, ttl_ms: int) -> None:
+def create_pair_code(code: str, device_id: str, ttl_ms: int) -> None:
     t = now_ms()
     with connect() as conn:
-        conn.execute("INSERT OR REPLACE INTO pair_codes(code, created_at, expires_at) VALUES(?,?,?)",
-                     (code, t, t + ttl_ms))
+        conn.execute(
+            """INSERT OR REPLACE INTO pair_codes(code, device_id, created_at, expires_at)
+               VALUES(?,?,?,?)""", (code, device_id, t, t + ttl_ms))
 
 
 def pair_codes() -> list[dict[str, Any]]:
     with connect() as conn:
         return [dict(r) for r in conn.execute(
             "SELECT * FROM pair_codes ORDER BY created_at DESC LIMIT 10")]
+
+
+def pair_code(code: str) -> dict[str, Any] | None:
+    with connect() as conn:
+        r = conn.execute("SELECT * FROM pair_codes WHERE code=?", (code,)).fetchone()
+    return dict(r) if r else None
+
+
+def bind_pair_pubkey(code: str, fp: str) -> None:
+    """首次兑换时把公钥指纹钉在配对码上。"""
+    with connect() as conn:
+        conn.execute("UPDATE pair_codes SET pubkey_fp=? WHERE code=? AND pubkey_fp IS NULL",
+                     (fp, code))
+
+
+def mark_pair_used(code: str) -> bool:
+    with connect() as conn:
+        cur = conn.execute(
+            "UPDATE pair_codes SET used_at=? WHERE code=? AND used_at IS NULL",
+            (now_ms(), code))
+        return cur.rowcount == 1
+
+
+def pair_failure(code: str, max_attempts: int, lock_ms: int) -> None:
+    with connect() as conn:
+        row = conn.execute("SELECT attempts FROM pair_codes WHERE code=?", (code,)).fetchone()
+        attempts = (row["attempts"] if row else 0) + 1
+        locked = now_ms() + lock_ms if attempts >= max_attempts else None
+        conn.execute("UPDATE pair_codes SET attempts=?, locked_until=? WHERE code=?",
+                     (attempts, locked, code))
+
+
+# ---------------------------------------------------------------- 证书
+
+def device_certs() -> list[dict[str, Any]]:
+    with connect() as conn:
+        return [dict(r) for r in conn.execute(
+            "SELECT * FROM device_certs ORDER BY issued_at DESC LIMIT 50")]
+
+
+def revoke_serial(serial: str, device_id: str, reason: str) -> None:
+    with connect() as conn:
+        conn.execute(
+            """INSERT OR REPLACE INTO revoked(serial, device_id, reason, revoked_at)
+               VALUES(?,?,?,?)""", (serial, device_id, reason, now_ms()))
+
+
+def is_revoked(serial: str) -> bool:
+    with connect() as conn:
+        return conn.execute("SELECT 1 FROM revoked WHERE serial=?", (serial,)).fetchone() is not None
+
+
+def revoked() -> list[dict[str, Any]]:
+    with connect() as conn:
+        return [dict(r) for r in conn.execute("SELECT * FROM revoked ORDER BY revoked_at DESC")]
+
+
+# ---------------------------------------------------------------- 发件箱退避
+
+BACKOFF_MS = [60_000, 5 * 60_000, 30 * 60_000, 2 * 3600_000]
+
+
+def due_reports(limit: int = 20) -> list[dict[str, Any]]:
+    with connect() as conn:
+        rows = conn.execute(
+            """SELECT * FROM outbox WHERE sent_at IS NULL
+               AND (next_at IS NULL OR next_at <= ?) ORDER BY created_at LIMIT ?""",
+            (now_ms(), limit)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def schedule_retry(report_id: str, error: str) -> int:
+    """按 1 min / 5 min / 30 min / 2 h 退避；返回下一次尝试时间。"""
+    with connect() as conn:
+        row = conn.execute("SELECT attempts FROM outbox WHERE report_id=?",
+                           (report_id,)).fetchone()
+        attempts = row["attempts"] if row else 0
+        delay = BACKOFF_MS[min(attempts, len(BACKOFF_MS) - 1)]
+        nxt = now_ms() + delay
+        conn.execute(
+            """UPDATE outbox SET attempts=attempts+1, last_error=?, next_at=? WHERE report_id=?""",
+            (error[:300], nxt, report_id))
+    return nxt
