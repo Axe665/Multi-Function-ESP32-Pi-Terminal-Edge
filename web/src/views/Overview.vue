@@ -343,7 +343,7 @@ const adviceRows = computed(() => {
 }
 .lane-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1.1fr) minmax(120px, 1.4fr) auto;
+  grid-template-columns: minmax(250px, 1.3fr) minmax(120px, 1.2fr) auto;
   align-items: center;
   gap: var(--space-3);
 }
