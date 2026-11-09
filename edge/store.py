@@ -99,6 +99,18 @@ CREATE TABLE IF NOT EXISTS audit (
   created_at INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS alert_state (
+  device_id   TEXT NOT NULL,
+  metric      TEXT NOT NULL,
+  ts_from     INTEGER NOT NULL,
+  acked_at    INTEGER,
+  acked_by    TEXT,
+  muted_until INTEGER,
+  mute_reason TEXT,
+  updated_at  INTEGER NOT NULL,
+  PRIMARY KEY (device_id, metric, ts_from)
+);
+
 CREATE TABLE IF NOT EXISTS counters (
   key   TEXT PRIMARY KEY,
   value INTEGER NOT NULL
@@ -475,6 +487,152 @@ def anomalies(since_ms: int, limit: int = 40) -> list[dict[str, Any]]:
         prev[key] = r
     out.sort(key=lambda x: -x["ts_from"])
     return out[:limit]
+
+
+def hour_baseline(device_id: str, metric: str, ts: int,
+                  days: int = 7) -> tuple[float, float]:
+    """同小时的历史均值与标准差。实况窗口用它算 z，跟种子数据同一套口径。"""
+    with connect() as conn:
+        r = conn.execute(
+            """SELECT AVG(mean) AS mu, AVG(mean*mean) - AVG(mean)*AVG(mean) AS var,
+                      COUNT(*) AS n
+               FROM aggregates
+               WHERE device_id=? AND metric=? AND ts_from>=? AND ts_from<?
+                 AND (ts_from/3600000) % 24 = ?""",
+            (device_id, metric, ts - days * 86_400_000, ts,
+             int(ts / 3_600_000) % 24)).fetchone()
+    if not r or (r["n"] or 0) < 8:
+        return (0.0, 0.0)
+    return (float(r["mu"] or 0.0), max(float(r["var"] or 0.0), 0.0) ** 0.5)
+
+
+# ---------------------------------------------------------------- 告警
+
+ANOMALY_Z = 2.0      # 注意门槛
+SEVERE_Z = 2.5       # 严重门槛，需连续两个窗口
+
+
+def _alert_states() -> dict[tuple[str, str, int], dict[str, Any]]:
+    with connect() as conn:
+        return {(r["device_id"], r["metric"], r["ts_from"]): dict(r)
+                for r in conn.execute("SELECT * FROM alert_state")}
+
+
+def alert_feed(since_ms: int, stale_ms: int, at: int | None = None) -> list[dict[str, Any]]:
+    """一条告警 = 一段连续越界的窗口，而不是每个窗口一条。
+
+    注意：单窗口 |z|≥2。严重：段内有两个相隔不超过 2 个窗口的 |z|≥2.5，
+    与 anomalies() 的判定一致。已恢复在读取时按后续窗口算，不落库。
+    """
+    now = at if at is not None else now_ms()
+    with connect() as conn:
+        rows = conn.execute(
+            """SELECT device_id, metric, ts_from, mean, z, k FROM aggregates
+               WHERE ts_from>=? ORDER BY device_id, metric, ts_from""",
+            (since_ms,)).fetchall()
+
+    runs: list[dict[str, Any]] = []
+    cur: dict[str, Any] | None = None
+    for r in rows:
+        key = (r["device_id"], r["metric"])
+        z = abs(r["z"] or 0)
+        if z < ANOMALY_Z:
+            # 后面出现了正常窗口就算恢复
+            if cur is not None and (cur["device_id"], cur["metric"]) == key:
+                cur["resolved"] = True
+                cur = None
+            continue
+        contiguous = (cur is not None
+                      and (cur["device_id"], cur["metric"]) == key
+                      and r["ts_from"] - cur["ts_to"] <= config.WINDOW_MS)
+        if contiguous:
+            cur["ts_to"] = r["ts_from"] + config.WINDOW_MS
+            cur["windows"] += 1
+            cur["max_z"] = max(cur["max_z"], z)
+            if z >= SEVERE_Z:
+                if cur["_severe_at"] and r["ts_from"] - cur["_severe_at"] <= 2 * config.WINDOW_MS:
+                    cur["critical"] = True
+                cur["_severe_at"] = r["ts_from"]
+        else:
+            if cur is not None and (cur["device_id"], cur["metric"]) == key:
+                cur["resolved"] = True      # 中间断了，上一段结束
+            cur = {
+                "kind": "anomaly", "device_id": r["device_id"], "metric": r["metric"],
+                "ts_from": r["ts_from"], "ts_to": r["ts_from"] + config.WINDOW_MS,
+                "mean": r["mean"], "z": r["z"], "k": r["k"],
+                "windows": 1, "max_z": z, "critical": False, "resolved": False,
+                "_severe_at": r["ts_from"] if z >= SEVERE_Z else 0,
+            }
+            runs.append(cur)
+
+    # 数据过期本身就是一条严重告警：没有上报比数值漂移更需要处理
+    for d in devices():
+        last = d["last_seen"] or 0
+        if now - last <= stale_ms:
+            continue
+        runs.append({
+            "kind": "stale", "device_id": d["device_id"], "metric": "__stale__",
+            "ts_from": last or 0, "ts_to": last or 0,
+            "mean": None, "z": None, "k": None, "windows": 0,
+            "max_z": 0, "critical": True, "resolved": False,
+        })
+
+    states = _alert_states()
+    for a in runs:
+        st = states.get((a["device_id"], a["metric"], a["ts_from"])) or {}
+        muted = bool(st.get("muted_until")) and st["muted_until"] > now
+        a["severity"] = "critical" if a["critical"] else "notice"
+        a["state"] = ("muted" if muted
+                      else "resolved" if a["resolved"]
+                      else "acked" if st.get("acked_at") else "pending")
+        a["acked_at"] = st.get("acked_at")
+        a["acked_by"] = st.get("acked_by")
+        a["muted_until"] = st.get("muted_until")
+        a["mute_reason"] = st.get("mute_reason")
+        a.pop("_severe_at", None)
+
+    order = {"critical": 0, "notice": 1}
+    rank = {"pending": 0, "acked": 1, "muted": 2, "resolved": 3}
+    runs.sort(key=lambda a: (rank[a["state"]], order[a["severity"]], -a["ts_from"]))
+    return runs
+
+
+def ack_alert(device_id: str, metric: str, ts_from: int, actor: str) -> None:
+    now = now_ms()
+    with connect() as conn:
+        conn.execute(
+            """INSERT INTO alert_state(device_id, metric, ts_from, acked_at, acked_by, updated_at)
+               VALUES(?,?,?,?,?,?)
+               ON CONFLICT(device_id, metric, ts_from) DO UPDATE SET
+                 acked_at=excluded.acked_at, acked_by=excluded.acked_by,
+                 updated_at=excluded.updated_at""",
+            (device_id, metric, ts_from, now, actor, now))
+    audit_action(actor, "alert.ack", f"{device_id}/{metric}", {"ts_from": ts_from})
+
+
+def mute_alert(device_id: str, metric: str, ts_from: int, until: int,
+               reason: str, actor: str) -> None:
+    now = now_ms()
+    with connect() as conn:
+        conn.execute(
+            """INSERT INTO alert_state(device_id, metric, ts_from, muted_until,
+                                       mute_reason, acked_by, updated_at)
+               VALUES(?,?,?,?,?,?,?)
+               ON CONFLICT(device_id, metric, ts_from) DO UPDATE SET
+                 muted_until=excluded.muted_until, mute_reason=excluded.mute_reason,
+                 acked_by=excluded.acked_by, updated_at=excluded.updated_at""",
+            (device_id, metric, ts_from, until, reason, actor, now))
+    audit_action(actor, "alert.mute", f"{device_id}/{metric}",
+                 {"ts_from": ts_from, "until": until, "reason": reason})
+
+
+def unmute_alert(device_id: str, metric: str, ts_from: int) -> None:
+    with connect() as conn:
+        conn.execute(
+            """UPDATE alert_state SET muted_until=NULL, mute_reason=NULL, updated_at=?
+               WHERE device_id=? AND metric=? AND ts_from=?""",
+            (now_ms(), device_id, metric, ts_from))
+    audit_action("admin", "alert.unmute", f"{device_id}/{metric}", {"ts_from": ts_from})
 
 
 # ---------------------------------------------------------------- 词频

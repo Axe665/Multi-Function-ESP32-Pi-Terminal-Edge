@@ -224,6 +224,11 @@ def overview() -> dict[str, Any]:
             "SELECT COUNT(*) FROM advice WHERE created_at>=?", (day_ago,)).fetchone()[0]
         alerts = conn.execute(
             "SELECT COUNT(*) FROM advice WHERE created_at>=? AND risk='alert'", (day_ago,)).fetchone()[0]
+        prev = day_ago - 24 * 3_600_000
+        batches_prev = conn.execute(
+            "SELECT COUNT(*) FROM telemetry WHERE ts_from>=? AND ts_from<?", (prev, day_ago)).fetchone()[0]
+        advice_prev = conn.execute(
+            "SELECT COUNT(*) FROM advice WHERE created_at>=? AND created_at<?", (prev, day_ago)).fetchone()[0]
         alerts_by_dev = {r[0]: r[1] for r in conn.execute(
             "SELECT device_id, COUNT(*) FROM advice WHERE created_at>=? AND risk='alert'"
             " GROUP BY device_id", (day_ago,))}
@@ -257,12 +262,30 @@ def overview() -> dict[str, Any]:
             } for a in latest],
         })
 
+    feed = store.alert_feed(now - 7 * 86_400_000, stale_ms=3 * config.WINDOW_MS)
+    open_alerts = [a for a in feed if a["state"] in ("pending", "acked", "muted")]
+    pending = [a for a in open_alerts if a["state"] == "pending"]
+    critical = sum(1 for a in pending if a["severity"] == "critical")
+    notice = sum(1 for a in pending if a["severity"] == "notice")
+    status = "critical" if critical else "notice" if notice else "ok"
+
     findings = [f for f in (finding(d["device_id"]) for d in devs) if f]
     return {
+        "status": {
+            "level": status,
+            "critical": critical,
+            "notice": notice,
+            "acked": sum(1 for a in open_alerts if a["state"] == "acked"),
+            "muted": sum(1 for a in open_alerts if a["state"] == "muted"),
+            "stale_devices": sum(1 for a in pending if a["kind"] == "stale"),
+            "top": pending[:3],
+        },
+        "k_min": min([lane["k"] for lane in lanes if lane["k"]] or [0]),
         "edge_id": config.EDGE_ID, "edge_name": config.EDGE_NAME,
         "demo": config.DEMO, "generated_at": now,
         "devices_total": len(devs), "devices_online": online,
         "batches_24h": batches_24h, "advice_24h": advice_24h, "alerts_24h": alerts,
+        "batches_prev_24h": batches_prev, "advice_prev_24h": advice_prev,
         "suppressed_buckets": c.get("suppressed_buckets", 0),
         "raw_rejected": c.get("raw_rejected", 0),
         "pending_reports": len(pending),

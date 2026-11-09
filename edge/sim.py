@@ -283,7 +283,9 @@ def append_window(ts: int | None = None) -> int:
         for row in rows:
             metric = row["metric"]
             v = max(0.0, _value(metric, h, 7) + rnd.gauss(0, NOISE.get(metric, 0.5)))
-            z = rnd.gauss(0, 0.8)
+            # 实况的 z 也按库里同小时的历史算，否则演示永远不会有需要处理的东西
+            mu, sd = store.hour_baseline(dev, metric, now)
+            z = (v - mu) / sd if sd > 0 else rnd.gauss(0, 0.8)
             aggs.append({
                 "metric": metric, "module_id": row["module_id"],
                 "label": row["label"], "unit": row["unit"], "table": row["table_name"],

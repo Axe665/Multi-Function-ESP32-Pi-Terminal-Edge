@@ -42,6 +42,17 @@
   --md-inverse-on-surface: #f1f1ea;
   --md-scrim: #000000;
   --md-shadow: #000000;
+  /* ---- 严重度（只有异常才饱和） ---- */
+  --md-ok: #386a20;
+  --md-ok-container: #e4f2da;
+  --md-on-ok-container: #17300a;
+  --md-notice: #8a5a00;
+  --md-notice-container: #fdf1d8;
+  --md-on-notice-container: #3d2a00;
+  --md-critical: #b3261e;
+  --md-critical-container: #fde8e6;
+  --md-on-critical-container: #410002;
+
 
   /* ---- 字阶（Roboto + Noto Sans SC） ---- */
   --md-font: 'Roboto', 'Noto Sans SC', system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -136,6 +147,15 @@
   --md-inverse-surface: #e3e3dc;
   --md-inverse-on-surface: #2f312c;
   --md-elev-1: 0 1px 2px rgba(0, 0, 0, 0.30), 0 1px 3px 1px rgba(0, 0, 0, 0.15);
+  --md-ok: #9cd67e;
+  --md-ok-container: #22301a;
+  --md-on-ok-container: #c9eeb5;
+  --md-notice: #e0b05a;
+  --md-notice-container: #33280f;
+  --md-on-notice-container: #f6dda9;
+  --md-critical: #ffb4ab;
+  --md-critical-container: #3b1b18;
+  --md-on-critical-container: #ffdad6;
 }
 
 /* ---------------------------------------------------------------- 基础 */
@@ -229,11 +249,9 @@ h3 {
   color: var(--md-on-primary);
   font: var(--md-label-large);
   cursor: pointer;
-  transition: box-shadow var(--md-dur-short) var(--md-ease),
-    background-color var(--md-dur-short) var(--md-ease);
+  transition: background-color var(--md-dur-short) var(--md-ease);
 }
 .md-btn:hover {
-  box-shadow: var(--md-elev-1);
   background: color-mix(in srgb, var(--md-primary) 92%, var(--md-on-primary));
 }
 .md-btn:active {
@@ -286,6 +304,11 @@ h3 {
 .md-chip--warn {
   background: var(--md-secondary-container);
   color: var(--md-on-secondary-container);
+  border-color: transparent;
+}
+.md-chip--idle {
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface-variant);
   border-color: transparent;
 }
 .md-chip--alert {
@@ -384,4 +407,58 @@ h3 {
   font: var(--md-body-medium);
   box-shadow: var(--md-elev-3);
   z-index: 40;
+}
+
+/* ---------------------------------------------------------------- 严重度 */
+
+/* 只有异常用饱和色；正常状态保持中性，靠稀缺性让异常显眼 */
+.sev {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: var(--md-label-medium);
+}
+.sev-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--md-outline);
+  flex: none;
+}
+.sev--ok { color: var(--md-on-surface-variant); }
+.sev--notice { color: var(--md-on-notice-container); }
+.sev--critical { color: var(--md-on-critical-container); }
+.sev--ok .sev-dot { background: var(--md-ok); }
+.sev--notice .sev-dot { background: var(--md-notice); }
+.sev--critical .sev-dot { background: var(--md-critical); }
+
+.sev-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: var(--md-shape-full);
+  font: var(--md-label-medium);
+  white-space: nowrap;
+}
+.sev-tag--critical { background: var(--md-critical-container); color: var(--md-on-critical-container); }
+.sev-tag--notice { background: var(--md-notice-container); color: var(--md-on-notice-container); }
+.sev-tag--ok { background: var(--md-ok-container); color: var(--md-on-ok-container); }
+.sev-tag--idle { background: var(--md-surface-container-highest); color: var(--md-on-surface-variant); }
+
+/* 只有真正需要围合的组用面板，其余靠间距与标题分组 */
+.md-panel {
+  background: var(--md-card-bg);
+  border: 1px solid var(--md-card-border);
+  border-radius: var(--md-shape-lg);
+  padding: var(--space-4) var(--space-5);
+}
+.md-section { margin-top: var(--space-5); }
+.md-panel + .md-panel,
+.md-panel + .md-section { margin-top: var(--space-4); }
+
+/* 数字等宽，一列数值才对得齐 */
+.md-num {
+  font-variant-numeric: tabular-nums;
 }

@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { api, fmtNum, fmtTime } from '../api'
 import PageHeader from '../components/PageHeader.vue'
 
@@ -19,11 +19,14 @@ onMounted(async () => {
 })
 
 const linkLabel = { wifi: 'Wi-Fi', ethernet: '有线', offline: '离线', unknown: '未知' }
+const allOnline = computed(() => devs.value.length > 0 && devs.value.every((d) => d.online))
 </script>
 
 <template>
   <PageHeader title="设备" sub="三台终端：一台带屏跑完整 QML，两台无头只上报数据。">
-    <span class="md-chip">{{ devs.filter((d) => d.online).length }} / {{ devs.length }} 在线</span>
+    <span class="sev" :class="allOnline ? 'sev--ok' : 'sev--notice'">
+      <span class="sev-dot"></span>{{ devs.filter((d) => d.online).length }}/{{ devs.length }} 在线
+    </span>
   </PageHeader>
 
   <p v-if="error" class="error">{{ error }}</p>
@@ -42,15 +45,15 @@ const linkLabel = { wifi: 'Wi-Fi', ethernet: '有线', offline: '离线', unknow
           <td>{{ d.scene }}</td>
           <td>{{ linkLabel[d.link] || '未知' }}</td>
           <td>
-            <span class="md-chip" :class="d.online ? 'md-chip--ok' : 'md-chip--warn'">
-              {{ d.online ? '在线' : '离线' }}
+            <span class="sev" :class="d.online ? 'sev--ok' : 'sev--critical'">
+              <span class="sev-dot"></span>{{ d.online ? '在线' : '离线' }}
             </span>
           </td>
           <td class="num">{{ fmtTime(d.last_seen) }}</td>
-          <td>
+          <td class="metrics">
             <span v-for="m in d.metrics.slice(0, 3)" :key="m.metric" class="metric">
               <span class="md-muted">{{ m.label }}</span>
-              {{ fmtNum(m.mean, m.decimals) }}<span class="md-muted">{{ m.unit }}</span>
+              <b class="md-num">{{ fmtNum(m.mean, m.decimals) }}{{ m.unit }}</b>
             </span>
           </td>
           <td class="num"><RouterLink class="md-btn md-btn--text" :to="`/devices/${d.device_id}`">查看</RouterLink></td>
@@ -88,8 +91,11 @@ const linkLabel = { wifi: 'Wi-Fi', ethernet: '有线', offline: '离线', unknow
 
 <style scoped>
 .error { color: var(--md-error); margin-bottom: var(--space-3); }
-.metric { display: block; white-space: nowrap; }
+.metrics { white-space: nowrap; }
+.metric { margin-right: var(--space-3); white-space: nowrap; }
+.metric:last-child { margin-right: 0; }
 .metric span:first-child { margin-right: 4px; }
+.metric b { font-weight: 500; color: var(--md-on-surface); }
 .hint { margin-top: var(--space-3); font: var(--md-body-small); }
 .batches { margin-top: var(--space-4); }
 .section-head {

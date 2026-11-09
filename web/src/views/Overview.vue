@@ -1,29 +1,35 @@
 <script setup>
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { api, fmtNum, fmtTime } from '../api'
 import { createFlow } from '../lib/flow'
-import PageHeader from '../components/PageHeader.vue'
-import KpiRow from '../components/KpiRow.vue'
+import StatusBar from '../components/StatusBar.vue'
+import AlertList from '../components/AlertList.vue'
 
 const o = ref(null)
+const alerts = ref([])
 const advice = ref([])
 const error = ref('')
 const flowHost = ref(null)
 let flow = null
+let timer = 0
 
-const load = async () => {
+async function load() {
   try {
-    o.value = await api('/overview')
-    advice.value = await api('/advice?limit=6').catch(() => [])
+    const [over, al, adv] = await Promise.all([
+      api('/overview'),
+      api('/alerts').catch(() => []),
+      api('/advice?limit=5').catch(() => []),
+    ])
+    o.value = over
+    alerts.value = al
+    advice.value = adv
     error.value = ''
-    if (flow && o.value) {
-      flow.setData({
-        batches: o.value.batches_24h,
-        suppressed: o.value.suppressed_buckets,
-        alerts: o.value.alerts_24h,
-        online: o.value.lanes.map((l) => l.online),
-      })
-    }
+    flow?.setData?.({
+      batches: over.batches_24h,
+      suppressed: over.suppressed_buckets,
+      alerts: over.alerts_24h,
+      online: over.lanes.map((l) => l.online),
+    })
   } catch (e) {
     error.value = e.message
   }
@@ -34,130 +40,197 @@ onMounted(async () => {
   await load()
   timer = setInterval(load, 15000)
 })
-
-let timer = 0
 onBeforeUnmount(() => {
   clearInterval(timer)
   flow?.destroy?.()
 })
 
-const kpis = () => {
-  if (!o.value) return []
+const status = computed(() => o.value?.status || { level: 'ok' })
+
+// 结论先给，数字后给；颜色只是辅助
+const headline = computed(() => {
+  const v = o.value
+  if (!v) return '总览'
+  const s = v.status
+  if (s.level === 'critical') {
+    return s.stale_devices && s.stale_devices === s.critical
+      ? `${s.stale_devices} 台设备掉线`
+      : `${s.critical} 条严重异常待处理`
+  }
+  if (s.level === 'notice') return `${s.notice} 条异常待确认`
+  const handled = (s.acked || 0) + (s.muted || 0)
+  return `${v.devices_online}/${v.devices_total} 台在线，${handled ? `${handled} 条已处理` : '没有待处理异常'}`
+})
+
+const sub = computed(() => {
+  const v = o.value
+  if (!v) return ''
+  return `${v.edge_name}，5 分钟聚合窗口，k≥5 才入库；更新于 ${fmtTime(v.generated_at, true)}`
+})
+
+const pct = (cur, prev) => (prev ? Math.round(((cur - prev) / prev) * 100) : null)
+
+const measures = computed(() => {
+  const v = o.value
+  if (!v) return []
   return [
-    { label: '在线终端', value: `${o.value.devices_online}/${o.value.devices_total}`, note: '最近 15 分钟有批次' },
-    { label: '24 h 批次', value: fmtNum(o.value.batches_24h, 0), note: '按 (device, batch_id) 去重' },
-    { label: '24 h 建议', value: fmtNum(o.value.advice_24h, 0), note: `其中告警 ${o.value.alerts_24h}` },
-    { label: '被抑制的桶', value: fmtNum(o.value.suppressed_buckets, 0), note: 'k<5，只在端内使用' },
+    { label: '24 h 批次', value: fmtNum(v.batches_24h, 0),
+      delta: pct(v.batches_24h, v.batches_prev_24h), note: '按批次去重' },
+    { label: '24 h 建议', value: fmtNum(v.advice_24h, 0),
+      delta: pct(v.advice_24h, v.advice_prev_24h),
+      note: `其中告警 ${v.alerts_24h}` },
+    { label: '最小 k', value: String(v.k_min || '—'), delta: null,
+      note: '低于 5 的桶只在端内使用' },
   ]
-}
+})
+
+const risky = (r) => r === 'alert'
+
+// 同一句话在一批窗口里会重复出现，按文本合并，只留条数
+const adviceRows = computed(() => {
+  const seen = new Map()
+  for (const a of advice.value) {
+    const hit = seen.get(a.text)
+    if (hit) { hit.count += 1; continue }
+    seen.set(a.text, { ...a, count: 1 })
+  }
+  return [...seen.values()].slice(0, 5)
+})
 </script>
 
 <template>
-  <PageHeader title="总览" :sub="`${o?.edge_name || '边节点'}，3 台终端，5 分钟聚合窗口，k≥5 才入库`">
-    <button class="md-btn md-btn--tonal" @click="load">刷新</button>
-    <RouterLink class="md-btn" to="/settings">上云设置</RouterLink>
-  </PageHeader>
-
   <p v-if="error" class="error">读不到总览：{{ error }}</p>
 
-  <KpiRow :items="kpis()" />
+  <StatusBar :status="status" :title="headline" :sub="sub">
+    <template #actions>
+      <button class="md-btn md-btn--tonal" @click="load">刷新</button>
+      <RouterLink class="md-btn" to="/settings">上云设置</RouterLink>
+    </template>
+  </StatusBar>
 
-  <section class="md-card flow-card">
-    <div class="flow-head">
-      <div>
-        <h2>数据流</h2>
-        <p class="md-muted">端 → k≥5 聚合环 → 云。熄掉的粒子是被抑制的桶。</p>
+  <div class="top">
+    <div class="main">
+    <section class="md-panel">
+      <div class="section-head">
+        <h2>待处理</h2>
+        <span class="md-muted">{{ alerts.length }} 条</span>
       </div>
-      <span class="md-chip" :class="o?.cloud_ok ? 'md-chip--ok' : 'md-chip--warn'">
-        {{ o?.cloud_ok ? '云端可达' : '云端未连' }}
-      </span>
-    </div>
-    <div class="flow-wrap">
-      <canvas ref="flowHost" class="flow-canvas"></canvas>
-      <div class="flow-legend" aria-hidden="true">
-        <span class="flow-stage">终端</span>
-        <span class="flow-arrow">→</span>
-        <span class="flow-stage flow-stage--ring">k≥5 聚合环</span>
-        <span class="flow-arrow">→</span>
-        <span class="flow-stage">云端</span>
-      </div>
-    </div>
-  </section>
+      <AlertList :alerts="alerts" :limit="4" @changed="load" />
+      <RouterLink v-if="alerts.length > 4" class="more" to="/analysis">
+        全部 {{ alerts.length }} 条 →
+      </RouterLink>
+    </section>
 
-  <section class="md-card lanes">
-    <div class="section-head">
-      <h2>链路</h2>
-      <span class="md-muted">最近 24 个 5 分钟窗口，实心格为已收到</span>
+    <section class="md-panel">
+      <div class="section-head">
+        <h2>链路</h2>
+        <span class="md-muted">最近 24 个 5 分钟窗口，实心格为已收到</span>
+      </div>
+      <div class="lanes">
+        <article v-for="lane in o?.lanes || []" :key="lane.device_id" class="lane">
+          <div class="lane-row">
+            <div class="lane-id">
+              <strong>{{ lane.name }}</strong>
+              <span class="sev" :class="lane.online ? 'sev--ok' : 'sev--critical'">
+                <span class="sev-dot"></span>{{ lane.online ? '在线' : '掉线' }}
+              </span>
+              <span class="md-mono md-muted">{{ lane.device_id }}</span>
+            </div>
+            <div class="ticks" :aria-label="`${lane.device_id} 最近 24 个窗口`">
+              <span v-for="(t, i) in lane.ticks" :key="i" class="tick" :class="{ 'tick--on': t }"></span>
+            </div>
+            <div class="lane-meta">
+              <span>{{ fmtTime(lane.last_seen) }}</span>
+              <span>k {{ lane.k }}</span>
+              <span>{{ lane.fill }}%</span>
+            </div>
+          </div>
+          <div class="lane-metrics">
+            <span v-for="m in lane.metrics.slice(0, 4)" :key="m.metric">
+              {{ m.label }} <b class="md-num">{{ fmtNum(m.mean, m.decimals) }}{{ m.unit }}</b>
+            </span>
+          </div>
+        </article>
+      </div>
+    </section>
     </div>
-    <div class="lane-grid">
-      <article v-for="lane in o?.lanes || []" :key="lane.device_id" class="lane">
-        <header>
-          <strong>{{ lane.name }}</strong>
-          <span class="md-chip" :class="lane.online ? 'md-chip--ok' : 'md-chip--warn'">
-            {{ lane.online ? '在线' : '离线' }}
+
+    <div class="side">
+      <section class="md-panel thumb">
+        <div class="section-head">
+          <h2>数据流</h2>
+          <span class="md-chip" :class="o?.cloud_ok ? 'md-chip--ok' : 'md-chip--warn'">
+            {{ o?.cloud_ok ? '云端可达' : '云端未连' }}
           </span>
-          <span class="md-chip">{{ lane.scene }}</span>
-          <span v-if="lane.alerts_24h" class="md-chip md-chip--alert">告警 {{ lane.alerts_24h }}</span>
-          <span class="md-mono md-muted">{{ lane.device_id }}</span>
-        </header>
-        <div class="ticks" :aria-label="`${lane.device_id} 最近 24 个窗口`">
-          <span v-for="(t, i) in lane.ticks" :key="i" class="tick" :class="{ 'tick--on': t }"></span>
         </div>
-        <div class="lane-meta">
-          <span>最近上报 {{ fmtTime(lane.last_seen) }}</span>
-          <span>最小 k {{ lane.k }}，{{ lane.fill }}% 到达</span>
+        <canvas ref="flowHost" class="flow-canvas" aria-hidden="true"></canvas>
+        <p class="thumb-note">端 → k≥5 聚合环 → 云，熄掉的粒子是被抑制的桶</p>
+      </section>
+
+      <section class="md-panel">
+        <div class="section-head">
+          <h2>近 24 小时</h2>
+          <span class="md-muted">相对前 24 小时</span>
         </div>
-        <dl class="lane-metrics">
-          <div v-for="m in lane.metrics.slice(0, 4)" :key="m.metric">
+        <dl class="measures">
+          <div v-for="m in measures" :key="m.label">
             <dt>{{ m.label }}</dt>
-            <dd>{{ fmtNum(m.mean, m.decimals) }}<span class="unit">{{ m.unit }}</span></dd>
+            <dd>
+              <span class="md-num">{{ m.value }}</span>
+              <span v-if="m.delta" class="delta" :class="m.delta > 0 ? 'up' : 'down'">
+                {{ m.delta > 0 ? '+' : '' }}{{ m.delta }}%
+              </span>
+              <span v-else-if="m.delta === 0" class="delta flat">持平</span>
+              <span class="note">{{ m.note }}</span>
+            </dd>
           </div>
         </dl>
-      </article>
+      </section>
     </div>
-  </section>
+  </div>
 
-  <section class="md-card advice">
-    <div class="section-head">
-      <h2>最近建议</h2>
-      <span class="md-muted">最近 6 条，共 {{ o?.advice_24h ?? 0 }}</span>
-    </div>
-    <div class="md-list">
-      <div v-for="a in advice" :key="a.id" class="md-list-row">
-        <span class="md-chip" :class="a.risk === 'alert' ? 'md-chip--alert' : 'md-chip--warn'">
-          {{ a.risk === 'alert' ? '告警' : '关注' }}
-        </span>
-        <div class="md-grow">
-          <div>{{ a.text }}</div>
-          <div class="md-muted small">{{ a.device_id }}，{{ fmtTime(a.created_at) }}</div>
-        </div>
+  <div class="bottom">
+    <section class="md-section">
+      <div class="section-head">
+        <h2>最近建议</h2>
+        <span class="md-muted">最近 5 条，24 h 共 {{ o?.advice_24h ?? 0 }} 条</span>
       </div>
-      <p v-if="!advice.length" class="md-muted">今天没有建议。</p>
-    </div>
-  </section>
+      <div class="md-list">
+        <div v-for="a in adviceRows" :key="a.id" class="md-list-row">
+          <span class="sev-tag" :class="risky(a.risk) ? 'sev-tag--notice' : 'sev-tag--idle'">
+            {{ risky(a.risk) ? '告警' : '关注' }}
+          </span>
+          <div class="md-grow">
+            <div>{{ a.text }}</div>
+            <div class="md-muted small">
+              {{ a.device_id }}，{{ fmtTime(a.created_at) }}<template v-if="a.count > 1">，近 5 条里出现 {{ a.count }} 次</template>
+            </div>
+          </div>
+        </div>
+        <p v-if="!adviceRows.length" class="md-muted">今天没有建议。</p>
+      </div>
+    </section>
 
-  <section class="md-card">
-    <div class="section-head">
-      <h2>近 24 小时的变化</h2>
-      <span class="md-muted">相对 7 天同段基线</span>
-    </div>
-    <div class="md-list">
-      <div v-for="f in o?.findings || []" :key="f.metric" class="md-list-row">
-        <div class="md-grow">
-          <div>{{ f.text }}</div>
-          <div class="md-muted small">{{ f.label }}，{{ f.delta > 0 ? '+' : '' }}{{ fmtNum(f.delta, 2) }}{{ f.unit }}</div>
-        </div>
-        <span class="md-chip" :class="Math.abs(f.pct) > 3 ? 'md-chip--warn' : ''">
-          {{ f.pct > 0 ? '+' : '' }}{{ fmtNum(f.pct, 1) }}%
-        </span>
+    <section class="md-section">
+      <div class="section-head">
+        <h2>近 24 小时的变化</h2>
       </div>
-      <p v-if="!o?.findings?.length" class="md-muted empty">数据不足，暂不生成结论。</p>
-    </div>
-    <p class="md-muted small hint">
-      比较口径：每个指标取最近 24 h 均值，对照同设备前 7 天同一时段的均值。
-      最近一次更新 {{ fmtTime(o?.generated_at, true) }}。
-    </p>
-  </section>
+      <div class="md-list">
+        <div v-for="f in o?.findings || []" :key="f.metric" class="md-list-row">
+          <div class="md-grow">
+            <div>{{ f.text }}</div>
+            <div class="md-muted small">
+              {{ f.label }}，{{ f.delta > 0 ? '+' : '' }}{{ fmtNum(f.delta, 2) }}{{ f.unit }}
+            </div>
+          </div>
+          <span class="md-num md-muted">
+            {{ f.pct > 0 ? '+' : '' }}{{ fmtNum(f.pct, 1) }}%
+          </span>
+        </div>
+        <p v-if="!o?.findings?.length" class="md-muted empty">数据不足，暂不生成结论。</p>
+      </div>
+    </section>
+  </div>
 </template>
 
 <style scoped>
@@ -165,131 +238,183 @@ const kpis = () => {
   color: var(--md-error);
   margin-bottom: var(--space-3);
 }
-.flow-card {
-  margin-bottom: var(--space-4);
+
+.main {
+  display: grid;
+  gap: var(--space-4);
+  align-content: start;
 }
-.flow-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: var(--space-3);
-  margin-bottom: var(--space-3);
+.top {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(280px, 1fr);
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+  align-items: stretch;
 }
-.flow-wrap {
-  position: relative;
-}
-.flow-canvas {
-  width: 100%;
-  height: 260px;
-  display: block;
-  border-radius: var(--md-shape-sm);
-  background: var(--md-card-bg);
-  border: 1px solid var(--md-card-border);
-}
-.flow-legend {
-  position: absolute;
-  left: 50%;
-  bottom: var(--space-3);
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 4px 14px;
-  border-radius: var(--md-shape-full);
-  background: color-mix(in srgb, var(--md-surface-container-highest) 90%, transparent);
-  border: 1px solid var(--md-card-border);
-  color: var(--md-on-surface-variant);
-  font: var(--md-label-medium);
-  pointer-events: none;
-}
-.flow-stage {
-  white-space: nowrap;
-}
-.flow-stage--ring {
-  color: #8a5a00;
-}
-[data-theme='dark'] .flow-stage--ring {
-  color: #ffd98a;
+.side {
+  display: grid;
+  gap: var(--space-4);
 }
 
-.flow-arrow {
-  color: color-mix(in srgb, var(--md-on-surface-variant) 70%, transparent);
-}
 .section-head {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
   gap: var(--space-3);
-  margin-bottom: var(--space-3);
+  margin-bottom: var(--space-2);
 }
-.lanes {
-  margin-bottom: var(--space-4);
+.section-head h2 {
+  font: var(--md-title-small);
+  color: var(--md-on-surface);
 }
-.lane-grid {
+
+.more {
+  display: inline-block;
+  margin-top: var(--space-2);
+  font: var(--md-label-large);
+  color: var(--md-primary);
+}
+
+.flow-canvas {
+  width: 100%;
+  height: 116px;
+  display: block;
+  border-radius: var(--md-shape-sm);
+}
+.thumb-note {
+  margin-top: var(--space-1);
+  font: var(--md-body-small);
+  color: var(--md-on-surface-variant);
+}
+
+.measures {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: var(--space-4);
+  gap: var(--space-2);
+}
+.measures div {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--md-card-border);
+}
+.measures div:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.measures dt {
+  font: var(--md-body-small);
+  color: var(--md-on-surface-variant);
+}
+.measures dd {
+  text-align: right;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+.measures .md-num {
+  font: var(--md-title-medium);
+  color: var(--md-on-surface);
+}
+.delta {
+  font: var(--md-label-medium);
+}
+.delta.up { color: var(--md-ok); }
+.delta.down { color: var(--md-notice); }
+.delta.flat { color: var(--md-on-surface-variant); }
+.note {
+  flex-basis: 100%;
+  font: var(--md-body-small);
+  color: var(--md-on-surface-variant);
+}
+
+.lanes {
+  display: grid;
 }
 .lane {
-  border: 1px solid var(--md-surface-container-highest);
-  border-radius: var(--md-shape-sm);
-  padding: var(--space-3);
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--md-card-border);
 }
-.lane header {
+.lane:first-child {
+  border-top: 0;
+}
+.lane-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.1fr) minmax(120px, 1.4fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+.lane-id {
   display: flex;
   align-items: center;
   gap: var(--space-2);
   flex-wrap: wrap;
+  min-width: 0;
+}
+.lane-id strong {
+  font: var(--md-title-small);
 }
 .ticks {
-  display: flex;
-  gap: 3px;
-  margin: var(--space-3) 0 var(--space-2);
+  display: grid;
+  grid-template-columns: repeat(24, 1fr);
+  gap: 2px;
 }
 .tick {
-  flex: 1;
-  height: 18px;
+  height: 12px;
   border-radius: 2px;
   background: var(--md-surface-container-highest);
 }
 .tick--on {
-  background: var(--md-primary);
+  background: var(--md-ok);
 }
 .lane-meta {
   display: flex;
-  justify-content: space-between;
+  gap: var(--space-2);
+  justify-content: flex-end;
   font: var(--md-body-small);
   color: var(--md-on-surface-variant);
+  font-variant-numeric: tabular-nums;
 }
 .lane-metrics {
-  margin: var(--space-3) 0 0;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-2);
-}
-.lane-metrics div {
-  min-width: 0;
-}
-.lane-metrics dt {
-  font: var(--md-label-small);
-  color: var(--md-on-surface-variant);
-}
-.lane-metrics dd {
-  margin: 0;
-  font: var(--md-title-small);
-}
-.unit {
-  margin-left: 3px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  margin-top: 4px;
   font: var(--md-body-small);
   color: var(--md-on-surface-variant);
 }
+.lane-metrics b {
+  font: var(--md-body-medium);
+  color: var(--md-on-surface);
+  font-weight: 500;
+}
+.unit {
+  margin-left: 2px;
+  font: var(--md-body-small);
+  color: var(--md-on-surface-variant);
+}
+
+.bottom {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(280px, 1fr);
+  gap: var(--space-4);
+  align-items: stretch;
+}
+
 .small {
   font: var(--md-body-small);
 }
-.hint {
-  margin-top: var(--space-3);
-}
 .empty {
-  padding: var(--space-4) 0;
+  padding: var(--space-3) 0;
+}
+
+@media (max-width: 1080px) {
+  .top,
+  .bottom {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 </style>

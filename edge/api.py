@@ -297,6 +297,59 @@ def batches(device: str | None = None,
     return store.batches(device, limit)
 
 
+@router.get("/alerts", dependencies=admin)
+def alerts(days: int = Query(default=7, ge=1, le=30),
+           state: str = Query(default="open")) -> list[dict[str, Any]]:
+    rows = store.alert_feed(store.now_ms() - days * 86_400_000,
+                            stale_ms=3 * config.WINDOW_MS)
+    for r in rows:
+        r["label"] = "数据过期" if r["kind"] == "stale" \
+            else catalog.label(r["device_id"], r["metric"])
+        r["unit"] = "" if r["kind"] == "stale" \
+            else catalog.unit(r["device_id"], r["metric"])
+        r["device_name"] = (store.device(r["device_id"]) or {}).get("name", r["device_id"])
+    if state == "open":
+        rows = [r for r in rows if r["state"] in ("pending", "acked", "muted")]
+    return rows
+
+
+def _alert_target(body: dict[str, Any]) -> tuple[str, str, int]:
+    try:
+        return (str(body["device_id"]), str(body["metric"]), int(body["ts_from"]))
+    except (KeyError, TypeError, ValueError):
+        raise HTTPException(422, "需要 device_id、metric、ts_from") from None
+
+
+@router.post("/alerts/ack", dependencies=admin)
+def ack(body: dict[str, Any]) -> dict[str, Any]:
+    device_id, metric, ts_from = _alert_target(body)
+    actor = "admin"
+    store.ack_alert(device_id, metric, ts_from, actor)
+    return {"ok": True}
+
+
+@router.post("/alerts/mute", dependencies=admin)
+def mute(body: dict[str, Any]) -> dict[str, Any]:
+    device_id, metric, ts_from = _alert_target(body)
+    reason = str(body.get("reason") or "").strip()
+    if not reason:
+        raise HTTPException(422, "静音需要填写理由")
+    hours = int(body.get("hours") or 0)
+    if hours <= 0:
+        raise HTTPException(422, "静音需要有效期")
+    actor = "admin"
+    until = store.now_ms() + hours * 3_600_000
+    store.mute_alert(device_id, metric, ts_from, until, reason, actor)
+    return {"ok": True, "muted_until": until}
+
+
+@router.post("/alerts/unmute", dependencies=admin)
+def unmute(body: dict[str, Any]) -> dict[str, Any]:
+    device_id, metric, ts_from = _alert_target(body)
+    store.unmute_alert(device_id, metric, ts_from)
+    return {"ok": True}
+
+
 @router.get("/anomalies", dependencies=admin)
 def anomalies(days: int = Query(default=7, ge=1, le=30)) -> list[dict[str, Any]]:
     rows = store.anomalies(store.now_ms() - days * 86_400_000, 60)
