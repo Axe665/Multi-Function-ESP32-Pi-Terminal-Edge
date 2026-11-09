@@ -183,8 +183,8 @@ const kpis = () => {
   height: 260px;
   display: block;
   border-radius: var(--md-shape-sm);
-  /* 流场是加色混合的粒子，配一块反色底才有对比（M3 的 inverse surface） */
-  background: var(--md-inverse-surface);
+  background: var(--md-card-bg);
+  border: 1px solid var(--md-card-border);
 }
 .flow-legend {
   position: absolute;

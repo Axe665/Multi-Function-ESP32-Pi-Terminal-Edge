@@ -137,8 +137,9 @@ function toggleTheme() {
   background: color-mix(in srgb, var(--md-on-surface) 8%, transparent);
 }
 .nav-item--active {
-  background: var(--md-secondary-container);
-  color: var(--md-on-secondary-container);
+  background: var(--md-card-bg);
+  border: 1px solid var(--md-card-border);
+  color: var(--md-on-surface-variant);
 }
 
 .theme-toggle {
@@ -158,8 +159,9 @@ function toggleTheme() {
   margin-bottom: var(--space-4);
   padding: var(--space-2) var(--space-3);
   border-radius: var(--md-shape-sm);
-  background: var(--md-secondary-container);
-  color: var(--md-on-secondary-container);
+  background: var(--md-card-bg);
+  border: 1px solid var(--md-card-border);
+  color: var(--md-on-surface-variant);
   font: var(--md-body-small);
 }
 

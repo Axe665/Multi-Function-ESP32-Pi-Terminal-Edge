@@ -23,16 +23,18 @@
   --md-error-container: #ffdad6;
   --md-on-error-container: #410002;
 
-  --md-surface: #fbfdf6;
+  --md-surface: #ffffff;
+  --md-card-bg: #ffffff;
+  --md-card-border: #e8eae5;
   --md-on-surface: #1a1c18;
-  --md-surface-dim: #dcded4;
-  --md-surface-bright: #fbfdf6;
+  --md-surface-dim: #eef1ec;
+  --md-surface-bright: #ffffff;
   --md-surface-container-lowest: #ffffff;
-  --md-surface-container-low: #f5f8ef;
-  --md-surface-container: #eff2e9;
-  --md-surface-container-high: #e9ece2;
-  --md-surface-container-highest: #e3e6dc;
-  --md-surface-variant: #e1e4d5;
+  --md-surface-container-low: #ffffff;
+  --md-surface-container: #ffffff;
+  --md-surface-container-high: #f5f7f3;
+  --md-surface-container-highest: #eef1ec;
+  --md-surface-variant: #e9ece7;
   --md-on-surface-variant: #43483e;
   --md-outline: #74796d;
   --md-outline-variant: #c3c8bb;
@@ -118,6 +120,8 @@
 
   --md-surface: #11140e;
   --md-on-surface: #e3e3dc;
+  --md-card-bg: #1e201b;
+  --md-card-border: #2b2e28;
   --md-surface-dim: #11140e;
   --md-surface-bright: #373a33;
   --md-surface-container-lowest: #0c0f0a;
@@ -202,11 +206,10 @@ h3 {
 /* ---------------------------------------------------------------- 组件层 */
 
 .md-card {
-  /* M3 filled card：靠色调分层，不靠描边 */
-  background: var(--md-surface-container);
+  background: var(--md-card-bg);
   border-radius: var(--md-shape-md);
   padding: var(--space-4);
-  border: 0;
+  border: 1px solid var(--md-card-border);
 }
 
 .md-card--filled {

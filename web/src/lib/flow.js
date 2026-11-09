@@ -9,15 +9,16 @@ const FS = `#version 300 es
 precision highp float;
 in float vAlpha;
 in float vWarm;
+uniform float uDark;
 out vec4 outColor;
 void main() {
   vec2 d = gl_PointCoord - 0.5;
   float r = length(d);
   if (r > 0.5) discard;
   float edge = smoothstep(0.5, 0.10, r);
-  // 琥珀为主，汇入环时偏白热；亮度整体抬高，深色底上才看得见
-  vec3 cold = vec3(0.62, 0.55, 0.40);
-  vec3 warm = vec3(1.0, 0.86, 0.55);
+  // 白底用深琥珀，暗底用亮琥珀；同一套粒子，两套主题都看得见
+  vec3 cold = mix(vec3(0.24, 0.15, 0.03), vec3(0.62, 0.55, 0.40), uDark);
+  vec3 warm = mix(vec3(0.56, 0.25, 0.00), vec3(1.0, 0.86, 0.55), uDark);
   vec3 c = mix(cold, warm, vWarm);
   outColor = vec4(c * edge, vAlpha * edge);
 }`;
@@ -32,6 +33,7 @@ uniform float uSpeed;
 uniform float uCull;
 uniform vec3 uEmitters;  // 每台终端是否在线
 uniform float uAlerts;
+uniform float uDark;
 out float vAlpha;
 out float vWarm;
 
@@ -62,9 +64,10 @@ void main() {
   gl_Position = uProj * view;
 
   float depth = clamp(1.0 - (-view.z - 1.6) / 4.5, 0.0, 1.0);
-  gl_PointSize = (2.4 + 4.6 * depth) * uEmitters[int(clamp(e, 0.0, 2.0))];
+  gl_PointSize = (3.0 + 5.4 * depth) * uEmitters[int(clamp(e, 0.0, 2.0))];
   vWarm = swirl * (0.55 + 0.45 * uAlerts);
-  vAlpha = (1.0 - dead) * em * (0.26 + 0.68 * depth) * smoothstep(0.0, 0.06, ph) * (1.0 - smoothstep(0.94, 1.0, ph));
+  vAlpha = (1.0 - dead) * em * (0.30 + 0.70 * depth) * smoothstep(0.0, 0.06, ph) * (1.0 - smoothstep(0.94, 1.0, ph));
+  vAlpha = min(1.0, vAlpha * mix(1.35, 1.0, uDark));
 }`;
 
 const RING_VS = `#version 300 es
@@ -83,8 +86,11 @@ void main() {
 const RING_FS = `#version 300 es
 precision highp float;
 in float vA;
+uniform float uDark;
 out vec4 outColor;
-void main() { outColor = vec4(1.0, 0.82, 0.46, vA); }`;
+void main() {
+  outColor = vec4(mix(vec3(0.52, 0.28, 0.02), vec3(1.0, 0.82, 0.46), uDark), vA);
+}`;
 
 const COUNT = 16000;
 
@@ -114,12 +120,14 @@ export function createFlow(canvas, opts = {}) {
     cull: gl.getUniformLocation(prog, "uCull"),
     emitters: gl.getUniformLocation(prog, "uEmitters"),
     alerts: gl.getUniformLocation(prog, "uAlerts"),
+    dark: gl.getUniformLocation(prog, "uDark"),
   };
   const rloc = {
     pos: gl.getAttribLocation(ringProg, "aPos"),
     proj: gl.getUniformLocation(ringProg, "uProj"),
     view: gl.getUniformLocation(ringProg, "uView"),
     pulse: gl.getUniformLocation(ringProg, "uPulse"),
+    dark: gl.getUniformLocation(ringProg, "uDark"),
   };
 
   const ring = new Float32Array(97 * 2);
@@ -163,7 +171,7 @@ export function createFlow(canvas, opts = {}) {
 
   gl.clearColor(0, 0, 0, 0);
   gl.enable(gl.BLEND);
-  gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
   const stop = animate((t) => {
     const a = resize();
@@ -182,6 +190,8 @@ export function createFlow(canvas, opts = {}) {
     gl.uniform1f(loc.cull, state.cull);
     gl.uniform1f(loc.alerts, state.alerts);
     gl.uniform3f(loc.emitters, ...state.emitters);
+    const dark = document.documentElement.dataset.theme === "dark" ? 1 : 0;
+    gl.uniform1f(loc.dark, dark);
     gl.drawArrays(gl.POINTS, 0, COUNT);
 
     gl.useProgram(ringProg);
@@ -191,6 +201,7 @@ export function createFlow(canvas, opts = {}) {
     gl.uniformMatrix4fv(rloc.proj, false, mvp);
     gl.uniformMatrix4fv(rloc.view, false, view);
     gl.uniform1f(rloc.pulse, 0.5 + 0.5 * Math.sin(t * 1.4) * (0.4 + state.alerts));
+    gl.uniform1f(rloc.dark, dark);
     gl.drawArrays(gl.LINE_STRIP, 0, 97);
     // 再画一圈稍大的同心环，模拟环的厚度（WebGL 的 lineWidth 不可靠）
     gl.uniform1f(rloc.pulse, 0.25 + 0.25 * Math.sin(t * 1.4));
