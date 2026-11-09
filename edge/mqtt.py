@@ -20,6 +20,7 @@ TELEMETRY = "orpi/v1/{dev}/telemetry"
 STATUS = "orpi/v1/{dev}/status"
 ACK = "orpi/v1/{dev}/ack"
 CMD = "orpi/v1/{dev}/cmd"
+ADVICE = "orpi/v1/{dev}/advice"
 
 
 class MqttIngest:
@@ -74,7 +75,8 @@ class MqttIngest:
         self.last_error = None if rc == 0 else f"rc={rc}"
         if rc == 0:
             client.subscribe([(TELEMETRY.replace("{dev}", "+"), 1),
-                              (STATUS.replace("{dev}", "+"), 1)])
+                              (STATUS.replace("{dev}", "+"), 1),
+                              (ADVICE.replace("{dev}", "+"), 1)])
             store.bump("mqtt_connects")
 
     def _on_disconnect(self, client, userdata, rc):
@@ -96,6 +98,9 @@ class MqttIngest:
         if kind == "status":
             self._status(device_id, body)
             return
+        if kind == "advice":
+            self._advice(device_id, body)
+            return
         if kind != "telemetry":
             return
 
@@ -111,6 +116,26 @@ class MqttIngest:
         self.received += 1
         client.publish(ACK.format(dev=device_id),
                        json.dumps(ingest.ack_payload(result)), qos=1)
+
+    def _advice(self, device_id: str, body: dict[str, Any]) -> None:
+        """设备侧就地生成的建议（文档 §5.2 的 advice 主题），与 telemetry 里的建议同一张表。"""
+        from . import privacy
+
+        items = body.get("advice") if isinstance(body.get("advice"), list) else [body]
+        saved = 0
+        for a in items:
+            text = str(a.get("text") or "").strip()
+            if not text:
+                continue
+            clean, hits = privacy.scrub(text)
+            if hits:
+                store.bump("text_scrubbed", sum(hits.values()))
+            saved += store.add_advice(device_id, clean, str(a.get("risk") or "info"),
+                                      float(a.get("confidence") or 0.5),
+                                      str(a.get("source") or "local"),
+                                      int(a.get("created_at") or store.now_ms()))
+        if saved:
+            self.received += saved
 
     def _status(self, device_id: str, body: dict[str, Any]) -> None:
         """status 里带模块清单：可以是 [83, 80]，也可以是带 capabilities 的对象。"""

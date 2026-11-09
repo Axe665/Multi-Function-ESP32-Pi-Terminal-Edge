@@ -281,6 +281,17 @@ def insert_batch(device_id: str, batch_id: str, ts_from: int, ts_to: int,
         return True
 
 
+def add_advice(device_id: str, text: str, risk: str, confidence: float,
+               source: str, created_at: int) -> int:
+    """单条建议入库（advice 主题用）。同一 (device, text, 分钟) 只算一次。"""
+    with connect() as conn:
+        cur = conn.execute(
+            """INSERT OR IGNORE INTO advice(device_id, text, risk, confidence, source, created_at)
+               VALUES(?,?,?,?,?,?)""",
+            (device_id, text, risk, confidence, source, created_at))
+        return 1 if cur.rowcount else 0
+
+
 def bump(key: str, n: int = 1) -> None:
     with connect() as conn:
         conn.execute(
