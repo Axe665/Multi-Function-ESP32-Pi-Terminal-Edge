@@ -153,11 +153,13 @@ def generate(days: int = 7) -> dict[str, int]:
                 h = (ts / 3600_000) % 24
                 day_index = (ts - start) / 86_400_000
                 aggs, adv_out = [], []
-                # 轮换：多数窗口 8–10 人；少量窗口只剩 4 人 → 抑制
+                # 轮换：8–10 人上报。抑制按「指标 × 窗口」发生（某个模块掉线），
+                # 整批仍然会发出，所以链路带看起来是连续的。
                 subjects = 8 + rnd.randint(0, 2)
-                if rnd.random() < 0.06:
-                    subjects = 4
                 for m in _metrics_for(dev):
+                    if rnd.random() < 0.05:
+                        suppressed += 1
+                        continue
                     v = _value(m, h, day_index) + rnd.gauss(0, NOISE[m])
                     z_spike = _spike(m, ts, 7)
                     if z_spike:
@@ -172,9 +174,6 @@ def generate(days: int = 7) -> dict[str, int]:
                     z = (v - mu) / sd
                     v_prev = _value(m, h - window / 3600_000, day_index) + rnd.gauss(0, NOISE[m])
                     slope = v - v_prev
-                    if subjects < config.K_MIN:
-                        suppressed += 1
-                        continue
                     from . import metrics
                     aggs.append({
                         "metric": m, "module_id": metrics.METRICS[m].module_id,
@@ -186,7 +185,8 @@ def generate(days: int = 7) -> dict[str, int]:
                     if a:
                         adv_out.append(a)
 
-                # 被抑制的窗口也要更新 last_seen：终端确实上报了，只是没有可入库的桶
+                # 所有指标都被抑制的极端窗口也要更新 last_seen：
+                # 终端确实上报了，只是没有可入库的桶。
                 if not aggs:
                     conn.execute("UPDATE devices SET last_seen=? WHERE device_id=?",
                                  (ts + window, dev))
@@ -198,7 +198,7 @@ def generate(days: int = 7) -> dict[str, int]:
                     "window": {"from": ts, "to": ts + window, "step_ms": window},
                     "aggregates": aggs, "advice": adv_out,
                     "privacy": {"k": min(a["k"] for a in aggs), "pseudonym": "hmac16",
-                                "raw": False, "suppressed": 1 if subjects < config.K_MIN else 0},
+                                "raw": False, "suppressed": 0},
                 }
                 conn.execute(
                     """INSERT OR REPLACE INTO telemetry
@@ -229,9 +229,9 @@ def generate(days: int = 7) -> dict[str, int]:
     return {"batches": inserted, "suppressed": suppressed, "days": days}
 
 
-def append_window() -> int:
-    """模拟一次 report_now：只追加当前窗口。"""
-    now = store.now_ms() // config.WINDOW_MS * config.WINDOW_MS
+def append_window(ts: int | None = None) -> int:
+    """模拟一次上报：追加一个窗口（默认当前窗口）。"""
+    now = ts or (store.now_ms() // config.WINDOW_MS * config.WINDOW_MS)
     rnd = random.Random(now)
     n = 0
     from . import analysis, metrics
@@ -262,4 +262,21 @@ def append_window() -> int:
                            now, now + config.WINDOW_MS, payload, aggs, adv_out)
         n += 1
     analysis.rebuild_words()
+    return n
+
+
+def backfill(max_windows: int = 288) -> int:
+    """把最后一个批次到现在的空窗口补齐，演示环境不会显示成「断线」。"""
+    window = config.WINDOW_MS
+    current = store.now_ms() // window * window
+    with store.connect() as conn:
+        row = conn.execute("SELECT MAX(ts_to) AS m FROM telemetry").fetchone()
+    last = row["m"] or (current - window)
+    start = max(last, current - max_windows * window)
+    n = 0
+    ts = start
+    while ts < current:
+        append_window(ts)
+        ts += window
+        n += 1
     return n

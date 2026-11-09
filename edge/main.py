@@ -1,12 +1,14 @@
 """应用入口：python3 -m edge.main 或 uvicorn edge.main:app。"""
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import os
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from . import api, config, store
+from . import api, config, sim, store
 
 DESCRIPTION = """\
 边节点管理软件：接收端侧假名聚合、做趋势/热力/词云分析、按小时打包上报云端。
@@ -16,14 +18,36 @@ DESCRIPTION = """\
 """
 
 
+async def _ticker() -> None:
+    """演示用：每 5 分钟补一个窗口，省得界面看起来像断了线。
+
+    EDGE_SIM=0 关掉；没有演示设备（mt-3b-01）时也不会启动。
+    """
+    while True:
+        await asyncio.sleep(config.WINDOW_MS / 1000)
+        await asyncio.to_thread(sim.backfill, 12)
+
+
+@contextlib.asynccontextmanager
+async def lifespan(app: FastAPI):
+    task = None
+    if os.environ.get("EDGE_SIM", "1") != "0" and store.device("mt-3b-01"):
+        await asyncio.to_thread(sim.backfill, 288)
+        task = asyncio.create_task(_ticker())
+    yield
+    if task:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+
 def create_app() -> FastAPI:
     store.init_db()
-    if os.environ.get("EDGE_AUTOSEED") == "1":
-        from . import sim
-        if not store.devices():
-            sim.generate(7)
+    if os.environ.get("EDGE_AUTOSEED") == "1" and not store.devices():
+        sim.generate(7)
     app = FastAPI(title="Modular Terminal Edge", version="1.0.0",
-                  description=DESCRIPTION, docs_url="/api/docs", redoc_url=None)
+                  description=DESCRIPTION, docs_url="/api/docs", redoc_url=None,
+                  lifespan=lifespan)
     app.include_router(api.router)
     app.mount("/", StaticFiles(directory=config.STATIC, html=True), name="static")
     return app

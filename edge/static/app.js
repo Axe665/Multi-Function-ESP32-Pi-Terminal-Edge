@@ -722,6 +722,7 @@ async function viewSettings() {
 
 const routes = [
   [/^#\/$/, viewOverview, "overview"],
+  [/^#\/overview$/, viewOverview, "overview"],
   [/^#\/devices$/, viewDevices, "devices"],
   [/^#\/devices\/(.+)$/, (m) => viewDevice(decodeURIComponent(m[1])), "devices"],
   [/^#\/analysis$/, viewAnalysis, "analysis"],

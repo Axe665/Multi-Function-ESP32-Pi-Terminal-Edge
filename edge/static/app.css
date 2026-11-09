@@ -200,7 +200,9 @@ h3 { margin: 0; font-size: 14px; font-weight: 600; }
 .lane-scene { font-size: 11px; color: var(--faint); border: 1px solid var(--border); border-radius: var(--chip, 3px); padding: 0 5px; line-height: 15px; }
 .lane-id { font-family: var(--mono); font-size: 11px; color: var(--faint); margin-left: auto; }
 
-.ticks { display: flex; gap: 2px; margin: 12px 0 10px; height: 18px; align-items: flex-end; }
+.ticks { display: flex; gap: 2px; margin: 12px 0 10px; height: 18px; align-items: flex-end;
+  /* 窄屏会把 lane 拉满宽，不封顶的话 24 个格子会变成粗条 */
+  max-width: 430px; }
 .tick {
   flex: 1; height: 18px; border-radius: 1px;
   background: #23282e;
@@ -208,7 +210,7 @@ h3 { margin: 0; font-size: 14px; font-weight: 600; }
 .tick.got { background: #565f69; }
 .tick.now { background: var(--accent); }
 .tick.miss { background: transparent; box-shadow: inset 0 0 0 1px #1e2227; }
-.ticks-legend { display: flex; justify-content: space-between; font-size: 11px; color: var(--faint); }
+.ticks-legend { display: flex; justify-content: space-between; font-size: 11px; color: var(--faint); max-width: 430px; }
 
 .lane-foot {
   display: flex; align-items: baseline; justify-content: space-between;
