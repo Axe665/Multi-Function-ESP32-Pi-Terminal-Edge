@@ -196,6 +196,8 @@ def _migrate(conn: sqlite3.Connection) -> None:
     if "next_at" not in outbox:
         conn.execute("ALTER TABLE outbox ADD COLUMN next_at INTEGER")
         conn.execute("UPDATE outbox SET next_at = created_at WHERE next_at IS NULL")
+    if "queue_depth" not in dev_cols:
+        conn.execute("ALTER TABLE devices ADD COLUMN queue_depth INTEGER")
 
 
 # ---------------------------------------------------------------- 设备
@@ -299,6 +301,21 @@ def snapshot(keep: int = 7) -> str | None:
     for old in sorted(out.glob("edge-*.db"))[:-keep]:
         old.unlink(missing_ok=True)
     return name.name
+
+
+def set_status(device_id: str, fw: str | None, queue_depth: int | None) -> None:
+    sets, args = [], []
+    if fw:
+        sets.append("fw=?")
+        args.append(fw)
+    if queue_depth is not None:
+        sets.append("queue_depth=?")
+        args.append(queue_depth)
+    if not sets:
+        return
+    with connect() as conn:
+        conn.execute(f"UPDATE devices SET {', '.join(sets)} WHERE device_id=?",
+                     (*args, device_id))
 
 
 def add_advice(device_id: str, text: str, risk: str, confidence: float,

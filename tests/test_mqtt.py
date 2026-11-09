@@ -94,12 +94,17 @@ class MqttTest(unittest.TestCase):
     def test_status_updates_modules(self):
         store.upsert_device("mt-a64-02", "温室无头 · Pine64", "env", "orpi 1.4.2", [129])
         self.broker.inject("orpi/v1/mt-a64-02/status",
-                           json.dumps({"online": True, "modules": [129, 131]}).encode())
+                           json.dumps({"online": True, "fw": "orpi 1.5.0",
+                                       "queue_depth": 7, "modules": [129, 131]}).encode())
         for _ in range(40):
-            if store.device("mt-a64-02")["modules"] == [129, 131]:
+            d = store.device("mt-a64-02")
+            if d["modules"] == [129, 131] and d.get("queue_depth") == 7:
                 break
             time.sleep(0.05)
-        self.assertEqual(store.device("mt-a64-02")["modules"], [129, 131])
+        d = store.device("mt-a64-02")
+        self.assertEqual(d["modules"], [129, 131])
+        self.assertEqual(d["fw"], "orpi 1.5.0")
+        self.assertEqual(d["queue_depth"], 7)
 
     def test_cmd_publish(self):
         ok = mqtt.mqtt_ingest.publish_cmd("mt-3b-01", {"cmd": "report_now"})

@@ -141,6 +141,8 @@ class MqttIngest:
         """status 里带模块清单：可以是 [83, 80]，也可以是带 capabilities 的对象。"""
         store.ensure_device(device_id)
         store.touch_device(device_id, store.now_ms())
+        store.set_status(device_id, body.get("fw") or body.get("version"),
+                         body.get("queue_depth") if isinstance(body.get("queue_depth"), int) else None)
         link = body.get("link")
         if isinstance(link, str) and link in ("wifi", "ethernet", "offline"):
             store.set_link(device_id, link)
