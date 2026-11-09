@@ -99,13 +99,15 @@ HTTPS  POST /ingest/telemetry                                   ← 兜底通道
 | 边 CA / 设备证书 | CN=deviceId、OU=mt-device、365 天、ECDSA P-256 | `tests/test_security.py` |
 | 配对码 | 6 位 / 10 分钟 / 一次性 / 绑定公钥指纹 / 5 次失败锁 10 分钟 | 同上 |
 | 吊销与 CRL | 吊销后 `verify()` 失败，CRL 可下载 | 同上 |
-| mDNS | 广播 `_orpi-edge._tcp`、发现 `_orpi-device._tcp` 与 `_orpi-cloud._tcp`（云地址优先发现、静态兜底） | `edge/mdns.py`；组播不可用时自动退化 |
+| mDNS | 广播 `_orpi-edge._tcp`、发现 `_orpi-device._tcp` 与 `_orpi-cloud._tcp`；静态地址（环境变量或 `cloud.json`）兜底 | `edge/mdns.py`；容器内实测发现到 `https://172.20.0.5:8443`，组播不可用时退化 |
 | 定时上云 | 每小时生成报表 + 到期队列投递 | `tests/test_scheduler.py` |
-| 退避与保留期 | 1/5/30 分钟、2 小时；按天清理过期聚合 | 同上 |
+| 退避与保留期 | 1/5/30 分钟、2 小时；L2 聚合保留 180 天、L3 文本 365 天 | 同上 |
 | 隐私闸门 | k<5 抑制、原始字段整份 422、min/max/subject 不出端 | `tests/test_contracts.py` |
 | 证书校验 | 出站前用同一份契约再验一次 | `cloudpush.send` |
 | 指标目录 | 端报什么就登记什么，前端下拉框动态生成 | `edge/catalog.py` + `/api/v1/metrics` |
 | 磁盘加密 | 设 `EDGE_DB_KEY` 时强制走 SQLCipher，没驱动就拒绝启动 | `store._driver` |
+| 每日快照 | 每天一份 SQLite 快照，保留最近 7 份；设了 `EDGE_DB_KEY` 时交给运维脚本 | `store.snapshot` + `tests/test_scheduler.py` |
+| 演示模式 | 演示环境显式开启群体分析并写审计（时间/操作者/构建号）；前端挂「演示模式」横幅 | `edge/sim.py`、`/api/v1/health` 的 `demo` |
 | 词频 TF-IDF | jieba 分词 + 停用词，按天重算，查询时用 TF-IDF 加权（跨天高频词降权） | `/api/v1/wordcloud`，页面点词下钻到建议原文 |
 | WiFi 配置生成 | 管理员给无头终端生成 `wpa_supplicant.conf`；口令只在请求里出现，不落库、审计只记长度 | `POST /api/v1/devices/{id}/wifi-config` |
 
@@ -160,12 +162,12 @@ MQTT 真实报文往返、退避序列与保留期清理。
 
 | 文档条目 | 要求 | 现状 |
 |---|---|---|
-| §5.1 部署形态 | Compose 四服务 | ✅ `docker/compose.yml` 起 mosquitto + ingest + api + web 四个服务；ingest 与 api 共用镜像、按角色挂不同路由 |
+| §5.1 部署形态 | Compose 四服务、每日快照 | ✅ 四个服务齐全；每日快照保留 7 份（`data/snapshots/`），路径可用 `EDGE_DATA_DIR` 指到 `/srv/...` |
 | §5.2 接入与主题 | 5 个主题、QoS1、retained status、幂等 | ✅ 全部实现，ACK 回执带 batch_id |
 | §5.3 存储 | devices/telemetry/aggregates/advice/word_freq | ✅ 另加 catalog、certs、revoked、audit、outbox |
 | §5.4 分析 | 趋势 / 热力 / 词云 / 异常 | ✅ 四项都在页面上，数字全部重算 |
 | §5.5 API | 10 个端点 | ✅ 全部实现，另有 metrics/certs/pair/renew |
-| §5.6 前端 | Vue3 + Vite + ECharts，五页 | ✅ 五页齐全（总览/设备/分析/接入/设置）；上云并入设置页；样式为自写 M3 token |
+| §5.6 前端 | Vue3 + Vite + ECharts，五页 | ✅ 五页齐全；总览保留设备卡（在线/最近上报/告警数）与今日建议流；上云并入设置页；演示环境挂横幅 |
 | §5.7 设备接入 | CA、配对码、365 天证书、吊销、续期 | ✅ 前四项完成；续期是**设备主动 renew + 30 天提醒**。边不代签是刻意的：代签要托管设备私钥 |
 | §5.8 边→云 | 每小时批量、幂等、退避 | ✅ 1/5/30 分钟、2 小时退避，7 天 |
 | §5.9 mDNS | 广播 + 发现，TXT 只放 ID/型号/版本/端口/CA 指纹 | ✅ 组播不可用时自动退化为已登记清单 |

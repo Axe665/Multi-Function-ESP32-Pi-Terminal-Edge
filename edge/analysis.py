@@ -224,6 +224,9 @@ def overview() -> dict[str, Any]:
             "SELECT COUNT(*) FROM advice WHERE created_at>=?", (day_ago,)).fetchone()[0]
         alerts = conn.execute(
             "SELECT COUNT(*) FROM advice WHERE created_at>=? AND risk='alert'", (day_ago,)).fetchone()[0]
+        alerts_by_dev = {r[0]: r[1] for r in conn.execute(
+            "SELECT device_id, COUNT(*) FROM advice WHERE created_at>=? AND risk='alert'"
+            " GROUP BY device_id", (day_ago,))}
     c = store.counters()
     settings = store.get_settings()
     pending = [o for o in store.outbox(100) if not o["sent_at"]]
@@ -242,6 +245,7 @@ def overview() -> dict[str, Any]:
         lanes.append({
             "device_id": d["device_id"], "name": d["name"], "scene": d["scene"],
             "online": d["online"], "last_seen": d["last_seen"],
+            "alerts_24h": alerts_by_dev.get(d["device_id"], 0),
             "modules": d["modules"],
             "ticks": ticks, "fill": round(sum(ticks) / len(ticks) * 100),
             "k": min([a["k"] for a in latest] or [0]),
@@ -256,7 +260,7 @@ def overview() -> dict[str, Any]:
     findings = [f for f in (finding(d["device_id"]) for d in devs) if f]
     return {
         "edge_id": config.EDGE_ID, "edge_name": config.EDGE_NAME,
-        "generated_at": now,
+        "demo": config.DEMO, "generated_at": now,
         "devices_total": len(devs), "devices_online": online,
         "batches_24h": batches_24h, "advice_24h": advice_24h, "alerts_24h": alerts,
         "suppressed_buckets": c.get("suppressed_buckets", 0),

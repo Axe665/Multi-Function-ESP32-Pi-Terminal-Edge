@@ -43,6 +43,19 @@ class BackoffTest(unittest.TestCase):
         self.assertTrue(any(r["report_id"] == "r-due" for r in store.due_reports()))
 
 
+class SnapshotTest(unittest.TestCase):
+    def test_snapshot_written_once_per_day(self):
+        store.init_db()
+        out = scheduler.snapshot()
+        name = out["snapshot"]
+        self.assertTrue(name)
+        path = config.DATA_DIR / "snapshots" / name
+        self.assertTrue(path.exists())
+        self.assertGreater(path.stat().st_size, 0)
+        # 同一天再跑一次不会重复写
+        self.assertEqual(scheduler.snapshot()["snapshot"], name)
+
+
 class PruneTest(unittest.TestCase):
     def test_prune_removes_only_old_rows(self):
         store.init_db()

@@ -188,7 +188,7 @@ onMounted(load)
 .note { font: var(--md-body-small); color: var(--md-on-surface-variant); }
 .duo {
   display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
-  gap: var(--space-4); align-items: start;
+  gap: var(--space-4); align-items: stretch;
 }
 .section-head {
   display: flex; justify-content: space-between; align-items: baseline;

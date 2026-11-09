@@ -359,13 +359,19 @@ def health() -> dict[str, Any]:
     except Exception:  # noqa: BLE001 —— 自检要吞掉任何异常并如实报告
         db_ok = False
     c = store.counters()
+    last = (store.outbox(1) or [None])[0]
     return {
         "ok": db_ok,
         "edge_id": config.EDGE_ID,
+        "demo": config.DEMO,
+        "build": config.BUILD,
         "db": "ok" if db_ok else "fail",
         "ingest_token": "set" if config.INGEST_TOKEN else "open",
         "admin_token": "set" if config.ADMIN_TOKEN else "open",
         "cloud_url": config.CLOUD_URL or None,
+        "cloud": {"configured": bool(config.CLOUD_URL),
+                  "last_sent_at": (last or {}).get("sent_at"),
+                  "last_error": (last or {}).get("last_error")},
         "batches": c.get("batches", 0),
         "raw_rejected": c.get("raw_rejected", 0),
         "suppressed_buckets": c.get("suppressed_buckets", 0),

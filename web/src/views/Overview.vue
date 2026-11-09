@@ -84,15 +84,19 @@ const kpis = () => {
       <article v-for="lane in o?.lanes || []" :key="lane.device_id" class="lane">
         <header>
           <strong>{{ lane.name }}</strong>
+          <span class="md-chip" :class="lane.online ? 'md-chip--ok' : 'md-chip--warn'">
+            {{ lane.online ? '在线' : '离线' }}
+          </span>
           <span class="md-chip">{{ lane.scene }}</span>
+          <span v-if="lane.alerts_24h" class="md-chip md-chip--alert">告警 {{ lane.alerts_24h }}</span>
           <span class="md-mono md-muted">{{ lane.device_id }}</span>
         </header>
         <div class="ticks" :aria-label="`${lane.device_id} 最近 24 个窗口`">
           <span v-for="(t, i) in lane.ticks" :key="i" class="tick" :class="{ 'tick--on': t }"></span>
         </div>
         <div class="lane-meta">
-          <span>最小 k {{ lane.k }}</span>
-          <span>{{ lane.fill }}% 到达</span>
+          <span>最近上报 {{ fmtTime(lane.last_seen) }}</span>
+          <span>最小 k {{ lane.k }} · {{ lane.fill }}% 到达</span>
         </div>
         <dl class="lane-metrics">
           <div v-for="m in lane.metrics.slice(0, 4)" :key="m.metric">

@@ -35,6 +35,8 @@ x-edge: &edge
     EDGE_K_MIN: ${EDGE_K_MIN:-5}
     EDGE_SIM: ${EDGE_SIM:-1}
     EDGE_AUTOSEED: "1"
+    EDGE_DEMO: ${EDGE_DEMO:-1}
+    EDGE_BUILD: ${EDGE_BUILD:-compose-dev}
     TZ: Asia/Shanghai
 
 services:

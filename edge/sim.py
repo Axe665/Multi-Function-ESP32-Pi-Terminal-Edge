@@ -247,6 +247,12 @@ def generate(days: int = 7, seed: int | None = None) -> dict[str, int]:
     store.bump("suppressed_buckets", suppressed)
     from . import analysis
     analysis.rebuild_words()
+    # 文档 §8.3/§8.5：演示环境显式开启群体分析，并把初始化写进审计
+    if config.DEMO:
+        store.set_settings({"group_analysis": True})
+        store.audit_action("system", "seed.demo", config.EDGE_ID,
+                           {"operator": "sim", "build": config.BUILD, "days": days,
+                            "batches": inserted, "suppressed": suppressed})
     return {"batches": inserted, "suppressed": suppressed, "days": days,
             "devices": len(devices)}
 

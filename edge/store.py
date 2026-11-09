@@ -281,6 +281,25 @@ def insert_batch(device_id: str, batch_id: str, ts_from: int, ts_to: int,
         return True
 
 
+def snapshot(keep: int = 7) -> str | None:
+    """每日一次 SQLite 快照，保留最近 keep 份（文档 §5.1）。"""
+    import datetime as dt
+    import sqlite3
+
+    if config.DB_KEY:  # SQLCipher 库不能用标准 sqlite3 备份，交给运维
+        return None
+    out = config.DATA_DIR / "snapshots"
+    out.mkdir(parents=True, exist_ok=True)
+    name = out / f"edge-{dt.date.today():%Y%m%d}.db"
+    if name.exists():
+        return name.name
+    with connect() as src, sqlite3.connect(name) as dst:
+        src.backup(dst)
+    for old in sorted(out.glob("edge-*.db"))[:-keep]:
+        old.unlink(missing_ok=True)
+    return name.name
+
+
 def add_advice(device_id: str, text: str, risk: str, confidence: float,
                source: str, created_at: int) -> int:
     """单条建议入库（advice 主题用）。同一 (device, text, 分钟) 只算一次。"""

@@ -13,15 +13,24 @@ from . import analysis, cloudpush, config, store
 
 
 def prune(retention_days: int) -> dict[str, int]:
-    """按天清理边上的聚合与建议，保留期默认 180 天。"""
+    """按天清理边上的聚合与建议：L2 默认 180 天，L3 文本 365 天。"""
     cutoff = store.now_ms() - retention_days * 86_400_000
+    text_cutoff = store.now_ms() - config.TEXT_KEEP_DAYS * 86_400_000
     with store.connect() as conn:
         agg = conn.execute("DELETE FROM aggregates WHERE ts_to < ?", (cutoff,)).rowcount
         tel = conn.execute("DELETE FROM telemetry WHERE ts_to < ?", (cutoff,)).rowcount
-        adv = conn.execute("DELETE FROM advice WHERE created_at < ?", (cutoff,)).rowcount
+        adv = conn.execute("DELETE FROM advice WHERE created_at < ?", (text_cutoff,)).rowcount
         out = conn.execute(
             "DELETE FROM outbox WHERE sent_at IS NOT NULL AND created_at < ?", (cutoff,)).rowcount
     return {"aggregates": agg, "telemetry": tel, "advice": adv, "outbox": out}
+
+
+def snapshot() -> dict[str, Any]:
+    name = store.snapshot(config.SNAPSHOT_KEEP)
+    if name:
+        store.audit_action("system", "db.snapshot", "edge",
+                           {"file": name, "keep": config.SNAPSHOT_KEEP})
+    return {"snapshot": name}
 
 
 def check_certs() -> dict[str, int]:
@@ -72,6 +81,7 @@ class Scheduler:
             retention = store.get_settings().get("retention_days", config.KEEP_DAYS)
             await asyncio.to_thread(prune, int(retention))
             await asyncio.to_thread(check_certs)
+            await asyncio.to_thread(snapshot)
 
     def start(self) -> None:
         if self.task is None:

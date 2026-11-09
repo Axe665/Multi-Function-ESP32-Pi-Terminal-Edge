@@ -1,6 +1,7 @@
 """运行时配置。全部来自环境变量，默认值只适合单机演示。"""
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
@@ -20,7 +21,20 @@ EDGE_ID = _env("EDGE_ID", "edge-lab-01")
 EDGE_NAME = _env("EDGE_NAME", "实验室边节点")
 PUBLIC_URL = _env("EDGE_PUBLIC_URL", "http://127.0.0.1:8001")
 
-CLOUD_URL = _env("EDGE_CLOUD_URL").rstrip("/")
+def _cloud_url() -> str:
+    """文档 §5.9：静态地址兜底。环境变量优先，其次 /etc/orange-pi-terminal/cloud.json。"""
+    url = _env("EDGE_CLOUD_URL")
+    if url:
+        return url.rstrip("/")
+    path = Path(_env("EDGE_STATIC_CONFIG", "/etc/orange-pi-terminal/cloud.json"))
+    try:
+        data = json.loads(path.read_text())
+        return str(data.get("url") or data.get("cloud_url") or "").rstrip("/")
+    except (OSError, ValueError, AttributeError):
+        return ""
+
+
+CLOUD_URL = _cloud_url()
 CLOUD_TOKEN = _env("EDGE_CLOUD_TOKEN")
 
 # 空的 ingest token 表示只接受本机写入，见 README「安全边界」。
@@ -52,7 +66,14 @@ JANITOR_INTERVAL_MS = int(_env("EDGE_JANITOR_INTERVAL_MS", str(6 * 60 * 60 * 100
 # 设了就要求 SQLCipher；没有驱动就拒绝启动，不静默降级成明文
 DB_KEY = _env("EDGE_DB_KEY")
 WINDOW_MS = int(_env("EDGE_WINDOW_MS", str(5 * 60 * 1000)))
+# L2 聚合保留 180 天，L3 文本保留 365 天（文档 §8.1）
 KEEP_DAYS = int(_env("EDGE_KEEP_DAYS", "180"))
+TEXT_KEEP_DAYS = int(_env("EDGE_TEXT_KEEP_DAYS", "365"))
+# 每日快照 + 7 天保留（文档 §5.1）
+SNAPSHOT_KEEP = int(_env("EDGE_SNAPSHOT_KEEP", "7"))
+# 演示模式：compose 默认开，UI 挂「演示模式」横幅（文档 §8.5）
+DEMO = _env("EDGE_DEMO", "1") != "0"
+BUILD = _env("EDGE_BUILD", "dev")
 
 
 def ensure_dirs() -> None:

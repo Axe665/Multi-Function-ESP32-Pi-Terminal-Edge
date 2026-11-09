@@ -25,7 +25,6 @@ def edge_txt(port: int = 8001) -> dict[bytes, bytes]:
     return {
         b"v": b"1",
         b"id": config.EDGE_ID.encode(),
-        b"name": config.EDGE_NAME.encode(),
         b"port": str(port).encode(),
         b"ca_fp": security.ca_fingerprint().split(":")[-1][:16].encode(),
     }
