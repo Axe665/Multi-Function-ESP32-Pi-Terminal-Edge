@@ -4,7 +4,8 @@ import { line, heatmap, wordcloud, barList, fmtNum, fmtTime } from "./charts.js"
 import { createFlow } from "./flow.js";
 
 const main = document.getElementById("main");
-const navOutbox = document.getElementById("nav-outbox");
+// 外壳换过一次：这些节点在新壳里可能不存在，全部做空值保护
+const $ = (id) => document.getElementById(id);
 let settingsCache = null;
 
 /* ---------------------------------------------------------------- 工具 */
@@ -69,9 +70,13 @@ async function viewOverview() {
     return;
   }
 
-  navOutbox.hidden = !o.pending_reports;
-  navOutbox.textContent = o.pending_reports || "";
-  document.getElementById("scope").textContent = o.edge_name;
+  const navOutbox = $("nav-outbox");
+  if (navOutbox) {
+    navOutbox.hidden = !o.pending_reports;
+    navOutbox.textContent = o.pending_reports || "";
+  }
+  const scope = $("scope");
+  if (scope) scope.textContent = o.edge_name;
   renderSideFoot(o);
 
   const findings = o.findings.length ? o.findings.map((f) => `
@@ -194,12 +199,14 @@ async function viewOverview() {
     online: o.lanes.map((l) => l.online),
   });
 
-  document.getElementById("refresh").onclick = () => route(true);
-  document.getElementById("push").onclick = (e) => pushCloud(e.currentTarget);
+  $("refresh").onclick = () => route(true);
+  $("push").onclick = (e) => pushCloud(e.currentTarget);
 }
 
 function renderSideFoot(o) {
-  document.getElementById("side-foot").innerHTML = `
+  const foot = $("side-foot");
+  if (!foot) return;   // 新外壳把侧栏换成顶栏了
+  foot.innerHTML = `
     <dl>
       <dt>边 ID</dt><dd>${esc(o.edge_id)}</dd>
       <dt>云端</dt><dd>${o.cloud_ok ? "已配置" : "未配置"}</dd>
