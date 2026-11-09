@@ -1,7 +1,8 @@
+name: modular-terminal-edge
+
 # 边节点：mosquitto + ingest + api + web（文档 §5.1 的四服务）
 # 数据落 ./data（SQLite WAL，文档要求边保持 SQLite，不换 PG）
 x-edge: &edge
-  build: ..
   image: modular-terminal-edge:2.0.0
   restart: unless-stopped
   depends_on:
@@ -48,6 +49,12 @@ services:
   # 写入口：MQTT 订阅 + HTTP 摄取 + 演示补数 + 定时上云 + mDNS
   ingest:
     <<: *edge
+    # 只在 ingest 上构建一次，api 复用同一镜像（并行构建会撞标签）
+    build:
+      context: ..
+      args:
+        PYTHON_IMAGE: ${PYTHON_IMAGE:-python:3.11-slim}
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
     container_name: mt-edge-ingest
     command: ["python", "-m", "uvicorn", "edge.ingest_main:app", "--host", "0.0.0.0", "--port", "8001"]
     ports:
@@ -61,6 +68,9 @@ services:
   api:
     <<: *edge
     container_name: mt-edge-api
+    depends_on:
+      ingest:
+        condition: service_started
     command: ["python", "-m", "uvicorn", "edge.api_main:app", "--host", "0.0.0.0", "--port", "8001"]
     environment:
       <<: *edge-env

@@ -131,8 +131,11 @@ def issue(device_id: str, csr_pem: str) -> dict[str, Any]:
             "pubkey_fp": pubkey_fp}
 
 
-def issue_server(name: str) -> dict[str, Any]:
-    """给 broker 签一张 serverAuth 证书（mosquitto 的 certfile）。"""
+def issue_server(name: str, extra_sans: list[str] | None = None) -> dict[str, Any]:
+    """给 broker 签一张 serverAuth 证书（mosquitto 的 certfile）。
+
+    extra_sans 用来补容器里的服务名（compose 里连的是 mosquitto 这个名字）。
+    """
     ca_crt, ca_key = ensure_ca()
     key = ec.generate_private_key(ec.SECP256R1())
     now = _now()
@@ -150,8 +153,9 @@ def issue_server(name: str) -> dict[str, Any]:
         .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
         .add_extension(x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.SERVER_AUTH]),
                        critical=False)
-        .add_extension(x509.SubjectAlternativeName([x509.DNSName(name), x509.DNSName("localhost")]),
-                       critical=False)
+        .add_extension(x509.SubjectAlternativeName(
+            [x509.DNSName(n) for n in [name, "localhost", *(extra_sans or [])]]),
+            critical=False)
         .sign(ca_key, hashes.SHA256())
     )
     return {

@@ -1,7 +1,5 @@
-{
-	# 边节点的对外入口：只绑本机，公网访问靠前面的反向隧道或 VPN
-	admin :8001
-
+# 边节点的对外入口：只绑本机，公网访问靠前面的反向隧道或 VPN
+:8001 {
 	# 端 → 边的摄取（HTTP 通道，MQTT 直连 mosquitto:8883）
 	@ingest path /api/v1/ingest/*
 	handle @ingest {

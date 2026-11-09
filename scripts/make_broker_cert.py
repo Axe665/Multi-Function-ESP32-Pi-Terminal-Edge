@@ -19,7 +19,7 @@ def main() -> None:
     name = sys.argv[1] if len(sys.argv) > 1 else "mqtt.edge.local"
     out = ROOT / "docker" / "mosquitto" / "certs"
     out.mkdir(parents=True, exist_ok=True)
-    bundle = security.issue_server(name)
+    bundle = security.issue_server(name, extra_sans=["mosquitto", "mt-mqtt"])
     (out / "ca.crt").write_text(bundle["ca_pem"])
     (out / "broker.crt").write_text(bundle["cert_pem"])
     (out / "broker.key").write_text(bundle["key_pem"])
@@ -30,7 +30,9 @@ def main() -> None:
     client = security.issue_edge_client(edge_id)
     (out / "edge.crt").write_text(client["cert_pem"])
     (out / "edge.key").write_text(client["key_pem"])
-    (out / "edge.key").chmod(0o600)
+    # 容器里的 mosquitto 以 uid 1883 运行，读不到 0600 的私钥；演示证书放 0644
+    for f in ("ca.crt", "broker.crt", "broker.key", "edge.crt", "edge.key"):
+        (out / f).chmod(0o644)
     print(f"已签发 {name} 的 broker 证书与 {edge_id} 的客户端证书 → {out}")
 
 
