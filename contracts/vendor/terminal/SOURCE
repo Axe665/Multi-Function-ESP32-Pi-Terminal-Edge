@@ -1,0 +1,12 @@
+# 边仓 vendor 的端侧契约
+#
+# 消费方（本仓）不修改这里的副本。要改就回端仓提 PR，
+# 再跑 scripts/sync_contracts.py --update terminal 重新拉取。
+
+repo: https://github.com/Axe665/Multi-Function-ESP32-Pi-Terminal
+path: contracts/manifest/data-schema.v1.json + contracts/wire/telemetry.v1.json
+tag: contracts/terminal/v1.0.0
+synced: 2026-11-09
+
+files:
+  telemetry@v1.json

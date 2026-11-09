@@ -1,0 +1,25 @@
+services:
+  edge:
+    build: ..
+    image: modular-terminal-edge:1.0.0
+    container_name: mt-edge
+    restart: unless-stopped
+    ports:
+      # 只绑本机：管理台不对外，需要外网访问时在前面加一层 Caddy + mTLS
+      - "127.0.0.1:8001:8001"
+    volumes:
+      - ../data:/app/data
+    environment:
+      EDGE_ID: ${EDGE_ID:-edge-lab-01}
+      EDGE_NAME: ${EDGE_NAME:-实验室边节点}
+      EDGE_CLOUD_URL: ${EDGE_CLOUD_URL:-}
+      EDGE_CLOUD_TOKEN: ${EDGE_CLOUD_TOKEN:-}
+      EDGE_INGEST_TOKEN: ${EDGE_INGEST_TOKEN:-}
+      EDGE_ADMIN_TOKEN: ${EDGE_ADMIN_TOKEN:-}
+      EDGE_K_MIN: ${EDGE_K_MIN:-5}
+      TZ: Asia/Shanghai
+    # cgroup 限额：边只做聚合和查询，给 1G 足够
+    deploy:
+      resources:
+        limits:
+          memory: 1g

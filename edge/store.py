@@ -1,0 +1,408 @@
+"""SQLite 存储层。单机演示用 SQLite WAL；表结构与 docs 里的 DDL 一一对应。"""
+from __future__ import annotations
+
+import json
+import sqlite3
+import time
+from contextlib import contextmanager
+from typing import Any, Iterable
+
+from . import config
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS devices (
+  device_id   TEXT PRIMARY KEY,
+  name        TEXT NOT NULL,
+  scene       TEXT NOT NULL,
+  cert_fp     TEXT,
+  last_seen   INTEGER,
+  fw          TEXT,
+  modules_json TEXT,
+  paired_at   INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS telemetry (
+  id          INTEGER PRIMARY KEY,
+  device_id   TEXT NOT NULL,
+  batch_id    TEXT NOT NULL,
+  ts_from     INTEGER NOT NULL,
+  ts_to       INTEGER NOT NULL,
+  payload     TEXT NOT NULL,
+  received_at INTEGER NOT NULL,
+  UNIQUE(device_id, batch_id)
+);
+
+CREATE TABLE IF NOT EXISTS aggregates (
+  device_id  TEXT NOT NULL,
+  metric     TEXT NOT NULL,
+  module_id  INTEGER NOT NULL,
+  ts_from    INTEGER NOT NULL,
+  ts_to      INTEGER NOT NULL,
+  n_subjects INTEGER NOT NULL,
+  n_samples  INTEGER NOT NULL,
+  mean       REAL NOT NULL,
+  slope      REAL NOT NULL,
+  z          REAL NOT NULL,
+  k          INTEGER NOT NULL,
+  PRIMARY KEY (device_id, metric, ts_from)
+);
+CREATE INDEX IF NOT EXISTS ix_agg_metric ON aggregates(device_id, metric, ts_from);
+
+CREATE TABLE IF NOT EXISTS advice (
+  id         INTEGER PRIMARY KEY,
+  device_id  TEXT NOT NULL,
+  text       TEXT NOT NULL,
+  risk       TEXT NOT NULL,
+  confidence REAL NOT NULL,
+  source     TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_advice_time ON advice(created_at);
+
+CREATE TABLE IF NOT EXISTS word_freq (
+  day   TEXT NOT NULL,
+  word  TEXT NOT NULL,
+  count INTEGER NOT NULL,
+  PRIMARY KEY (day, word)
+);
+
+CREATE TABLE IF NOT EXISTS outbox (
+  report_id  TEXT PRIMARY KEY,
+  created_at INTEGER NOT NULL,
+  payload    TEXT NOT NULL,
+  sent_at    INTEGER,
+  attempts   INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT
+);
+
+CREATE TABLE IF NOT EXISTS counters (
+  key   TEXT PRIMARY KEY,
+  value INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS pair_codes (
+  code      TEXT PRIMARY KEY,
+  device_id TEXT,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  used_at   INTEGER
+);
+"""
+
+
+def now_ms() -> int:
+    return int(time.time() * 1000)
+
+
+@contextmanager
+def connect():
+    config.ensure_dirs()
+    conn = sqlite3.connect(config.DB_PATH, timeout=10)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA foreign_keys=ON")
+    try:
+        yield conn
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def init_db() -> None:
+    with connect() as conn:
+        conn.executescript(SCHEMA)
+
+
+# ---------------------------------------------------------------- 设备
+
+def upsert_device(device_id: str, name: str, scene: str, fw: str,
+                  modules: list[int], cert_fp: str | None = None) -> None:
+    with connect() as conn:
+        conn.execute(
+            """INSERT INTO devices(device_id, name, scene, fw, modules_json, cert_fp, last_seen, paired_at)
+               VALUES(?,?,?,?,?,?,NULL,?)
+               ON CONFLICT(device_id) DO UPDATE SET
+                 name=excluded.name, scene=excluded.scene, fw=excluded.fw,
+                 modules_json=excluded.modules_json""",
+            (device_id, name, scene, fw, json.dumps(modules), cert_fp, now_ms()),
+        )
+
+
+def touch_device(device_id: str, ts: int) -> None:
+    with connect() as conn:
+        conn.execute("UPDATE devices SET last_seen=? WHERE device_id=?", (ts, device_id))
+
+
+def devices() -> list[dict[str, Any]]:
+    with connect() as conn:
+        rows = conn.execute("SELECT * FROM devices ORDER BY scene, device_id").fetchall()
+    out = []
+    for r in rows:
+        d = dict(r)
+        d["modules"] = json.loads(d.pop("modules_json") or "[]")
+        d["online"] = bool(d["last_seen"]) and now_ms() - d["last_seen"] < 3 * config.WINDOW_MS
+        out.append(d)
+    return out
+
+
+def device(device_id: str) -> dict[str, Any] | None:
+    return next((d for d in devices() if d["device_id"] == device_id), None)
+
+
+# ---------------------------------------------------------------- 批次与聚合
+
+def insert_batch(device_id: str, batch_id: str, ts_from: int, ts_to: int,
+                 payload: dict[str, Any], aggregates: Iterable[dict[str, Any]],
+                 advice: Iterable[dict[str, Any]]) -> bool:
+    """返回 False 表示重复投递（幂等）。"""
+    with connect() as conn:
+        cur = conn.execute(
+            """INSERT OR IGNORE INTO telemetry(device_id, batch_id, ts_from, ts_to, payload, received_at)
+               VALUES(?,?,?,?,?,?)""",
+            (device_id, batch_id, ts_from, ts_to,
+             json.dumps(payload, ensure_ascii=False), now_ms()),
+        )
+        if cur.rowcount == 0:
+            return False
+        for a in aggregates:
+            conn.execute(
+                """INSERT OR REPLACE INTO aggregates
+                   (device_id, metric, module_id, ts_from, ts_to,
+                    n_subjects, n_samples, mean, slope, z, k)
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+                (device_id, a["metric"], a["module_id"], ts_from, ts_to,
+                 a["n_subjects"], a["n_samples"], a["mean"], a["slope"], a["z"], a["k"]),
+            )
+        for a in advice:
+            conn.execute(
+                """INSERT INTO advice(device_id, text, risk, confidence, source, created_at)
+                   VALUES(?,?,?,?,?,?)""",
+                (device_id, a["text"], a["risk"], a["confidence"], a["source"], ts_to),
+            )
+        return True
+
+
+def bump(key: str, n: int = 1) -> None:
+    with connect() as conn:
+        conn.execute(
+            "INSERT INTO counters(key, value) VALUES(?,?) "
+            "ON CONFLICT(key) DO UPDATE SET value = value + excluded.value",
+            (key, n),
+        )
+
+
+def counters() -> dict[str, int]:
+    with connect() as conn:
+        return {r["key"]: r["value"] for r in conn.execute("SELECT * FROM counters")}
+
+
+def series(device_id: str, metric: str, ts_from: int, ts_to: int,
+           step_ms: int) -> list[dict[str, Any]]:
+    """按 step 重采样（均值），返回 [{ts, mean, k, n_subjects, z}]。"""
+    with connect() as conn:
+        rows = conn.execute(
+            """SELECT ts_from, mean, z, k, n_subjects FROM aggregates
+               WHERE device_id=? AND metric=? AND ts_from>=? AND ts_from<=?
+               ORDER BY ts_from""",
+            (device_id, metric, ts_from, ts_to),
+        ).fetchall()
+    if step_ms <= config.WINDOW_MS:
+        return [{"ts": r["ts_from"], "mean": r["mean"], "z": r["z"],
+                 "k": r["k"], "n_subjects": r["n_subjects"]} for r in rows]
+    buckets: dict[int, list[sqlite3.Row]] = {}
+    for r in rows:
+        buckets.setdefault(r["ts_from"] // step_ms * step_ms, []).append(r)
+    return [
+        {"ts": b, "mean": sum(x["mean"] for x in xs) / len(xs),
+         "z": sum(x["z"] for x in xs) / len(xs),
+         "k": min(x["k"] for x in xs),
+         "n_subjects": max(x["n_subjects"] for x in xs)}
+        for b, xs in sorted(buckets.items())
+    ]
+
+
+def latest_aggregates(device_id: str | None = None) -> list[dict[str, Any]]:
+    sql = """SELECT a.* FROM aggregates a
+             JOIN (SELECT device_id, metric, MAX(ts_from) AS m FROM aggregates GROUP BY device_id, metric) t
+               ON a.device_id=t.device_id AND a.metric=t.metric AND a.ts_from=t.m"""
+    args: tuple = ()
+    if device_id:
+        sql += " WHERE a.device_id=?"
+        args = (device_id,)
+    sql += " ORDER BY a.device_id, a.metric"
+    with connect() as conn:
+        return [dict(r) for r in conn.execute(sql, args)]
+
+
+def heatmap(device_id: str, metric: str, since_ms: int) -> list[dict[str, Any]]:
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT ts_from, z, mean FROM aggregates WHERE device_id=? AND metric=? AND ts_from>=?",
+            (device_id, metric, since_ms),
+        ).fetchall()
+    cells: dict[tuple[int, int], list] = {}
+    for r in rows:
+        t = time.localtime(r["ts_from"] / 1000)
+        cells.setdefault((t.tm_wday, t.tm_hour), []).append(r)
+    return [{"dow": d, "hour": h,
+             "mean": sum(x["mean"] for x in v) / len(v),
+             "z": sum(x["z"] for x in v) / len(v),
+             "n": len(v)}
+            for (d, h), v in sorted(cells.items())]
+
+
+def batches(device_id: str | None, limit: int = 20) -> list[dict[str, Any]]:
+    sql = ("SELECT device_id, batch_id, ts_from, ts_to, received_at, payload "
+           "FROM telemetry")
+    args: tuple = ()
+    if device_id:
+        sql += " WHERE device_id=?"
+        args = (device_id,)
+    sql += " ORDER BY ts_from DESC LIMIT ?"
+    with connect() as conn:
+        rows = conn.execute(sql, args + (limit,)).fetchall()
+    out = []
+    for r in rows:
+        p = json.loads(r["payload"])
+        out.append({
+            "device_id": r["device_id"], "batch_id": r["batch_id"],
+            "ts_from": r["ts_from"], "ts_to": r["ts_to"],
+            "received_at": r["received_at"],
+            "metrics": len(p.get("aggregates", [])),
+            "k_min": min([a["k"] for a in p.get("aggregates", [])] or [0]),
+            "advice": len(p.get("advice", [])),
+        })
+    return out
+
+
+def advice(device_id: str | None = None, risk: str | None = None,
+           limit: int = 30, since_ms: int | None = None) -> list[dict[str, Any]]:
+    sql = "SELECT * FROM advice WHERE 1=1"
+    args: list[Any] = []
+    if device_id:
+        sql += " AND device_id=?"
+        args.append(device_id)
+    if risk:
+        sql += " AND risk=?"
+        args.append(risk)
+    if since_ms:
+        sql += " AND created_at>=?"
+        args.append(since_ms)
+    sql += " ORDER BY created_at DESC LIMIT ?"
+    args.append(limit)
+    with connect() as conn:
+        return [dict(r) for r in conn.execute(sql, args)]
+
+
+def anomalies(since_ms: int, limit: int = 40) -> list[dict[str, Any]]:
+    with connect() as conn:
+        rows = conn.execute(
+            """SELECT device_id, metric, ts_from, z, mean FROM aggregates
+               WHERE ts_from>=? AND ABS(z)>=2.5 ORDER BY ts_from DESC LIMIT ?""",
+            (since_ms, limit),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------- 词频
+
+def rebuild_word_freq(terms: dict[str, dict[str, int]]) -> None:
+    with connect() as conn:
+        conn.execute("DELETE FROM word_freq")
+        for day, counts in terms.items():
+            conn.executemany(
+                "INSERT INTO word_freq(day, word, count) VALUES(?,?,?)",
+                [(day, w, c) for w, c in counts.items()],
+            )
+
+
+def wordcloud(days: int, today: str) -> list[dict[str, Any]]:
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT word, SUM(count) AS count FROM word_freq WHERE day>=? "
+            "GROUP BY word ORDER BY count DESC LIMIT 40",
+            (today if days <= 0 else _shift_day(today, -(days - 1)),),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def _shift_day(day: str, delta: int) -> str:
+    import datetime as dt
+    d = dt.date.fromisoformat(day) + dt.timedelta(days=delta)
+    return d.isoformat()
+
+
+# ---------------------------------------------------------------- 发件箱
+
+def enqueue_report(report_id: str, payload: dict[str, Any]) -> None:
+    with connect() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO outbox(report_id, created_at, payload) VALUES(?,?,?)",
+            (report_id, now_ms(), json.dumps(payload, ensure_ascii=False)),
+        )
+
+
+def outbox(limit: int = 50) -> list[dict[str, Any]]:
+    with connect() as conn:
+        rows = conn.execute("SELECT * FROM outbox ORDER BY created_at DESC LIMIT ?",
+                            (limit,)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def mark_sent(report_id: str, error: str | None) -> None:
+    with connect() as conn:
+        if error is None:
+            conn.execute("UPDATE outbox SET sent_at=?, attempts=attempts+1, last_error=NULL "
+                         "WHERE report_id=?", (now_ms(), report_id))
+        else:
+            conn.execute("UPDATE outbox SET attempts=attempts+1, last_error=? WHERE report_id=?",
+                         (error[:300], report_id))
+
+
+# ---------------------------------------------------------------- 设置
+
+def get_settings() -> dict[str, Any]:
+    defaults = {
+        "report_cadence_min": 60,
+        "cloud_enabled": True,
+        "personalization": True,
+        "group_analysis": False,
+        "k_min": config.K_MIN,
+        "retention_days": 180,
+    }
+    with connect() as conn:
+        rows = conn.execute("SELECT * FROM settings").fetchall()
+    for r in rows:
+        try:
+            defaults[r["key"]] = json.loads(r["value"])
+        except json.JSONDecodeError:
+            defaults[r["key"]] = r["value"]
+    return defaults
+
+
+def set_settings(patch: dict[str, Any]) -> dict[str, Any]:
+    with connect() as conn:
+        for k, v in patch.items():
+            conn.execute("INSERT OR REPLACE INTO settings(key, value) VALUES(?,?)",
+                         (k, json.dumps(v, ensure_ascii=False)))
+    return get_settings()
+
+
+# ---------------------------------------------------------------- 配对码
+
+def create_pair_code(code: str, ttl_ms: int) -> None:
+    t = now_ms()
+    with connect() as conn:
+        conn.execute("INSERT OR REPLACE INTO pair_codes(code, created_at, expires_at) VALUES(?,?,?)",
+                     (code, t, t + ttl_ms))
+
+
+def pair_codes() -> list[dict[str, Any]]:
+    with connect() as conn:
+        return [dict(r) for r in conn.execute(
+            "SELECT * FROM pair_codes ORDER BY created_at DESC LIMIT 10")]

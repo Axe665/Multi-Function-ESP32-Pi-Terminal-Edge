@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Axe665/Multi-Function-ESP32-Pi-Terminal-Edge/contracts/wire/edge-report.v1.json",
+  "title": "orpi.edge.report.v1 —— 边 → 云",
+  "description": "只含日聚合、建议文本与计数。出现 user_id/subject/values 等原始字段即视为事故。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "report_id", "edge_id", "sent_at", "period", "devices", "telemetry_daily", "privacy"],
+  "properties": {
+    "schema": { "const": "orpi.edge.report.v1" },
+    "report_id": { "type": "string", "minLength": 8, "maxLength": 64 },
+    "edge_id": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "edge_name": { "type": "string", "maxLength": 80 },
+    "sent_at": { "type": "integer" },
+    "period": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to"],
+      "properties": { "from": { "type": "integer" }, "to": { "type": "integer" } }
+    },
+    "devices": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["device_id", "scene"],
+        "properties": {
+          "device_id": { "type": "string" },
+          "scene": { "type": "string" },
+          "modules": { "type": "array", "items": { "type": "integer" } },
+          "last_seen": { "type": ["integer", "null"] },
+          "online": { "type": "boolean" }
+        }
+      }
+    },
+    "telemetry_daily": {
+      "type": "array",
+      "maxItems": 4096,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["device_id", "day", "metric", "n_subjects", "n_samples", "mean", "slope", "z", "k"],
+        "properties": {
+          "device_id": { "type": "string" },
+          "day": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+          "metric": { "type": "string" },
+          "n_subjects": { "type": "integer", "minimum": 1 },
+          "n_samples": { "type": "integer", "minimum": 1 },
+          "mean": { "type": "number" },
+          "slope": { "type": "number" },
+          "z": { "type": "number" },
+          "k": { "type": "integer", "minimum": 5, "description": "k<5 不允许到云" }
+        }
+      }
+    },
+    "advice": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["device_id", "text", "risk", "confidence", "source", "created_at"],
+        "properties": {
+          "device_id": { "type": "string" },
+          "text": { "type": "string", "maxLength": 160 },
+          "risk": { "enum": ["info", "watch", "alert"] },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+          "source": { "type": "string" },
+          "created_at": { "type": "integer" }
+        }
+      }
+    },
+    "word_freq": {
+      "type": "array",
+      "maxItems": 512,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["day", "word", "count"],
+        "properties": {
+          "day": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+          "word": { "type": "string" },
+          "count": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["k_min", "suppressed_buckets", "raw_rejected"],
+      "properties": {
+        "k_min": { "type": "integer", "minimum": 5 },
+        "suppressed_buckets": { "type": "integer", "minimum": 0 },
+        "raw_rejected": { "type": "integer", "minimum": 0 },
+        "subjects_total": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

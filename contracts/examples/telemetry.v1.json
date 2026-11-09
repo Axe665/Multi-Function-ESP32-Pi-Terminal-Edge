@@ -1,0 +1,37 @@
+{
+  "schema": "orpi.telemetry.v1",
+  "device_id": "mt-3b-01",
+  "edge_id": "edge-lab-01",
+  "sent_at": 1794214800000,
+  "window": {
+    "from": 1794214500000,
+    "to": 1794214800000,
+    "step_ms": 300000
+  },
+  "aggregates": [
+    {
+      "metric": "bp.systolic",
+      "module_id": 83,
+      "n_subjects": 8,
+      "n_samples": 320,
+      "mean": 131.4,
+      "slope": 0.27,
+      "z": 1.6,
+      "k": 8
+    }
+  ],
+  "advice": [
+    {
+      "text": "近 7 天收缩压缓慢上升，建议复测并关注晨间读数",
+      "risk": "watch",
+      "confidence": 0.72,
+      "source": "local"
+    }
+  ],
+  "privacy": {
+    "k": 8,
+    "pseudonym": "hmac16",
+    "raw": false,
+    "suppressed": 2
+  }
+}

@@ -1,0 +1,2081 @@
+{
+  "schema": "orpi.edge.report.v1",
+  "report_id": "949a81920e7765aa",
+  "edge_id": "edge-lab-01",
+  "edge_name": "实验室边节点",
+  "sent_at": 1794215216649,
+  "period": {
+    "from": 1794128816649,
+    "to": 1794215216649
+  },
+  "devices": [
+    {
+      "device_id": "mt-rk64-03",
+      "scene": "energy",
+      "modules": [
+        31,
+        32
+      ],
+      "last_seen": 1794214800000,
+      "online": true
+    },
+    {
+      "device_id": "mt-a64-02",
+      "scene": "env",
+      "modules": [
+        21,
+        22
+      ],
+      "last_seen": 1794214800000,
+      "online": true
+    },
+    {
+      "device_id": "mt-3b-01",
+      "scene": "health",
+      "modules": [
+        83,
+        84
+      ],
+      "last_seen": 1794214800000,
+      "online": true
+    }
+  ],
+  "telemetry_daily": [
+    {
+      "device_id": "mt-3b-01",
+      "day": "2026-11-08",
+      "metric": "bp.systolic",
+      "n_subjects": 10,
+      "n_samples": 29437,
+      "mean": 128.12,
+      "slope": 0.1472,
+      "z": 0.386,
+      "k": 8
+    },
+    {
+      "device_id": "mt-3b-01",
+      "day": "2026-11-09",
+      "metric": "bp.systolic",
+      "n_subjects": 10,
+      "n_samples": 70116,
+      "mean": 129.192,
+      "slope": -0.0427,
+      "z": 0.334,
+      "k": 8
+    },
+    {
+      "device_id": "mt-3b-01",
+      "day": "2026-11-08",
+      "metric": "spo2",
+      "n_subjects": 10,
+      "n_samples": 29444,
+      "mean": 97.174,
+      "slope": -0.0333,
+      "z": -0.079,
+      "k": 8
+    },
+    {
+      "device_id": "mt-3b-01",
+      "day": "2026-11-09",
+      "metric": "spo2",
+      "n_subjects": 10,
+      "n_samples": 70153,
+      "mean": 96.969,
+      "slope": 0.0243,
+      "z": -0.012,
+      "k": 8
+    },
+    {
+      "device_id": "mt-3b-01",
+      "day": "2026-11-08",
+      "metric": "weight",
+      "n_subjects": 10,
+      "n_samples": 29676,
+      "mean": 68.419,
+      "slope": 0.0069,
+      "z": -1.092,
+      "k": 8
+    },
+    {
+      "device_id": "mt-3b-01",
+      "day": "2026-11-09",
+      "metric": "weight",
+      "n_subjects": 10,
+      "n_samples": 70509,
+      "mean": 68.396,
+      "slope": -0.0017,
+      "z": -1.253,
+      "k": 8
+    },
+    {
+      "device_id": "mt-a64-02",
+      "day": "2026-11-08",
+      "metric": "env.co2",
+      "n_subjects": 10,
+      "n_samples": 27186,
+      "mean": 757.689,
+      "slope": -5.2907,
+      "z": 0.059,
+      "k": 8
+    },
+    {
+      "device_id": "mt-a64-02",
+      "day": "2026-11-09",
+      "metric": "env.co2",
+      "n_subjects": 10,
+      "n_samples": 69928,
+      "mean": 593.651,
+      "slope": 0.7459,
+      "z": 0.109,
+      "k": 8
+    },
+    {
+      "device_id": "mt-a64-02",
+      "day": "2026-11-08",
+      "metric": "env.humidity",
+      "n_subjects": 10,
+      "n_samples": 27109,
+      "mean": 47.624,
+      "slope": -0.2356,
+      "z": 0.07,
+      "k": 8
+    },
+    {
+      "device_id": "mt-a64-02",
+      "day": "2026-11-09",
+      "metric": "env.humidity",
+      "n_subjects": 10,
+      "n_samples": 70138,
+      "mean": 56.576,
+      "slope": 0.1697,
+      "z": 0.018,
+      "k": 8
+    },
+    {
+      "device_id": "mt-a64-02",
+      "day": "2026-11-08",
+      "metric": "env.temp",
+      "n_subjects": 10,
+      "n_samples": 27329,
+      "mean": 24.282,
+      "slope": 0.0228,
+      "z": -0.064,
+      "k": 8
+    },
+    {
+      "device_id": "mt-a64-02",
+      "day": "2026-11-09",
+      "metric": "env.temp",
+      "n_subjects": 10,
+      "n_samples": 70348,
+      "mean": 21.669,
+      "slope": -0.0334,
+      "z": 0.021,
+      "k": 8
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "day": "2026-11-08",
+      "metric": "energy.load",
+      "n_subjects": 10,
+      "n_samples": 27218,
+      "mean": 1.204,
+      "slope": -0.013,
+      "z": 0.014,
+      "k": 8
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "day": "2026-11-09",
+      "metric": "energy.load",
+      "n_subjects": 10,
+      "n_samples": 70350,
+      "mean": 1.512,
+      "slope": -0.0063,
+      "z": -0.043,
+      "k": 8
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "day": "2026-11-08",
+      "metric": "energy.pv",
+      "n_subjects": 10,
+      "n_samples": 27194,
+      "mean": 3.029,
+      "slope": 0.0074,
+      "z": 0.153,
+      "k": 8
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "day": "2026-11-09",
+      "metric": "energy.pv",
+      "n_subjects": 10,
+      "n_samples": 70017,
+      "mean": 0.286,
+      "slope": 0.0253,
+      "z": 0.325,
+      "k": 8
+    }
+  ],
+  "advice": [
+    {
+      "device_id": "mt-rk64-03",
+      "text": "用电负荷尖峰前移，峰谷差扩大",
+      "risk": "watch",
+      "confidence": 0.63,
+      "source": "local",
+      "created_at": 1794214800000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "昨夜血氧平稳，未见连续偏低",
+      "risk": "info",
+      "confidence": 0.78,
+      "source": "local",
+      "created_at": 1794214500000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "昨夜血氧平稳，未见连续偏低",
+      "risk": "info",
+      "confidence": 0.78,
+      "source": "local",
+      "created_at": 1794214200000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "室内温度日间波动较大，注意结露风险",
+      "risk": "watch",
+      "confidence": 0.64,
+      "source": "local",
+      "created_at": 1794213600000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "昨夜血氧平稳，未见连续偏低",
+      "risk": "info",
+      "confidence": 0.78,
+      "source": "local",
+      "created_at": 1794213600000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "室内温度平稳，与昨日同一时段接近",
+      "risk": "info",
+      "confidence": 0.75,
+      "source": "local",
+      "created_at": 1794213300000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794213300000
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "text": "用电负荷平稳，未见异常尖峰",
+      "risk": "info",
+      "confidence": 0.77,
+      "source": "local",
+      "created_at": 1794213000000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "血氧出现短时偏低，建议关注睡眠时段",
+      "risk": "watch",
+      "confidence": 0.58,
+      "source": "local",
+      "created_at": 1794213000000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794212700000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794211800000
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "text": "用电负荷平稳，未见异常尖峰",
+      "risk": "info",
+      "confidence": 0.77,
+      "source": "local",
+      "created_at": 1794211500000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "相对湿度处于舒适区间",
+      "risk": "info",
+      "confidence": 0.8,
+      "source": "local",
+      "created_at": 1794211500000
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "text": "光伏午间出力回落，较昨日低 0.4 kW",
+      "risk": "watch",
+      "confidence": 0.6,
+      "source": "local",
+      "created_at": 1794211200000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "相对湿度偏高，建议通风降低结露风险",
+      "risk": "watch",
+      "confidence": 0.61,
+      "source": "local",
+      "created_at": 1794210600000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "昨夜血氧平稳，未见连续偏低",
+      "risk": "info",
+      "confidence": 0.78,
+      "source": "local",
+      "created_at": 1794210600000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "相对湿度处于舒适区间",
+      "risk": "info",
+      "confidence": 0.8,
+      "source": "local",
+      "created_at": 1794210000000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794209700000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794209400000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "昨夜血氧平稳，未见连续偏低",
+      "risk": "info",
+      "confidence": 0.78,
+      "source": "local",
+      "created_at": 1794209400000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794207900000
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "text": "光伏午间出力回落，较昨日低 0.4 kW",
+      "risk": "watch",
+      "confidence": 0.6,
+      "source": "local",
+      "created_at": 1794207600000
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "text": "用电负荷尖峰前移，峰谷差扩大",
+      "risk": "watch",
+      "confidence": 0.63,
+      "source": "local",
+      "created_at": 1794207300000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "午后 CO₂ 连续偏高，建议换气通风",
+      "risk": "watch",
+      "confidence": 0.69,
+      "source": "local",
+      "created_at": 1794207300000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794207300000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794206400000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "近 7 天收缩压缓慢上升，建议复测并关注晨间读数",
+      "risk": "watch",
+      "confidence": 0.72,
+      "source": "local",
+      "created_at": 1794206400000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "相对湿度处于舒适区间",
+      "risk": "info",
+      "confidence": 0.8,
+      "source": "local",
+      "created_at": 1794206100000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "收缩压日间平稳，晨间峰值较上周回落",
+      "risk": "info",
+      "confidence": 0.66,
+      "source": "local",
+      "created_at": 1794205500000
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "text": "用电负荷平稳，未见异常尖峰",
+      "risk": "info",
+      "confidence": 0.77,
+      "source": "local",
+      "created_at": 1794205200000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794204000000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "收缩压连续三个窗口高于基线，建议复测并与医生确认",
+      "risk": "alert",
+      "confidence": 0.81,
+      "source": "local",
+      "created_at": 1794204000000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "相对湿度偏高，建议通风降低结露风险",
+      "risk": "watch",
+      "confidence": 0.61,
+      "source": "local",
+      "created_at": 1794203700000
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "text": "光伏午间出力回落，较昨日低 0.4 kW",
+      "risk": "watch",
+      "confidence": 0.6,
+      "source": "local",
+      "created_at": 1794203400000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "血氧出现短时偏低，建议关注睡眠时段",
+      "risk": "watch",
+      "confidence": 0.58,
+      "source": "local",
+      "created_at": 1794203400000
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "text": "用电负荷尖峰前移，峰谷差扩大",
+      "risk": "watch",
+      "confidence": 0.63,
+      "source": "local",
+      "created_at": 1794203100000
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "text": "用电负荷平稳，未见异常尖峰",
+      "risk": "info",
+      "confidence": 0.77,
+      "source": "local",
+      "created_at": 1794202500000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "收缩压日间平稳，晨间峰值较上周回落",
+      "risk": "info",
+      "confidence": 0.66,
+      "source": "local",
+      "created_at": 1794202500000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "血氧出现短时偏低，建议关注睡眠时段",
+      "risk": "watch",
+      "confidence": 0.58,
+      "source": "local",
+      "created_at": 1794202200000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794201000000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "血氧出现短时偏低，建议关注睡眠时段",
+      "risk": "watch",
+      "confidence": 0.58,
+      "source": "local",
+      "created_at": 1794200700000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "室内温度日间波动较大，注意结露风险",
+      "risk": "watch",
+      "confidence": 0.64,
+      "source": "local",
+      "created_at": 1794200400000
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "text": "光伏午间出力回落，较昨日低 0.4 kW",
+      "risk": "watch",
+      "confidence": 0.6,
+      "source": "local",
+      "created_at": 1794200100000
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "text": "用电负荷尖峰前移，峰谷差扩大",
+      "risk": "watch",
+      "confidence": 0.63,
+      "source": "local",
+      "created_at": 1794200100000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "室内温度日间波动较大，注意结露风险",
+      "risk": "watch",
+      "confidence": 0.64,
+      "source": "local",
+      "created_at": 1794200100000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794200100000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "CO₂ 出现尖峰，与人员集中时段吻合",
+      "risk": "alert",
+      "confidence": 0.74,
+      "source": "local",
+      "created_at": 1794199800000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "室内温度日间波动较大，注意结露风险",
+      "risk": "watch",
+      "confidence": 0.64,
+      "source": "local",
+      "created_at": 1794199800000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794199800000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794199500000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794198900000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794198300000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "室内温度日间波动较大，注意结露风险",
+      "risk": "watch",
+      "confidence": 0.64,
+      "source": "local",
+      "created_at": 1794198000000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "午后 CO₂ 连续偏高，建议换气通风",
+      "risk": "watch",
+      "confidence": 0.69,
+      "source": "local",
+      "created_at": 1794197400000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794197400000
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "text": "光伏出力与天气预报一致",
+      "risk": "info",
+      "confidence": 0.72,
+      "source": "local",
+      "created_at": 1794197100000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "昨夜血氧平稳，未见连续偏低",
+      "risk": "info",
+      "confidence": 0.78,
+      "source": "local",
+      "created_at": 1794197100000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "近 7 天收缩压缓慢上升，建议复测并关注晨间读数",
+      "risk": "watch",
+      "confidence": 0.72,
+      "source": "local",
+      "created_at": 1794196800000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "室内温度平稳，与昨日同一时段接近",
+      "risk": "info",
+      "confidence": 0.75,
+      "source": "local",
+      "created_at": 1794196500000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "昨夜血氧平稳，未见连续偏低",
+      "risk": "info",
+      "confidence": 0.78,
+      "source": "local",
+      "created_at": 1794196500000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "收缩压日间平稳，晨间峰值较上周回落",
+      "risk": "info",
+      "confidence": 0.66,
+      "source": "local",
+      "created_at": 1794196200000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "昨夜血氧平稳，未见连续偏低",
+      "risk": "info",
+      "confidence": 0.78,
+      "source": "local",
+      "created_at": 1794195900000
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "text": "光伏午间出力回落，较昨日低 0.4 kW",
+      "risk": "watch",
+      "confidence": 0.6,
+      "source": "local",
+      "created_at": 1794195600000
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "text": "用电负荷平稳，未见异常尖峰",
+      "risk": "info",
+      "confidence": 0.77,
+      "source": "local",
+      "created_at": 1794195300000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "收缩压连续三个窗口高于基线，建议复测并与医生确认",
+      "risk": "alert",
+      "confidence": 0.81,
+      "source": "local",
+      "created_at": 1794194700000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "相对湿度偏高，建议通风降低结露风险",
+      "risk": "watch",
+      "confidence": 0.61,
+      "source": "local",
+      "created_at": 1794192600000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "室内温度平稳，与昨日同一时段接近",
+      "risk": "info",
+      "confidence": 0.75,
+      "source": "local",
+      "created_at": 1794192600000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "收缩压日间平稳，晨间峰值较上周回落",
+      "risk": "info",
+      "confidence": 0.66,
+      "source": "local",
+      "created_at": 1794192600000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794192300000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794191700000
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "text": "光伏午间出力回落，较昨日低 0.4 kW",
+      "risk": "watch",
+      "confidence": 0.6,
+      "source": "local",
+      "created_at": 1794191400000
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "text": "用电负荷平稳，未见异常尖峰",
+      "risk": "info",
+      "confidence": 0.77,
+      "source": "local",
+      "created_at": 1794191400000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "近 7 天收缩压缓慢上升，建议复测并关注晨间读数",
+      "risk": "watch",
+      "confidence": 0.72,
+      "source": "local",
+      "created_at": 1794191400000
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "text": "用电负荷平稳，未见异常尖峰",
+      "risk": "info",
+      "confidence": 0.77,
+      "source": "local",
+      "created_at": 1794190800000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794190800000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "相对湿度处于舒适区间",
+      "risk": "info",
+      "confidence": 0.8,
+      "source": "local",
+      "created_at": 1794190500000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "收缩压连续三个窗口高于基线，建议复测并与医生确认",
+      "risk": "alert",
+      "confidence": 0.81,
+      "source": "local",
+      "created_at": 1794190200000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "相对湿度偏高，建议通风降低结露风险",
+      "risk": "watch",
+      "confidence": 0.61,
+      "source": "local",
+      "created_at": 1794189600000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "收缩压日间平稳，晨间峰值较上周回落",
+      "risk": "info",
+      "confidence": 0.66,
+      "source": "local",
+      "created_at": 1794189600000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "CO₂ 出现尖峰，与人员集中时段吻合",
+      "risk": "alert",
+      "confidence": 0.74,
+      "source": "local",
+      "created_at": 1794189000000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "昨夜血氧平稳，未见连续偏低",
+      "risk": "info",
+      "confidence": 0.78,
+      "source": "local",
+      "created_at": 1794189000000
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "text": "用电负荷尖峰前移，峰谷差扩大",
+      "risk": "watch",
+      "confidence": 0.63,
+      "source": "local",
+      "created_at": 1794188700000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "血氧出现短时偏低，建议关注睡眠时段",
+      "risk": "watch",
+      "confidence": 0.58,
+      "source": "local",
+      "created_at": 1794188400000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "午后 CO₂ 连续偏高，建议换气通风",
+      "risk": "watch",
+      "confidence": 0.69,
+      "source": "local",
+      "created_at": 1794188100000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794187500000
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "text": "用电负荷平稳，未见异常尖峰",
+      "risk": "info",
+      "confidence": 0.77,
+      "source": "local",
+      "created_at": 1794187200000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "近 7 天收缩压缓慢上升，建议复测并关注晨间读数",
+      "risk": "watch",
+      "confidence": 0.72,
+      "source": "local",
+      "created_at": 1794187200000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794186900000
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "text": "用电负荷平稳，未见异常尖峰",
+      "risk": "info",
+      "confidence": 0.77,
+      "source": "local",
+      "created_at": 1794186600000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "血氧出现短时偏低，建议关注睡眠时段",
+      "risk": "watch",
+      "confidence": 0.58,
+      "source": "local",
+      "created_at": 1794186300000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "室内温度日间波动较大，注意结露风险",
+      "risk": "watch",
+      "confidence": 0.64,
+      "source": "local",
+      "created_at": 1794186000000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794186000000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "近 7 天收缩压缓慢上升，建议复测并关注晨间读数",
+      "risk": "watch",
+      "confidence": 0.72,
+      "source": "local",
+      "created_at": 1794186000000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794185400000
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "text": "用电负荷平稳，未见异常尖峰",
+      "risk": "info",
+      "confidence": 0.77,
+      "source": "local",
+      "created_at": 1794184200000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "室内温度日间波动较大，注意结露风险",
+      "risk": "watch",
+      "confidence": 0.64,
+      "source": "local",
+      "created_at": 1794183900000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794183600000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "收缩压日间平稳，晨间峰值较上周回落",
+      "risk": "info",
+      "confidence": 0.66,
+      "source": "local",
+      "created_at": 1794183300000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794182700000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "收缩压连续三个窗口高于基线，建议复测并与医生确认",
+      "risk": "alert",
+      "confidence": 0.81,
+      "source": "local",
+      "created_at": 1794182700000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "CO₂ 出现尖峰，与人员集中时段吻合",
+      "risk": "alert",
+      "confidence": 0.74,
+      "source": "local",
+      "created_at": 1794182100000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "CO₂ 出现尖峰，与人员集中时段吻合",
+      "risk": "alert",
+      "confidence": 0.74,
+      "source": "local",
+      "created_at": 1794181500000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "午后 CO₂ 连续偏高，建议换气通风",
+      "risk": "watch",
+      "confidence": 0.69,
+      "source": "local",
+      "created_at": 1794181200000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "午后 CO₂ 连续偏高，建议换气通风",
+      "risk": "watch",
+      "confidence": 0.69,
+      "source": "local",
+      "created_at": 1794180900000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "室内温度平稳，与昨日同一时段接近",
+      "risk": "info",
+      "confidence": 0.75,
+      "source": "local",
+      "created_at": 1794180900000
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "text": "光伏出力与天气预报一致",
+      "risk": "info",
+      "confidence": 0.72,
+      "source": "local",
+      "created_at": 1794180600000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "血氧出现短时偏低，建议关注睡眠时段",
+      "risk": "watch",
+      "confidence": 0.58,
+      "source": "local",
+      "created_at": 1794180600000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "相对湿度处于舒适区间",
+      "risk": "info",
+      "confidence": 0.8,
+      "source": "local",
+      "created_at": 1794180300000
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "text": "光伏出力与天气预报一致",
+      "risk": "info",
+      "confidence": 0.72,
+      "source": "local",
+      "created_at": 1794179700000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "收缩压日间平稳，晨间峰值较上周回落",
+      "risk": "info",
+      "confidence": 0.66,
+      "source": "local",
+      "created_at": 1794179700000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "CO₂ 出现尖峰，与人员集中时段吻合",
+      "risk": "alert",
+      "confidence": 0.74,
+      "source": "local",
+      "created_at": 1794179100000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "近 7 天收缩压缓慢上升，建议复测并关注晨间读数",
+      "risk": "watch",
+      "confidence": 0.72,
+      "source": "local",
+      "created_at": 1794179100000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "午后 CO₂ 连续偏高，建议换气通风",
+      "risk": "watch",
+      "confidence": 0.69,
+      "source": "local",
+      "created_at": 1794178800000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "相对湿度处于舒适区间",
+      "risk": "info",
+      "confidence": 0.8,
+      "source": "local",
+      "created_at": 1794178500000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "近 7 天收缩压缓慢上升，建议复测并关注晨间读数",
+      "risk": "watch",
+      "confidence": 0.72,
+      "source": "local",
+      "created_at": 1794177300000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794177000000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "近 7 天收缩压缓慢上升，建议复测并关注晨间读数",
+      "risk": "watch",
+      "confidence": 0.72,
+      "source": "local",
+      "created_at": 1794177000000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "收缩压连续三个窗口高于基线，建议复测并与医生确认",
+      "risk": "alert",
+      "confidence": 0.81,
+      "source": "local",
+      "created_at": 1794176700000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "血氧出现短时偏低，建议关注睡眠时段",
+      "risk": "watch",
+      "confidence": 0.58,
+      "source": "local",
+      "created_at": 1794176400000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "室内温度平稳，与昨日同一时段接近",
+      "risk": "info",
+      "confidence": 0.75,
+      "source": "local",
+      "created_at": 1794175500000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794175500000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "相对湿度处于舒适区间",
+      "risk": "info",
+      "confidence": 0.8,
+      "source": "local",
+      "created_at": 1794174900000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794174300000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794173100000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "CO₂ 出现尖峰，与人员集中时段吻合",
+      "risk": "alert",
+      "confidence": 0.74,
+      "source": "local",
+      "created_at": 1794172800000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "相对湿度处于舒适区间",
+      "risk": "info",
+      "confidence": 0.8,
+      "source": "local",
+      "created_at": 1794172800000
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "text": "光伏午间出力回落，较昨日低 0.4 kW",
+      "risk": "watch",
+      "confidence": 0.6,
+      "source": "local",
+      "created_at": 1794172500000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "CO₂ 出现尖峰，与人员集中时段吻合",
+      "risk": "alert",
+      "confidence": 0.74,
+      "source": "local",
+      "created_at": 1794172200000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794172200000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "近 7 天收缩压缓慢上升，建议复测并关注晨间读数",
+      "risk": "watch",
+      "confidence": 0.72,
+      "source": "local",
+      "created_at": 1794171900000
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "text": "用电负荷尖峰前移，峰谷差扩大",
+      "risk": "watch",
+      "confidence": 0.63,
+      "source": "local",
+      "created_at": 1794171600000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "午后 CO₂ 连续偏高，建议换气通风",
+      "risk": "watch",
+      "confidence": 0.69,
+      "source": "local",
+      "created_at": 1794171600000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "室内温度平稳，与昨日同一时段接近",
+      "risk": "info",
+      "confidence": 0.75,
+      "source": "local",
+      "created_at": 1794171600000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "昨夜血氧平稳，未见连续偏低",
+      "risk": "info",
+      "confidence": 0.78,
+      "source": "local",
+      "created_at": 1794171600000
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "text": "用电负荷尖峰前移，峰谷差扩大",
+      "risk": "watch",
+      "confidence": 0.63,
+      "source": "local",
+      "created_at": 1794171300000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "室内温度日间波动较大，注意结露风险",
+      "risk": "watch",
+      "confidence": 0.64,
+      "source": "local",
+      "created_at": 1794171300000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "近 7 天收缩压缓慢上升，建议复测并关注晨间读数",
+      "risk": "watch",
+      "confidence": 0.72,
+      "source": "local",
+      "created_at": 1794171300000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "午后 CO₂ 连续偏高，建议换气通风",
+      "risk": "watch",
+      "confidence": 0.69,
+      "source": "local",
+      "created_at": 1794171000000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "室内温度平稳，与昨日同一时段接近",
+      "risk": "info",
+      "confidence": 0.75,
+      "source": "local",
+      "created_at": 1794171000000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "近 7 天收缩压缓慢上升，建议复测并关注晨间读数",
+      "risk": "watch",
+      "confidence": 0.72,
+      "source": "local",
+      "created_at": 1794171000000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "室内温度平稳，与昨日同一时段接近",
+      "risk": "info",
+      "confidence": 0.75,
+      "source": "local",
+      "created_at": 1794170700000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "室内温度平稳，与昨日同一时段接近",
+      "risk": "info",
+      "confidence": 0.75,
+      "source": "local",
+      "created_at": 1794170400000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "CO₂ 出现尖峰，与人员集中时段吻合",
+      "risk": "alert",
+      "confidence": 0.74,
+      "source": "local",
+      "created_at": 1794170100000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794170100000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "相对湿度偏高，建议通风降低结露风险",
+      "risk": "watch",
+      "confidence": 0.61,
+      "source": "local",
+      "created_at": 1794169800000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "午后 CO₂ 连续偏高，建议换气通风",
+      "risk": "watch",
+      "confidence": 0.69,
+      "source": "local",
+      "created_at": 1794169500000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "午后 CO₂ 连续偏高，建议换气通风",
+      "risk": "watch",
+      "confidence": 0.69,
+      "source": "local",
+      "created_at": 1794169200000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "室内温度日间波动较大，注意结露风险",
+      "risk": "watch",
+      "confidence": 0.64,
+      "source": "local",
+      "created_at": 1794169200000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "相对湿度处于舒适区间",
+      "risk": "info",
+      "confidence": 0.8,
+      "source": "local",
+      "created_at": 1794168900000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794168900000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "室内温度日间波动较大，注意结露风险",
+      "risk": "watch",
+      "confidence": 0.64,
+      "source": "local",
+      "created_at": 1794168600000
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "text": "用电负荷尖峰前移，峰谷差扩大",
+      "risk": "watch",
+      "confidence": 0.63,
+      "source": "local",
+      "created_at": 1794168000000
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "text": "光伏午间出力回落，较昨日低 0.4 kW",
+      "risk": "watch",
+      "confidence": 0.6,
+      "source": "local",
+      "created_at": 1794167700000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "昨夜血氧平稳，未见连续偏低",
+      "risk": "info",
+      "confidence": 0.78,
+      "source": "local",
+      "created_at": 1794167700000
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "text": "光伏出力与天气预报一致",
+      "risk": "info",
+      "confidence": 0.72,
+      "source": "local",
+      "created_at": 1794167400000
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "text": "用电负荷尖峰前移，峰谷差扩大",
+      "risk": "watch",
+      "confidence": 0.63,
+      "source": "local",
+      "created_at": 1794167400000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "室内温度平稳，与昨日同一时段接近",
+      "risk": "info",
+      "confidence": 0.75,
+      "source": "local",
+      "created_at": 1794167400000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "近 7 天收缩压缓慢上升，建议复测并关注晨间读数",
+      "risk": "watch",
+      "confidence": 0.72,
+      "source": "local",
+      "created_at": 1794167100000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "室内温度平稳，与昨日同一时段接近",
+      "risk": "info",
+      "confidence": 0.75,
+      "source": "local",
+      "created_at": 1794166500000
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "text": "光伏午间出力回落，较昨日低 0.4 kW",
+      "risk": "watch",
+      "confidence": 0.6,
+      "source": "local",
+      "created_at": 1794166200000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "室内温度平稳，与昨日同一时段接近",
+      "risk": "info",
+      "confidence": 0.75,
+      "source": "local",
+      "created_at": 1794166200000
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "text": "光伏出力与天气预报一致",
+      "risk": "info",
+      "confidence": 0.72,
+      "source": "local",
+      "created_at": 1794165600000
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "text": "光伏午间出力回落，较昨日低 0.4 kW",
+      "risk": "watch",
+      "confidence": 0.6,
+      "source": "local",
+      "created_at": 1794165000000
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "text": "光伏出力与天气预报一致",
+      "risk": "info",
+      "confidence": 0.72,
+      "source": "local",
+      "created_at": 1794164700000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794164100000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794163800000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794163500000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "血氧出现短时偏低，建议关注睡眠时段",
+      "risk": "watch",
+      "confidence": 0.58,
+      "source": "local",
+      "created_at": 1794163200000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794162900000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "室内温度日间波动较大，注意结露风险",
+      "risk": "watch",
+      "confidence": 0.64,
+      "source": "local",
+      "created_at": 1794162600000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794162300000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "收缩压日间平稳，晨间峰值较上周回落",
+      "risk": "info",
+      "confidence": 0.66,
+      "source": "local",
+      "created_at": 1794161400000
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "text": "用电负荷尖峰前移，峰谷差扩大",
+      "risk": "watch",
+      "confidence": 0.63,
+      "source": "local",
+      "created_at": 1794161100000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "室内温度平稳，与昨日同一时段接近",
+      "risk": "info",
+      "confidence": 0.75,
+      "source": "local",
+      "created_at": 1794160800000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794160500000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794160200000
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "text": "光伏出力与天气预报一致",
+      "risk": "info",
+      "confidence": 0.72,
+      "source": "local",
+      "created_at": 1794159900000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "室内温度日间波动较大，注意结露风险",
+      "risk": "watch",
+      "confidence": 0.64,
+      "source": "local",
+      "created_at": 1794159900000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794159900000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "室内温度平稳，与昨日同一时段接近",
+      "risk": "info",
+      "confidence": 0.75,
+      "source": "local",
+      "created_at": 1794159000000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "近 7 天收缩压缓慢上升，建议复测并关注晨间读数",
+      "risk": "watch",
+      "confidence": 0.72,
+      "source": "local",
+      "created_at": 1794158700000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "午后 CO₂ 连续偏高，建议换气通风",
+      "risk": "watch",
+      "confidence": 0.69,
+      "source": "local",
+      "created_at": 1794158100000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794157800000
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "text": "光伏出力与天气预报一致",
+      "risk": "info",
+      "confidence": 0.72,
+      "source": "local",
+      "created_at": 1794157200000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "CO₂ 出现尖峰，与人员集中时段吻合",
+      "risk": "alert",
+      "confidence": 0.74,
+      "source": "local",
+      "created_at": 1794157200000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794157200000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "血氧出现短时偏低，建议关注睡眠时段",
+      "risk": "watch",
+      "confidence": 0.58,
+      "source": "local",
+      "created_at": 1794157200000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "收缩压日间平稳，晨间峰值较上周回落",
+      "risk": "info",
+      "confidence": 0.66,
+      "source": "local",
+      "created_at": 1794156900000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794156300000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794155100000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "室内温度日间波动较大，注意结露风险",
+      "risk": "watch",
+      "confidence": 0.64,
+      "source": "local",
+      "created_at": 1794154800000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794154800000
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "text": "用电负荷尖峰前移，峰谷差扩大",
+      "risk": "watch",
+      "confidence": 0.63,
+      "source": "local",
+      "created_at": 1794154200000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "体重一周内变化在正常范围，趋势平稳",
+      "risk": "info",
+      "confidence": 0.7,
+      "source": "local",
+      "created_at": 1794154200000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "近 7 天收缩压缓慢上升，建议复测并关注晨间读数",
+      "risk": "watch",
+      "confidence": 0.72,
+      "source": "local",
+      "created_at": 1794154200000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "血氧出现短时偏低，建议关注睡眠时段",
+      "risk": "watch",
+      "confidence": 0.58,
+      "source": "local",
+      "created_at": 1794153900000
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "text": "光伏午间出力回落，较昨日低 0.4 kW",
+      "risk": "watch",
+      "confidence": 0.6,
+      "source": "local",
+      "created_at": 1794153600000
+    },
+    {
+      "device_id": "mt-a64-02",
+      "text": "午后 CO₂ 连续偏高，建议换气通风",
+      "risk": "watch",
+      "confidence": 0.69,
+      "source": "local",
+      "created_at": 1794153600000
+    },
+    {
+      "device_id": "mt-3b-01",
+      "text": "近 7 天收缩压缓慢上升，建议复测并关注晨间读数",
+      "risk": "watch",
+      "confidence": 0.72,
+      "source": "local",
+      "created_at": 1794153600000
+    },
+    {
+      "device_id": "mt-rk64-03",
+      "text": "光伏午间出力回落，较昨日低 0.4 kW",
+      "risk": "watch",
+      "confidence": 0.6,
+      "source": "local",
+      "created_at": 1794153300000
+    }
+  ],
+  "word_freq": [
+    {
+      "day": "2026-11-08",
+      "word": "平稳",
+      "count": 89
+    },
+    {
+      "day": "2026-11-08",
+      "word": "建议",
+      "count": 67
+    },
+    {
+      "day": "2026-11-08",
+      "word": "相对湿度",
+      "count": 39
+    },
+    {
+      "day": "2026-11-08",
+      "word": "结露",
+      "count": 38
+    },
+    {
+      "day": "2026-11-08",
+      "word": "偏高",
+      "count": 37
+    },
+    {
+      "day": "2026-11-08",
+      "word": "尖峰",
+      "count": 37
+    },
+    {
+      "day": "2026-11-08",
+      "word": "通风",
+      "count": 37
+    },
+    {
+      "day": "2026-11-08",
+      "word": "室内温度",
+      "count": 35
+    },
+    {
+      "day": "2026-11-08",
+      "word": "收缩压",
+      "count": 32
+    },
+    {
+      "day": "2026-11-08",
+      "word": "趋势",
+      "count": 32
+    },
+    {
+      "day": "2026-11-08",
+      "word": "晨间",
+      "count": 29
+    },
+    {
+      "day": "2026-11-08",
+      "word": "光伏",
+      "count": 27
+    },
+    {
+      "day": "2026-11-08",
+      "word": "关注",
+      "count": 27
+    },
+    {
+      "day": "2026-11-08",
+      "word": "回落",
+      "count": 27
+    },
+    {
+      "day": "2026-11-08",
+      "word": "偏低",
+      "count": 26
+    },
+    {
+      "day": "2026-11-08",
+      "word": "用电负荷",
+      "count": 26
+    },
+    {
+      "day": "2026-11-08",
+      "word": "血氧",
+      "count": 26
+    },
+    {
+      "day": "2026-11-08",
+      "word": "复测",
+      "count": 21
+    },
+    {
+      "day": "2026-11-08",
+      "word": "峰谷",
+      "count": 18
+    },
+    {
+      "day": "2026-11-08",
+      "word": "午间",
+      "count": 16
+    },
+    {
+      "day": "2026-11-08",
+      "word": "波动",
+      "count": 14
+    },
+    {
+      "day": "2026-11-08",
+      "word": "换气",
+      "count": 13
+    },
+    {
+      "day": "2026-11-08",
+      "word": "连续偏高",
+      "count": 13
+    },
+    {
+      "day": "2026-11-08",
+      "word": "异常",
+      "count": 8
+    },
+    {
+      "day": "2026-11-08",
+      "word": "基线",
+      "count": 3
+    },
+    {
+      "day": "2026-11-09",
+      "word": "平稳",
+      "count": 90
+    },
+    {
+      "day": "2026-11-09",
+      "word": "建议",
+      "count": 48
+    },
+    {
+      "day": "2026-11-09",
+      "word": "趋势",
+      "count": 46
+    },
+    {
+      "day": "2026-11-09",
+      "word": "尖峰",
+      "count": 30
+    },
+    {
+      "day": "2026-11-09",
+      "word": "收缩压",
+      "count": 29
+    },
+    {
+      "day": "2026-11-09",
+      "word": "室内温度",
+      "count": 27
+    },
+    {
+      "day": "2026-11-09",
+      "word": "关注",
+      "count": 26
+    },
+    {
+      "day": "2026-11-09",
+      "word": "晨间",
+      "count": 24
+    },
+    {
+      "day": "2026-11-09",
+      "word": "偏低",
+      "count": 22
+    },
+    {
+      "day": "2026-11-09",
+      "word": "血氧",
+      "count": 22
+    },
+    {
+      "day": "2026-11-09",
+      "word": "用电负荷",
+      "count": 21
+    },
+    {
+      "day": "2026-11-09",
+      "word": "回落",
+      "count": 20
+    },
+    {
+      "day": "2026-11-09",
+      "word": "复测",
+      "count": 20
+    },
+    {
+      "day": "2026-11-09",
+      "word": "光伏",
+      "count": 19
+    },
+    {
+      "day": "2026-11-09",
+      "word": "结露",
+      "count": 18
+    },
+    {
+      "day": "2026-11-09",
+      "word": "偏高",
+      "count": 17
+    },
+    {
+      "day": "2026-11-09",
+      "word": "通风",
+      "count": 17
+    },
+    {
+      "day": "2026-11-09",
+      "word": "相对湿度",
+      "count": 14
+    },
+    {
+      "day": "2026-11-09",
+      "word": "波动",
+      "count": 13
+    },
+    {
+      "day": "2026-11-09",
+      "word": "换气",
+      "count": 12
+    },
+    {
+      "day": "2026-11-09",
+      "word": "连续偏高",
+      "count": 12
+    },
+    {
+      "day": "2026-11-09",
+      "word": "午间",
+      "count": 11
+    },
+    {
+      "day": "2026-11-09",
+      "word": "峰谷",
+      "count": 11
+    },
+    {
+      "day": "2026-11-09",
+      "word": "异常",
+      "count": 10
+    },
+    {
+      "day": "2026-11-09",
+      "word": "基线",
+      "count": 5
+    }
+  ],
+  "privacy": {
+    "k_min": 5,
+    "suppressed_buckets": 994,
+    "raw_rejected": 0,
+    "subjects_total": 30
+  }
+}

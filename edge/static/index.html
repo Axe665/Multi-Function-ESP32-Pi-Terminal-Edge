@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>边节点 · Modular Terminal Edge</title>
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<a class="skip" href="#main">跳到主内容</a>
+<div class="shell">
+  <aside class="side">
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 20 20" aria-hidden="true">
+        <path d="M4 3v14M4 6h7M4 13h7M11 6v7" />
+        <circle cx="16" cy="6" r="1.6" /><circle cx="16" cy="13" r="1.6" />
+      </svg>
+      <div>
+        <div class="brand-name">Modular Terminal</div>
+        <div class="brand-scope" id="scope">边节点</div>
+      </div>
+    </div>
+
+    <nav class="nav" aria-label="主导航">
+      <a href="#/" data-nav="overview">总览</a>
+      <a href="#/devices" data-nav="devices">设备</a>
+      <a href="#/analysis" data-nav="analysis">分析</a>
+      <a href="#/cloud" data-nav="cloud">上云<span class="nav-count" id="nav-outbox" hidden></span></a>
+      <a href="#/settings" data-nav="settings">设置</a>
+    </nav>
+
+    <div class="side-foot" id="side-foot"></div>
+  </aside>
+
+  <main id="main" class="canvas" tabindex="-1"></main>
+</div>
+<script type="module" src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,153 @@
+openapi: 3.1.0
+info:
+  title: Modular Terminal Edge API
+  version: 1.0.0
+  description: |
+    边节点管理 API。设备侧走 /ingest/telemetry，管理侧走其余路径。
+    设了 EDGE_ADMIN_TOKEN / EDGE_INGEST_TOKEN 时要求 `Authorization: Bearer <token>`。
+servers:
+  - url: http://127.0.0.1:8001
+paths:
+  /api/v1/ingest/telemetry:
+    post:
+      summary: 设备上报一个 5 分钟窗口（幂等）
+      description: |
+        按 (device_id, batch_id) 去重。载荷出现 user_id/subject/values 等原始字段时
+        返回 422 并累加 raw_rejected。privacy.k < 门槛时整批拒收并累加 suppressed_buckets。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: './wire/telemetry.v1.json'
+      responses:
+        '200':
+          description: 已接受或已存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accepted: { type: boolean }
+                  batch_id: { type: string }
+                  code: { type: string, enum: [ok, duplicate, k_below_min] }
+        '422':
+          description: 原始字段或 schema 不合规
+  /api/v1/overview:
+    get:
+      summary: 总览（KPI、三条链路、24h 结论）
+      responses:
+        '200': { description: 总览对象 }
+  /api/v1/devices:
+    get:
+      summary: 设备列表与最新聚合
+      responses:
+        '200': { description: 设备数组 }
+  /api/v1/devices/{device_id}:
+    get:
+      summary: 设备详情（指标、最近批次、建议、一句话结论）
+      parameters:
+        - { name: device_id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: 设备详情 }
+        '404': { description: 设备不存在 }
+  /api/v1/devices/{device_id}/series:
+    get:
+      summary: 趋势序列（24 h 内按 15 min 聚合，更长按 1 h）
+      parameters:
+        - { name: device_id, in: path, required: true, schema: { type: string } }
+        - { name: metric, in: query, required: true, schema: { type: string } }
+        - { name: hours, in: query, schema: { type: integer, default: 24, minimum: 1, maximum: 168 } }
+      responses:
+        '200': { description: 含 points / baseline / anomalies / k }
+  /api/v1/devices/{device_id}/cmd:
+    post:
+      summary: 下发指令（report_now / ping / set_cadence）
+      parameters:
+        - { name: device_id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: 指令已受理 }
+  /api/v1/heatmap:
+    get:
+      summary: 7 天 × 24 小时时段矩阵
+      parameters:
+        - { name: device, in: query, required: true, schema: { type: string } }
+        - { name: metric, in: query, required: true, schema: { type: string } }
+        - { name: days, in: query, schema: { type: integer, default: 7 } }
+      responses:
+        '200': { description: cells[{dow,hour,mean,z,n}] }
+  /api/v1/wordcloud:
+    get:
+      summary: 建议文本词频
+      parameters:
+        - { name: days, in: query, schema: { type: integer, default: 7 } }
+      responses:
+        '200': { description: words[{word,count}] }
+  /api/v1/advice:
+    get:
+      summary: 建议列表
+      parameters:
+        - { name: device, in: query, schema: { type: string } }
+        - { name: risk, in: query, schema: { enum: [info, watch, alert] } }
+        - { name: limit, in: query, schema: { type: integer, default: 30 } }
+      responses:
+        '200': { description: 建议数组 }
+  /api/v1/batches:
+    get:
+      summary: 最近的批次（只含聚合元信息）
+      responses:
+        '200': { description: 批次数组 }
+  /api/v1/anomalies:
+    get:
+      summary: |z| ≥ 2.5 的窗口
+      responses:
+        '200': { description: 异常数组 }
+  /api/v1/discovery:
+    get:
+      summary: mDNS 发现记录与设备清单
+      responses:
+        '200': { description: 发现结果 }
+  /api/v1/devices/{device_id}/pair:
+    post:
+      summary: 生成一次性配对码（6 位，10 分钟）
+      responses:
+        '200': { description: '{code, ttl_s}' }
+  /api/v1/pair-codes:
+    get:
+      summary: 最近的配对码
+      responses:
+        '200': { description: 配对码数组 }
+  /api/v1/report/preview:
+    get:
+      summary: 预览下一份 edge-report（不落发件箱）
+      responses:
+        '200': { description: 计数、隐私块与前 8 行日聚合 }
+  /api/v1/report/cloud:
+    post:
+      summary: 立即打包并上报；失败进发件箱
+      responses:
+        '200': { description: '{queued, report_id, cloud}' }
+  /api/v1/outbox:
+    get:
+      summary: 发件箱
+      responses:
+        '200': { description: 报表数组 }
+  /api/v1/settings:
+    get:
+      summary: 读取设置
+      responses:
+        '200': { description: 设置对象 }
+    put:
+      summary: 更新设置（白名单字段）
+      responses:
+        '200': { description: 更新后的设置 }
+  /api/v1/privacy:
+    get:
+      summary: 隐私计数、k 分布、字段白名单
+      responses:
+        '200': { description: 审计对象 }
+  /api/v1/health:
+    get:
+      summary: 自检
+      responses:
+        '200': { description: 数据库、鉴权状态、云地址 }
