@@ -71,7 +71,7 @@ def ingest_telemetry(body: dict[str, Any]) -> dict[str, Any]:
     except ingest.IngestError as e:
         detail: dict[str, Any] = {"code": e.code, "message": e.message}
         if e.fields:
-            detail["fields" if e.code == "raw_payload_rejected" else "errors"] = e.fields
+            detail["fields" if e.code == "RAW_PAYLOAD_REJECTED" else "errors"] = e.fields
         raise HTTPException(422, detail)
 
 
@@ -84,13 +84,14 @@ def discovery() -> dict[str, Any]:
         base = seen.pop(dev["device_id"], None)
         out.append({**dev, "scene": base["scene"] if base else None,
                     "paired": bool(base and base["paired_at"]),
+                    "link": base["link"] if base else "unknown",
                     "last_seen": base["last_seen"] if base else None})
     for d in seen.values():
         out.append({
             "device_id": d["device_id"], "model": d["name"].split("·")[-1].strip(),
             "fw": d["fw"], "port": 4580, "address": None, "scene": d["scene"],
-            "paired": bool(d["paired_at"]), "last_seen": d["last_seen"],
-            "source": "registry",
+            "link": d["link"], "paired": bool(d["paired_at"]),
+            "last_seen": d["last_seen"], "source": "registry",
         })
     return {"service": mdns.DEVICE_TYPE, "edge": mdns.mdns.status(), "devices": out}
 
@@ -129,7 +130,16 @@ def crl() -> dict[str, Any]:
 
 @router.get("/certs", dependencies=admin)
 def certs() -> list[dict[str, Any]]:
-    return store.device_certs()
+    return security.device_certs()
+
+
+@router.post("/devices/{device_id}/renew", dependencies=device)
+def renew_cert(device_id: str, body: dict[str, Any]) -> dict[str, Any]:
+    """设备到期前拿新证书；旧证书保留到自然过期，避免交接期断链。"""
+    try:
+        return security.renew(device_id, str(body.get("csr", "")))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
 
 @router.post("/devices/{device_id}/revoke", dependencies=admin)
@@ -346,6 +356,8 @@ def health() -> dict[str, Any]:
                       "last": scheduler.scheduler.last},
         "db_cipher": "sqlcipher" if config.DB_KEY else "plain",
         "ca_fp": security.ca_fingerprint(),
+        "certs_expiring": len(security.expiring()),
+        "text_scrubbed": c.get("text_scrubbed", 0),
     }
 
 

@@ -18,7 +18,8 @@ CREATE TABLE IF NOT EXISTS devices (
   last_seen   INTEGER,
   fw          TEXT,
   modules_json TEXT,
-  paired_at   INTEGER
+  paired_at   INTEGER,
+  link        TEXT
 );
 
 CREATE TABLE IF NOT EXISTS telemetry (
@@ -188,6 +189,9 @@ def _migrate(conn: sqlite3.Connection) -> None:
     if "locked_until" not in cols("pair_codes"):
         conn.execute("ALTER TABLE pair_codes ADD COLUMN locked_until INTEGER")
     outbox = cols("outbox")
+    dev_cols = cols("devices")
+    if "link" not in dev_cols:
+        conn.execute("ALTER TABLE devices ADD COLUMN link TEXT")
     if "next_at" not in outbox:
         conn.execute("ALTER TABLE outbox ADD COLUMN next_at INTEGER")
         conn.execute("UPDATE outbox SET next_at = created_at WHERE next_at IS NULL")
@@ -206,6 +210,11 @@ def upsert_device(device_id: str, name: str, scene: str, fw: str,
                  modules_json=excluded.modules_json""",
             (device_id, name, scene, fw, json.dumps(modules), cert_fp, now_ms()),
         )
+
+
+def set_link(device_id: str, link: str) -> None:
+    with connect() as conn:
+        conn.execute("UPDATE devices SET link=? WHERE device_id=?", (link, device_id))
 
 
 def ensure_device(device_id: str) -> None:
@@ -229,6 +238,7 @@ def devices() -> list[dict[str, Any]]:
     for r in rows:
         d = dict(r)
         d["modules"] = json.loads(d.pop("modules_json") or "[]")
+        d["link"] = d.get("link") or "unknown"
         d["online"] = bool(d["last_seen"]) and now_ms() - d["last_seen"] < 3 * config.WINDOW_MS
         out.append(d)
     return out

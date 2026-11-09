@@ -159,8 +159,10 @@ def generate(days: int = 7, seed: int | None = None) -> dict[str, int]:
         for table in ("telemetry", "aggregates", "advice", "word_freq",
                       "catalog", "counters", "devices", "outbox"):
             conn.execute(f"DELETE FROM {table}")
-    for d in devices:
+    for i, d in enumerate(devices):
         _register(d)
+        store.set_link(d["device_id"], "wifi" if i % 2 else "ethernet")
+        _issue_demo_cert(d["device_id"])
 
     inserted = 0
     suppressed = 0
@@ -317,3 +319,20 @@ def backfill(max_windows: int = 288) -> int:
         ts += window
         n += 1
     return n
+
+
+def _issue_demo_cert(device_id: str) -> None:
+    """给演示设备签一张真证书，接入页才不是空的。"""
+    try:
+        from cryptography import x509
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import ec
+        from cryptography.x509.oid import NameOID
+        from . import security
+        key = ec.generate_private_key(ec.SECP256R1())
+        csr = (x509.CertificateSigningRequestBuilder()
+               .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, device_id)]))
+               .sign(key, hashes.SHA256()))
+        security.issue(device_id, csr.public_bytes(serialization.Encoding.PEM).decode())
+    except Exception:  # noqa: BLE001 —— 演示数据不该因为证书失败而中断
+        pass

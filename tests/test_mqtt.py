@@ -72,7 +72,7 @@ class MqttTest(unittest.TestCase):
         self.assertTrue(acks, "没有收到 ack")
         ack = json.loads(acks[-1])
         self.assertTrue(ack["accepted"])
-        self.assertEqual(ack["code"], "ok")
+        self.assertEqual(ack["code"], "accepted")
 
         rows = store.series("mt-3b-01", "systolic", 0, 2 ** 62, config.WINDOW_MS)
         self.assertTrue(any(r["mean"] == 131.4 for r in rows))
@@ -88,7 +88,7 @@ class MqttTest(unittest.TestCase):
                 break
             time.sleep(0.05)
         acks = [p for t, p in self.broker.published if t == "orpi/v1/mt-3b-01/ack"]
-        self.assertEqual(json.loads(acks[-1])["code"], "raw_payload_rejected")
+        self.assertEqual(json.loads(acks[-1])["code"], "RAW_PAYLOAD_REJECTED")
         self.assertGreaterEqual(store.counters().get("raw_rejected", 0), 1)
 
     def test_status_updates_modules(self):

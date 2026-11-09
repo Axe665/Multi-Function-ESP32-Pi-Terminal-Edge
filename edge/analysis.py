@@ -9,7 +9,7 @@ import hashlib
 from collections import defaultdict
 from typing import Any
 
-from . import catalog, config, store
+from . import catalog, config, privacy, store
 
 
 def day_of(ms: int) -> str:
@@ -177,9 +177,11 @@ def build_report() -> dict[str, Any]:
             "device_id": d["device_id"], "scene": d["scene"], "modules": d["modules"],
             "last_seen": d["last_seen"], "online": d["online"],
         } for d in devices],
-        "telemetry_daily": daily,
+        # 出端前二次脱敏：mean 只保留 1 位小数，min/max 本来就不在契约里
+        "telemetry_daily": [{**r, "mean": round(r["mean"], 1)} for r in daily],
         "advice": [{
-            "device_id": a["device_id"], "text": a["text"], "risk": a["risk"],
+            "device_id": a["device_id"], "text": privacy.scrub(a["text"])[0],
+            "risk": a["risk"],
             "confidence": a["confidence"], "source": a["source"],
             "created_at": a["created_at"],
         } for a in adv],

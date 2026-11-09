@@ -253,4 +253,26 @@ def _csr_fingerprint(csr_pem: str) -> str:
 
 
 def device_certs() -> list[dict[str, Any]]:
-    return store.device_certs()
+    """证书清单，带剩余天数 —— 到期前 30 天要提醒续期。"""
+    now = store.now_ms()
+    out = []
+    for row in store.device_certs():
+        days = max(0, (row["expires_at"] - now) // 86_400_000)
+        out.append({**row, "days_left": int(days), "expiring": days <= RENEW_BEFORE_DAYS})
+    return out
+
+
+RENEW_BEFORE_DAYS = 30
+
+
+def renew(device_id: str, csr_pem: str) -> dict[str, Any]:
+    """设备换新证书。旧证书不吊销：交接期两条链路都能连，到期自然失效。"""
+    if not store.device(device_id):
+        raise ValueError("设备不存在")
+    out = issue(device_id, csr_pem)
+    store.audit_action("device", "cert.renew", device_id, {"serial": out["serial"]})
+    return out
+
+
+def expiring(days: int = RENEW_BEFORE_DAYS) -> list[dict[str, Any]]:
+    return [c for c in device_certs() if c["days_left"] <= days]

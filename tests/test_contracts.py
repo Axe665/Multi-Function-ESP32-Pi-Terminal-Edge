@@ -74,7 +74,7 @@ class IngestTest(unittest.TestCase):
         bad = dict(self.payload, user_id="u-1")
         r = self.client.post("/api/v1/ingest/telemetry", json=bad)
         self.assertEqual(r.status_code, 422)
-        self.assertEqual(r.json()["detail"]["code"], "raw_payload_rejected")
+        self.assertEqual(r.json()["detail"]["code"], "RAW_PAYLOAD_REJECTED")
         self.assertIn("user_id", r.json()["detail"]["fields"])
         self.assertGreaterEqual(store.counters().get("raw_rejected", 0), 1)
 
@@ -85,7 +85,7 @@ class IngestTest(unittest.TestCase):
         r = self.client.post("/api/v1/ingest/telemetry", json=low)
         self.assertEqual(r.status_code, 200)
         self.assertFalse(r.json()["accepted"])
-        self.assertEqual(r.json()["code"], "k_below_min")
+        self.assertEqual(r.json()["code"], "suppressed")
 
     def test_schema_violation(self):
         broken = json.loads(json.dumps(self.payload))

@@ -9,7 +9,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from . import catalog, config, models, store
+from . import catalog, config, models, privacy, store
 
 
 class IngestError(Exception):
@@ -44,20 +44,32 @@ def process(body: dict[str, Any]) -> dict[str, Any]:
     hits = raw_hits(body)
     if hits:
         store.bump("raw_rejected")
-        raise IngestError("raw_payload_rejected", "出端载荷不得包含原始字段", hits[:5])
+        raise IngestError("RAW_PAYLOAD_REJECTED", "出端载荷不得包含原始字段", hits[:5])
 
     try:
         msg = models.Telemetry.model_validate(body)
     except ValidationError as e:
-        raise IngestError("schema_invalid", "载荷不符合 orpi.telemetry.v1",
+        raise IngestError("SCHEMA_INVALID", "载荷不符合 orpi.telemetry.v1",
                           [str(x.get("loc")) for x in e.errors(include_context=False)[:5]])
 
     if msg.privacy.k < config.K_MIN:
         store.bump("suppressed_buckets")
-        return {"accepted": False, "batch_id": None, "code": "k_below_min"}
+        return {"accepted": False, "batch_id": None,
+                "code": "suppressed", "error": "K_BELOW_MIN"}
 
     agg = [a.model_dump() for a in msg.aggregates]
-    adv = [a.model_dump() for a in msg.advice]
+    # 建议文案按不可信数据处理：入库前过一遍正则 + 词典
+    adv = []
+    scrubbed = 0
+    for a in msg.advice:
+        clean, hits = privacy.scrub(a.text)
+        scrubbed += sum(hits.values())
+        adv.append({**a.model_dump(), "text": clean})
+    if scrubbed:
+        store.bump("text_scrubbed", scrubbed)
+    safe_body = dict(body)
+    if adv:
+        safe_body["advice"] = [{**a, "text": b["text"]} for a, b in zip(body.get("advice", []), adv)]
     # 端上报了什么就登记什么：换模块不需要改边
     for a in msg.aggregates:
         catalog.upsert(msg.device_id, a.metric, a.module_id, a.package_id,
@@ -65,17 +77,21 @@ def process(body: dict[str, Any]) -> dict[str, Any]:
     bid = batch_id(msg.device_id, msg.window.from_, msg.window.to)
     store.ensure_device(msg.device_id)
     accepted = store.insert_batch(msg.device_id, bid, msg.window.from_,
-                                  msg.window.to, body, agg, adv)
+                                  msg.window.to, safe_body, agg, adv)
     store.touch_device(msg.device_id, msg.window.to)
     if accepted:
         store.bump("batches")
     if msg.privacy.suppressed:
         store.bump("suppressed_buckets", msg.privacy.suppressed)
     return {"accepted": accepted, "batch_id": bid,
-            "code": "ok" if accepted else "duplicate"}
+            "code": "accepted" if accepted else "duplicate"}
 
 
 def ack_payload(result: dict[str, Any]) -> dict[str, Any]:
     """MQTT 回执：{batch_id, accepted, code}。"""
-    return {"batch_id": result.get("batch_id"), "accepted": bool(result.get("accepted")),
-            "code": result.get("code", "ok")}
+    body = {"batch_id": result.get("batch_id"),
+            "accepted": bool(result.get("accepted")),
+            "code": result.get("code", "accepted")}
+    if result.get("error"):
+        body["error"] = result["error"]
+    return body

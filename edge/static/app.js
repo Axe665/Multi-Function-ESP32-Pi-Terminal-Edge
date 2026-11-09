@@ -276,43 +276,19 @@ async function viewDevices() {
       </section>
 
       <section class="panel">
-        <div class="panel-head"><h2>接入与配对</h2><span class="meta">mDNS + 一次性配对码</span></div>
-        <div id="discovery">${skeleton(3)}</div>
-        <p class="hint" id="ca-fp" style="margin:10px 0 0"></p>
-        <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
-          <select class="control" id="pair-device" aria-label="选择要配对的设备" style="flex:1;min-width:150px">
-            ${devs.map((d) => `<option value="${esc(d.device_id)}">${esc(d.device_id)}</option>`).join("")}
-          </select>
-          <button class="btn" id="pair-btn">生成配对码</button>
+        <div class="panel-head"><h2>模块</h2><span class="meta">端侧上报</span></div>
+        <div class="list">
+          ${devs.flatMap((d) => (d.module_list || []).map((m) => `<div class="list-row">
+            <div class="grow"><div class="row-text">${esc(m.package_id || "未知模块")}</div>
+              <div class="row-sub">${esc(d.device_id)}</div></div>
+            <span class="mono">${m.module_id}</span>
+          </div>`)).join("") || `<div class="empty">还没有设备上报模块清单。</div>`}
         </div>
-        <p class="hint" id="pair-hint" style="margin:10px 0 0">配对码 6 位、10 分钟有效，绑定设备公钥指纹，一次性使用。</p>
+        <p class="hint" style="margin:14px 0 0">
+          模块清单来自终端的 status 主题；新模块第一次上报时自动登记，不需要改边。</p>
+        <a class="btn btn-sm" href="#/access" style="margin-top:16px">去接入页配对</a>
       </section>
     </div>`;
-
-  const disc = await api("/api/v1/discovery").catch(() => null);
-  const codes = await api("/api/v1/pair-codes").catch(() => []);
-  if (disc) {
-    document.getElementById("ca-fp").textContent =
-      `边 CA 指纹 ${disc.edge.ca_fp} · 终端用 6 位码换 365 天证书`;
-    document.getElementById("discovery").innerHTML = `<dl class="list" style="margin:0;font-size:13px">
-      <div class="list-row"><div class="grow">广播服务</div><span class="mono">${esc(disc.service)}</span></div>
-      ${disc.devices.map((x) => `<div class="list-row">
-        <div class="grow"><div class="row-text">${esc(x.device_id)}</div>
-          <div class="row-sub">${esc(x.model)} · ${esc(x.fw)} · ${esc(x.scene)}</div></div>
-        <span class="pill ${x.paired ? "pill-ok" : "pill-watch"}">${x.paired ? "已配对" : "待配对"}</span>
-      </div>`).join("")}
-      ${codes.length ? `<div class="list-row"><div class="grow">最近配对码</div>
-        <span class="mono">${esc(codes.slice(0, 3).map((c) => c.code).join(" · "))}</span></div>` : ""}
-    </dl>`;
-  }
-  document.getElementById("pair-btn").onclick = async (ev) => {
-    try {
-      const r = await api(`/api/v1/devices/${encodeURIComponent(document.getElementById("pair-device").value)}/pair`, { method: "POST" });
-      document.getElementById("pair-hint").textContent = `配对码 ${r.code}，${r.ttl_s / 60} 分钟内有效。`;
-    } catch (e) {
-      toast(`生成失败：${e.message}`);
-    }
-  };
 }
 
 /* ---------------------------------------------------------------- 设备详情 */
@@ -572,6 +548,100 @@ async function viewAnalysis() {
   drawAnomalies();
 }
 
+/* ---------------------------------------------------------------- 接入 */
+
+async function viewAccess() {
+  main.innerHTML = `<div class="title-row"><div><h1>接入</h1><p class="sub">读取中…</p></div></div>`;
+
+  const [disc, certs, codes] = await Promise.all([
+    api("/api/v1/discovery").catch(() => null),
+    api("/api/v1/certs").catch(() => []),
+    api("/api/v1/pair-codes").catch(() => []),
+  ]);
+  const devices = disc?.devices || [];
+  const paired = devices.filter((d) => d.paired).length;
+  const pending = devices.length - paired;
+  const expiring = certs.filter((c) => c.expiring).length;
+
+  const linkLabel = { wifi: "Wi-Fi", ethernet: "有线", offline: "离线", unknown: "未知" };
+
+  main.innerHTML = `
+    <div class="title-row">
+      <div><h1>接入</h1>
+        <p class="sub">mDNS 发现、一次性配对码、设备证书与吊销列表。终端广播 <span class="mono">_orpi-device._tcp</span>，
+        边广播 <span class="mono">_orpi-edge._tcp</span>。</p></div>
+      <div class="title-actions"><span class="stamp">CA ${esc(disc?.edge?.ca_fp || "—")}</span></div>
+    </div>
+
+    <div class="kpis">
+      <div class="kpi"><div class="kpi-label">已接入</div><div class="kpi-value">${paired}</div>
+        <div class="kpi-note">${pending} 台待配对</div></div>
+      <div class="kpi"><div class="kpi-label">证书</div><div class="kpi-value">${certs.length}</div>
+        <div class="kpi-note">365 天有效期</div></div>
+      <div class="kpi"><div class="kpi-label">30 天内到期</div>
+        <div class="kpi-value">${expiring}</div>
+        <div class="kpi-note">到期前 30 天该续期</div></div>
+      <div class="kpi"><div class="kpi-label">吊销</div>
+        <div class="kpi-value">${certs.filter((c) => c.revoked).length}</div>
+        <div class="kpi-note">CRL 可下载</div></div>
+    </div>
+
+    <div class="row split" style="align-items:stretch">
+      <section class="panel fill">
+        <div class="panel-head"><h2>发现的设备</h2><span class="meta">${devices.length} 台</span></div>
+        <table class="table responsive">
+          <thead><tr><th>设备</th><th>型号</th><th>版本</th><th>链路</th><th>状态</th><th></th></tr></thead>
+          <tbody>${devices.map((d) => `<tr>
+            <td><strong>${esc(d.device_id)}</strong>
+              <div class="row-sub">${esc(d.scene || "—")} · ${d.source === "mdns" ? "mDNS" : "已登记"}</div></td>
+            <td>${esc(d.model || "—")}</td>
+            <td class="mono">${esc(d.fw || "—")}</td>
+            <td>${esc(linkLabel[d.link] || "未知")}</td>
+            <td>${d.paired ? `<span class="pill pill-ok">已配对</span>` : `<span class="pill pill-watch">待配对</span>`}</td>
+            <td class="num">${d.paired ? "" : `<button class="btn btn-sm" data-pair="${esc(d.device_id)}">生成配对码</button>`}</td>
+          </tr>`).join("") || `<tr><td colspan="6" class="dash">没有发现任何终端。</td></tr>`}</tbody>
+        </table>
+        <p class="hint grow-block" style="margin:14px 0 0" id="pair-hint">
+          配对码 6 位、10 分钟有效，绑定设备公钥指纹，一次性使用；同一设备 5 次失败锁 10 分钟。</p>
+      </section>
+
+      ${panel("证书", `${certs.length} 张`, `<table class="table">
+        <thead><tr><th>设备</th><th class="num">剩余</th><th class="num">序列号</th></tr></thead>
+        <tbody>${certs.slice(0, 8).map((c) => `<tr>
+          <td>${esc(c.device_id)}<div class="row-sub">${new Date(c.issued_at).toLocaleDateString("zh-CN")} 签发</div></td>
+          <td class="num">${c.expiring ? `<span class="pill pill-watch">${c.days_left} 天</span>` : `${c.days_left} 天`}</td>
+          <td class="num mono">${esc(String(c.serial).slice(0, 10))}</td>
+        </tr>`).join("") || `<tr><td colspan="3" class="dash">还没有签发过证书。生成配对码后终端用 CSR 来换。</td></tr>`}</tbody>
+      </table>
+      <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
+        <a class="btn btn-sm" href="/api/v1/ca.crt" target="_blank" rel="noopener">下载 CA</a>
+        <a class="btn btn-sm" href="/api/v1/crl.pem" target="_blank" rel="noopener">下载 CRL</a>
+      </div>`)}
+    </div>
+
+    <div class="row">
+      ${panel("最近的配对码", `${codes.length} 个`, `<div class="list">
+        ${codes.slice(0, 5).map((c) => `<div class="list-row">
+          <div class="grow"><div class="row-text mono" style="font-size:15px">${esc(c.code)}</div>
+            <div class="row-sub">${esc(c.device_id || "—")} · ${c.attempts} 次尝试</div></div>
+          <span class="pill ${c.used_at ? "pill-ok" : c.locked_until ? "pill-alert" : "pill-watch"}">
+            ${c.used_at ? "已使用" : c.locked_until ? "已锁定" : "待使用"}</span>
+        </div>`).join("") || `<div class="empty">还没有生成过配对码。</div>`}
+      </div>`)}
+    </div>`;
+
+  main.querySelectorAll("[data-pair]").forEach((btn) =>
+    btn.addEventListener("click", async () => {
+      try {
+        const r = await api(`/api/v1/devices/${encodeURIComponent(btn.dataset.pair)}/pair`, { method: "POST" });
+        $("pair-hint").textContent = `配对码 ${r.code}，${r.ttl_s / 60} 分钟内有效，绑定该设备的公钥指纹。`;
+        btn.disabled = true;
+      } catch (e) {
+        toast(`生成失败：${e.message}`);
+      }
+    }));
+}
+
 /* ---------------------------------------------------------------- 上云 */
 
 async function viewCloud() {
@@ -767,6 +837,7 @@ const routes = [
   [/^#\/devices$/, viewDevices, "devices"],
   [/^#\/devices\/(.+)$/, (m) => viewDevice(decodeURIComponent(m[1])), "devices"],
   [/^#\/analysis$/, viewAnalysis, "analysis"],
+  [/^#\/access$/, viewAccess, "access"],
   [/^#\/cloud$/, viewCloud, "cloud"],
   [/^#\/settings$/, viewSettings, "settings"],
 ];

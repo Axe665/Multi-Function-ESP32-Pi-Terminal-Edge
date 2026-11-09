@@ -24,6 +24,18 @@ def prune(retention_days: int) -> dict[str, int]:
     return {"aggregates": agg, "telemetry": tel, "advice": adv, "outbox": out}
 
 
+def check_certs() -> dict[str, int]:
+    """每天看一次证书剩余天数；到期前 30 天写审计，前端会标红。"""
+    from . import security
+    soon = security.expiring()
+    if soon:
+        store.audit_action("system", "cert.expiring", "edge",
+                           {"count": len(soon),
+                            "devices": [c["device_id"] for c in soon][:10]})
+        store.bump("certs_expiring", len(soon))
+    return {"expiring": len(soon)}
+
+
 def tick(now: int | None = None) -> dict[str, Any]:
     """一次调度：到点就生成报表，然后把到期的发出去。"""
     now = now or store.now_ms()
@@ -59,6 +71,7 @@ class Scheduler:
             await asyncio.sleep(config.JANITOR_INTERVAL_MS / 1000)
             retention = store.get_settings().get("retention_days", config.KEEP_DAYS)
             await asyncio.to_thread(prune, int(retention))
+            await asyncio.to_thread(check_certs)
 
     def start(self) -> None:
         if self.task is None:
