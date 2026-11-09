@@ -5,7 +5,8 @@ import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-STATIC = Path(__file__).resolve().parent / "static"
+# 前端构建产物；生产由 Caddy 直接服务，单进程调试时挂这里
+STATIC = Path(__file__).resolve().parent.parent / "web" / "dist"
 
 
 def _env(key: str, default: str = "") -> str:

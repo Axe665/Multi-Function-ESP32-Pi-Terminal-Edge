@@ -84,6 +84,6 @@ def create_app(role: str = "all") -> FastAPI:
         app.include_router(subset)
     else:
         app.include_router(api.router)
-    if role == "all":
+    if role == "all" and config.STATIC.is_dir():
         app.mount("/", StaticFiles(directory=config.STATIC, html=True), name="static")
     return app

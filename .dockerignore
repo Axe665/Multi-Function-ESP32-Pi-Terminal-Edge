@@ -2,7 +2,6 @@
 data/
 docs/
 tests/
-docker/
 .git/
 .env
 __pycache__/

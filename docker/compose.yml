@@ -91,15 +91,19 @@ services:
 
   # 静态前端 + 反代（文档 §5.1 的 web）
   web:
-    image: caddy:2-alpine
+    build:
+      context: ..
+      dockerfile: web/Dockerfile
+      args:
+        NODE_IMAGE: ${NODE_IMAGE:-node:22-alpine}
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org}
+    image: modular-terminal-edge-web:2.0.0
     container_name: mt-edge-web
     restart: unless-stopped
     ports:
       # 管理台不对外，需要外网时在前面加隧道或 VPN
       - "127.0.0.1:8001:8001"
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - ../edge/static:/srv/web:ro
       - caddy_data:/data
     depends_on:
       - ingest
