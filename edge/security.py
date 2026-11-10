@@ -197,8 +197,11 @@ def revoke(device_id: str, reason: str = "unspecified") -> int:
         try:
             config.BROKER_CRL.write_bytes(crl_pem())
             config.BROKER_CRL.chmod(0o644)
-        except OSError:
-            pass
+        except OSError as e:
+            # 证书目录必须对容器用户可写（make_broker_cert.py 会设 0777）；
+            # 写不进去就只剩消息层拦截，broker 侧吊销会失效 —— 记审计，不留哑巴
+            store.audit_action("system", "cert.crl_write_failed", device_id,
+                               {"path": str(config.BROKER_CRL), "error": str(e)[:200]})
     return n
 
 

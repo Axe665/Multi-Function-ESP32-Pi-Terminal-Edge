@@ -34,6 +34,9 @@ def main() -> None:
     (out / "crl.pem").write_bytes(security.crl_pem())
     for f in ("ca.crt", "broker.crt", "broker.key", "edge.crt", "edge.key", "crl.pem"):
         (out / f).chmod(0o644)
+    # api 容器（uid 10001）要在吊销时重写 crl.pem：目录得能建文件，文件本身也得可写
+    (out / "crl.pem").chmod(0o666)
+    out.chmod(0o777)
     print(f"已签发 {name} 的 broker 证书与 {edge_id} 的客户端证书 → {out}")
 
 

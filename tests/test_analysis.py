@@ -87,6 +87,32 @@ class AnalysisTest(unittest.TestCase):
         for lane in o["lanes"]:
             self.assertEqual(len(lane["ticks"]), 24)
 
+    def test_consent_switch_gates_group_analysis(self):
+        """文档 §8.5：关掉群体分析只剩在线/健康计数，分析页显示「样本不足」。"""
+        store.set_settings({"group_analysis": False})
+        try:
+            o = analysis.overview()
+            self.assertTrue(o["insufficient"])
+            self.assertEqual(o["lanes"], [])
+            self.assertEqual(o["findings"], [])
+            # 匿名计数照旧给
+            self.assertEqual(o["devices_total"], len(store.devices()))
+        finally:
+            store.set_settings({"group_analysis": True})
+        self.assertFalse(analysis.overview().get("insufficient", False))
+
+    def test_consent_switch_gates_personalization(self):
+        """文档 §8.5：关掉个性化后建议只留本地，报表里不带 advice/词频。"""
+        store.set_settings({"personalization": False})
+        try:
+            report = analysis.build_report()
+            self.assertEqual(report["advice"], [])
+            self.assertEqual(report["word_freq"], [])
+            self.assertFalse(report["privacy"]["personalization"])
+        finally:
+            store.set_settings({"personalization": True})
+        self.assertTrue(analysis.build_report()["advice"])
+
 
 if __name__ == "__main__":
     unittest.main()
