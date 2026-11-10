@@ -6,7 +6,9 @@ TXT 只放发现所需的 ID / 型号 / 版本 / 端口 / CA 指纹——
 """
 from __future__ import annotations
 
+import hashlib
 import socket
+from pathlib import Path
 from typing import Any
 
 try:
@@ -69,6 +71,29 @@ class _DeviceListener(ServiceListener):
         self.found.pop(dev, None)
 
 
+def pinned_cloud_fp(path: str | None = None) -> str:
+    """预置 cloud-ca 的指纹，口径与云广播的 ca_fp 一致：DER 的 SHA256 前 16 hex。"""
+    ca = path if path is not None else config.CLOUD_CA
+    if not ca:
+        return ""
+    try:
+        from cryptography import x509
+        from cryptography.hazmat.primitives import serialization
+
+        cert = x509.load_pem_x509_certificate(Path(ca).read_bytes())
+        return hashlib.sha256(cert.public_bytes(serialization.Encoding.DER)).hexdigest()[:16]
+    except Exception:  # noqa: BLE001 —— 预置证书读不了就退回只看静态地址
+        return ""
+
+
+# 最近一次被拒的假云：给 /discovery 和审计看，不是状态机
+_rejected: dict[str, str] = {"ca_fp": "", "reason": ""}
+
+
+def cloud_reject_reason() -> str | None:
+    return _rejected["reason"] or None
+
+
 class _CloudListener(ServiceListener):
     """发现云节点：拿到地址后拼 https://host:port，静态配置仍然优先。"""
 
@@ -78,6 +103,20 @@ class _CloudListener(ServiceListener):
     def add_service(self, zc, type_, name) -> None:
         info = zc.get_service_info(type_, name, timeout=800)
         if not info:
+            return
+        props = {k.decode(): v.decode() for k, v in info.properties.items() if v is not None}
+        fp = props.get("ca_fp", "")
+        pin = pinned_cloud_fp()
+        # 文档 §8.4：mDNS 只解决地址，信任靠 CA 指纹。广播的指纹和预置的
+        # cloud-ca 对不上就是假云，不能拿它替换上报地址（报表会被骗走）
+        if pin and fp != pin:
+            reason = f"ca_fp 不符：广播 {fp or '(空)'}，预置 {pin}"
+            if _rejected["ca_fp"] != fp:
+                _rejected.update(ca_fp=fp, reason=reason)
+                from . import store
+
+                store.audit_action("system", "mdns.cloud_rejected", name,
+                                   {"ca_fp": fp, "pinned": pin})
             return
         addresses = [socket.inet_ntoa(a) for a in info.addresses]
         if not addresses:
@@ -157,6 +196,13 @@ class Mdns:
             "service": EDGE_TYPE,
             "ca_fp": edge_txt()[b"ca_fp"].decode(),
             "error": self.error,
+            # 云侧：地址用静态的还是 mDNS 发现的，以及最近一次被拒的假云
+            "cloud": {
+                "url": config.CLOUD_URL or self.cloud_url,
+                "source": "static" if config.CLOUD_URL else ("mdns" if self.cloud_url else None),
+                "pinned_fp": pinned_cloud_fp(),
+                "rejected": cloud_reject_reason(),
+            },
         }
 
 
