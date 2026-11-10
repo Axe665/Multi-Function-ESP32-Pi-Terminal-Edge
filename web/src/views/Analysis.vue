@@ -12,6 +12,7 @@ const metrics = ref([])
 const metric = ref('')
 const heat = ref(null)
 const words = ref([])
+const wordsOff = ref(false)
 const anomalies = ref([])
 const allAdvice = ref([])
 const error = ref('')
@@ -40,7 +41,10 @@ onMounted(async () => {
   try {
     await loadDevices()
     ;[words.value, anomalies.value, allAdvice.value] = await Promise.all([
-      api('/wordcloud?days=7').then((r) => r.words || []),
+      api('/wordcloud?days=7').then((r) => {
+        wordsOff.value = Boolean(r.insufficient)
+        return r.words || []
+      }),
       api('/anomalies?days=7').catch(() => []),
       api('/advice?limit=100').catch(() => []),
     ])
@@ -237,7 +241,11 @@ const wordOption = computed(() => {
         <h2>建议用词</h2>
         <span class="md-muted">最近 7 天，词典分词</span>
       </div>
-      <ChartBox :option="wordOption" height="224px" :on-click="drillWord" />
+      <div v-if="wordsOff" class="sample-off">
+        <b>样本不足</b>
+        <span class="md-muted">群体分析已关闭，词云不显示；开启后才会聚合全体建议文本。</span>
+      </div>
+      <ChartBox v-else :option="wordOption" height="224px" :on-click="drillWord" />
       <p class="md-muted small">只统计用词频次，不表示严重程度；点词看原文。</p>
     </section>
   </div>
@@ -319,4 +327,6 @@ const wordOption = computed(() => {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+.sample-off { min-height: 224px; display: flex; flex-direction: column; gap: 6px;
+  align-items: center; justify-content: center; text-align: center; }
 </style>

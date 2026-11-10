@@ -288,6 +288,9 @@ def heatmap(device: str, metric: str, days: int = Query(default=7, ge=1, le=30))
 
 @router.get("/wordcloud", dependencies=admin)
 def wordcloud(days: int = Query(default=7, ge=1, le=30)) -> dict[str, Any]:
+    if not store.get_settings().get("group_analysis", False):
+        # 词云是全体建议文本的聚合，属于群体分析（文档 §8.5）
+        return {"words": [], "insufficient": True, "reason": "群体分析已关闭"}
     today = analysis.day_of(store.now_ms())
     return {"words": store.wordcloud(days, today)}
 
@@ -473,7 +476,14 @@ def put_settings(patch: dict[str, Any]) -> dict[str, Any]:
     clean = {k: v for k, v in patch.items() if k in allowed}
     if not clean:
         raise HTTPException(400, "没有可更新的字段")
-    return store.set_settings(clean)
+    before = store.get_settings()
+    after = store.set_settings(clean)
+    # 文档 §8.3：授权变更要留审计（时间、操作者、改动前后）
+    for k in ("personalization", "group_analysis"):
+        if k in clean and clean[k] != before.get(k):
+            store.audit_action("admin", "consent.change", k,
+                               {"from": before.get(k), "to": clean[k]})
+    return after
 
 
 @router.get("/privacy", dependencies=admin)

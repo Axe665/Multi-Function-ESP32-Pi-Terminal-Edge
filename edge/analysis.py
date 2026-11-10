@@ -208,8 +208,27 @@ def build_report() -> dict[str, Any]:
     }
     seed = f"{config.EDGE_ID}|{payload['period']['from']}|{payload['period']['to']}"
     payload["report_id"] = hashlib.sha256(seed.encode()).hexdigest()[:16]
+    if not store.get_settings().get("personalization", True):
+        # 文档 §8.5：关掉个性化后建议只留本地，不上云
+        payload["advice"] = []
+        payload["word_freq"] = []
+        payload["privacy"]["personalization"] = False
     assert payload["report_id"], "report_id 不能为空"
     return payload
+
+
+def insufficient() -> dict[str, Any]:
+    """文档 §8.5：关掉群体分析后边只留在线/健康/匿名计数，分析页显示「样本不足」。"""
+    devs = store.devices()
+    return {
+        "insufficient": True,
+        "reason": "群体分析已关闭，只保留在线与健康计数",
+        "devices_total": len(devs),
+        "devices_online": sum(1 for d in devs if d["online"]),
+        "lanes": [],
+        "findings": [],
+        "k_min": 0,
+    }
 
 
 def overview() -> dict[str, Any]:
@@ -277,7 +296,7 @@ def overview() -> dict[str, Any]:
             f["device_id"] = lane["device_id"]
             f["device_name"] = lane["name"]
             findings.append(f)
-    return {
+    out = {
         "status": {
             "level": status,
             "critical": critical,
@@ -302,3 +321,6 @@ def overview() -> dict[str, Any]:
         "lanes": lanes,
         "findings": findings[:3],
     }
+    if not settings.get("group_analysis", False):
+        out.update(insufficient())
+    return out

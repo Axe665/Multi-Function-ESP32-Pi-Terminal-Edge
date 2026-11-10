@@ -3,7 +3,15 @@
 端-边-云三层里的**边**：局域网内的一台管理节点。三台 Pi 终端把 5 分钟窗口的
 **假名聚合**推上来，这里做趋势、时段矩阵、词云和异常检测，再把日聚合打包上报云端。
 
-![总览](docs/screenshots/overview.png)
+## 界面（1900×1040，亮色）
+
+| 总览 | 设备 | 设备详情 |
+|---|---|---|
+| ![总览](docs/screenshots/overview.png) | ![设备](docs/screenshots/devices.png) | ![设备详情](docs/screenshots/devices-detail.png) |
+| **分析** | **接入** | **设置** |
+| ![分析](docs/screenshots/analysis.png) | ![接入](docs/screenshots/access.png) | ![设置](docs/screenshots/settings.png) |
+
+截图是按 1900×1040 截的；页面用 `clamp` 栅格，1920/1440/1366 下总览也是整屏不滚动。
 
 ## 边、云两仓的分工
 
@@ -92,7 +100,18 @@ Docker（含 mTLS broker）：
 ```bash
 python3 scripts/make_broker_cert.py mqtt.edge.local   # 用边 CA 签 broker 证书
 cd docker && docker compose up -d --build
+./scripts/verify_acl.sh                               # 实测设备只能读写自己的前缀
 ```
+
+`make_broker_cert.py` 用的是**宿主 `data/ca`**，容器里的边用 `edge_data` 卷。两边必须是同一套 CA，
+否则新签的设备证书会被 broker 以 `bad certificate` 拒掉。改过数据卷之后先对齐：
+
+```bash
+docker cp mt-edge-api:/app/data/ca/. data/ca/ && python3 scripts/make_broker_cert.py mqtt.edge.local
+docker restart mt-mqtt
+```
+
+`verify_acl.sh` 会先查这一步，不一致就直接报错。
 
 配置见 [`.env.example`](.env.example)。
 
@@ -144,6 +163,14 @@ HTTPS  POST /ingest/telemetry                                   ← 兜底通道
 - **吊销即时生效**：`/devices/{id}/revoke` 重写 `certs/crl.pem`，mosquitto 的 `crlfile` 读它；消息层再按 `device_id` 拒收，不用等 broker 重载。
 - **下发命令真的走 MQTT**：`POST /devices/{id}/cmd` 发布到 `orpi/v1/{id}/cmd` 并写 `device.cmd` 审计；演示环境同时本地补一个窗口。
 - **总览重做**：首屏 6 块图（链路矩阵、每设备 24h 走势、7×24 异常、建议风险、24h 对比、指标覆盖），弹性栅格在 1900 / 1440 / 1366 下都整屏无滚动。
+- **逐设备 ACL 真的测过**：`scripts/verify_acl.sh` 用边 CA 现签一张临时证书连 8883，实测「自己的 telemetry 能发、自己的 cmd 能收、别人的遥测与通配订阅被拒」，跑完删证书与库里的签发记录：
+  ```
+  [PASS] 自己的遥测能发     [PASS] 自己的 cmd 能收（边可下发）
+  [PASS] 别人的遥测被拒     [PASS] 读不到别人的遥测
+  [PASS] 通配订阅读不到东西
+  ```
+- **同意开关真的生效**（文档 §8.5）：关掉 `group_analysis` 后 `/overview` 只回在线/健康/匿名计数并标 `insufficient`，总览显示「样本不足」，`/wordcloud` 不回词；关掉 `personalization` 后报表里的 `advice` 与 `word_freq` 清空，建议只留本地。开关变更写 `consent.change` 审计（改动前后、操作者）。
+- **吊销写 CRL 的坑补了**：api 容器以 uid 10001 跑，证书目录原来对它只读，`crl.pem` 一直没被重写（错误被吞掉）。现在 `make_broker_cert.py` 把目录设 0777、`crl.pem` 设 0666，写失败会记 `cert.crl_write_failed` 审计。
 
 ## 告警怎么判定、怎么关掉
 
@@ -239,9 +266,7 @@ MQTT 真实报文往返、退避序列与保留期清理、每日快照、SQLCip
 | 方案里的东西 | 现状 |
 |---|---|
 | SQLCipher 默认开启 | 驱动已打进镜像（`sqlcipher3-binary`），设 `EDGE_DB_KEY` 即加密，测试验证了密文文件头与错误口令拒绝；不设时仍走明文，避免老库打不开 |
-| mosquitto 的逐设备 ACL | 已用真 broker 验证边自己的客户端证书；"每台设备只能读写自己前缀"还需要一台真终端证书才能验 |
 | broker 重载 CRL | `crlfile` 已挂上，吊销时重写；mosquitto 要等重载/重启才断连，消息层已即时拒收 |
-| 同意开关不生效 | `personalization` / `group_analysis` 已存库、demo 写审计，但分析接口还没读它 |
 | 性能基线 | 本机 `/overview` p95 338 ms、`pg_dump` 0.3 s；目标机 CPU 与 72 h 未测 |
 | 证书自动续期 | 刻意不做边代签：续期由终端提交 CSR 调 `/devices/{id}/renew`，边只负责 30 天提醒 |
 | 多边组网 | 单边单云，不支持一个边管多个云 |
@@ -265,9 +290,9 @@ MQTT 真实报文往返、退避序列与保留期清理、每日快照、SQLCip
 
 | 项 | 本机能否完成 | 现状 |
 |---|---|---|
-| 逐设备 MQTT ACL | 能 | 用边 CA 现签一张测试证书连 8883，验「只能发自己前缀」 |
+| 逐设备 MQTT ACL | ✅ 已完成 | `scripts/verify_acl.sh`：边 CA 现签证书连 8883，自己前缀能发能收，别人前缀与通配订阅被拒 |
 | 性能基线（§11.2 / §11.3） | 能，已测一轮 | 边 `/overview` p95 338 ms、云 `/overview` p95 200 ms、`pg_dump` 0.3 s、各容器内存均低于限额；CPU/72 h 需在目标机复测 |
-| 同意开关落地 | 能 | `personalization` / `group_analysis` 已存库、demo 时写审计，但分析接口还没读它 |
+| 同意开关落地 | ✅ 已完成 | 关 `group_analysis` → 总览「样本不足」、词云空；关 `personalization` → 报表不带 advice/词频；变更写审计 |
 | 本地 9B 模型 | 不能 | 无 NVIDIA 显卡，模型 5.6 GB，等 GPU |
 | 双网 30 s / 10 用户轮换 / 72 h | 不能 | 需要三台终端 |
 | 端侧 §3 / §4 | 不在本仓 | 已分发给端仓 |

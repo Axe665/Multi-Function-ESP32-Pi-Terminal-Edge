@@ -40,6 +40,7 @@ async function load() {
 
 async function loadCharts(over, dev) {
   const lanes = over?.lanes || []
+  if (over?.insufficient) { lines.value = []; heat.value = null; return }
   const first = lanes[0]
   if (first) {
     const metric = (first.metrics || [])[0]?.metric
@@ -254,7 +255,19 @@ const adviceRows = computed(() => {
     </template>
   </StatusBar>
 
-  <div class="board">
+  <section v-if="o?.insufficient" class="md-panel">
+    <div class="section-head">
+      <h2>样本不足</h2>
+      <span class="md-muted">{{ o.reason }}</span>
+    </div>
+    <p class="md-muted">
+      当前 {{ o.devices_online }}/{{ o.devices_total }} 台在线，告警 {{ o.status?.critical }} 条严重、
+      {{ o.status?.notice }} 条待确认。开启群体分析后才会显示分设备的走势与聚合。
+    </p>
+    <RouterLink class="md-btn md-btn--tonal" to="/settings">去设置里开启群体分析</RouterLink>
+  </section>
+
+  <div v-else class="board">
     <section class="md-panel wide">
       <div class="section-head">
         <h2>链路 · 最近 24 个窗口</h2>
