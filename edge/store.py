@@ -800,6 +800,12 @@ def is_revoked(serial: str) -> bool:
         return conn.execute("SELECT 1 FROM revoked WHERE serial=?", (serial,)).fetchone() is not None
 
 
+def device_revoked(device_id: str) -> bool:
+    with connect() as conn:
+        return conn.execute(
+            "SELECT 1 FROM revoked WHERE device_id=? LIMIT 1", (device_id,)).fetchone() is not None
+
+
 def revoked() -> list[dict[str, Any]]:
     with connect() as conn:
         return [dict(r) for r in conn.execute("SELECT * FROM revoked ORDER BY revoked_at DESC")]

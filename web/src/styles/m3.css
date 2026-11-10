@@ -66,13 +66,13 @@
   --md-headline-small: 400 24px/32px var(--md-font);
   --md-title-large: 400 22px/28px var(--md-font);
   --md-title-medium: 500 16px/24px var(--md-font);
-  --md-title-small: 500 14px/20px var(--md-font);
+  --md-title-small: 600 16px/22px var(--md-font);
   --md-body-large: 400 16px/24px var(--md-font);
-  --md-body-medium: 400 14px/20px var(--md-font);
-  --md-body-small: 400 12px/16px var(--md-font);
+  --md-body-medium: 400 15px/22px var(--md-font);
+  --md-body-small: 400 14px/20px var(--md-font);
   --md-label-large: 500 14px/20px var(--md-font);
-  --md-label-medium: 500 12px/16px var(--md-font);
-  --md-label-small: 500 11px/16px var(--md-font);
+  --md-label-medium: 500 13px/18px var(--md-font);
+  --md-label-small: 500 13px/18px var(--md-font);
 
   /* ---- 形状 ---- */
   --md-shape-none: 0;
@@ -452,7 +452,7 @@ h3 {
   background: var(--md-card-bg);
   border: 1px solid var(--md-card-border);
   border-radius: var(--md-shape-lg);
-  padding: var(--space-4) var(--space-5);
+  padding: clamp(14px, 1.1vw, 22px) clamp(16px, 1.2vw, 24px);
 }
 .md-section { margin-top: var(--space-5); }
 .md-panel + .md-panel,

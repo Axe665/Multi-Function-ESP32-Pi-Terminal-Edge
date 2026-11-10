@@ -17,7 +17,7 @@ os.environ.setdefault("EDGE_DATA_DIR", _TMP)
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from edge import models, store  # noqa: E402
+from edge import config, models, store  # noqa: E402
 from edge.main import app  # noqa: E402
 
 CONTRACTS = ROOT / "contracts"
@@ -57,7 +57,14 @@ class IngestTest(unittest.TestCase):
     def setUpClass(cls):
         store.init_db()
         cls.client = TestClient(app)
+        # 写入口现在默认要令牌，测试用同一份配置
+        cls.client.headers.update({"Authorization": f"Bearer {config.INGEST_TOKEN}"})
         cls.payload = load("telemetry.v1.json")
+
+    def test_ingest_requires_token(self):
+        client = TestClient(app)   # 没有带 Authorization
+        r = client.post("/api/v1/ingest/telemetry", json=self.payload)
+        self.assertEqual(r.status_code, 401)
 
     def test_accept_then_dedupe(self):
         first = self.client.post("/api/v1/ingest/telemetry", json=self.payload)

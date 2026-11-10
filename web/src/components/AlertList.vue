@@ -39,14 +39,12 @@ function ago(ms) {
 
 function detail(a) {
   if (a.kind === 'stale') return `最后${ago(a.last_seen || a.ts_from)}`
-  const span = a.windows > 1
-    ? `连续 ${a.windows} 个窗口`
-    : '单窗口'
-  return `${span}，最大 |z| ${Math.abs(a.max_z ?? a.z ?? 0).toFixed(1)}`
+  const span = a.windows > 1 ? `${a.windows} 窗连续` : '单窗'
+  return `${span}，|z| ${Math.abs(a.max_z ?? a.z ?? 0).toFixed(1)}`
 }
 
 function span(a) {
-  if (a.kind === 'stale') return ''
+  if (a.kind === 'stale' || !a.ts_from) return ''
   const from = fmtTime(a.ts_from)
   const to = fmtTime(a.ts_to)
   return from === to ? from : `${from}–${to}`
@@ -132,7 +130,7 @@ async function unmute(a) {
           <span v-if="a.state === 'muted'" class="tag-idle">已静音</span>
         </div>
         <div class="meta">
-          {{ detail(a) }}<template v-if="span(a)"> · {{ span(a) }}</template>
+          {{ detail(a) }}<template v-if="span(a)">，{{ span(a) }}</template>
         </div>
         <div v-if="a.state === 'muted'" class="meta">
           静音至 {{ fmtTime(a.muted_until) }}，理由：{{ a.mute_reason }}

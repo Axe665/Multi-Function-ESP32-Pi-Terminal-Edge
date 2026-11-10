@@ -74,7 +74,7 @@ const anomalyOption = computed(() => {
     tooltip: {
       formatter: (p) => {
         const [ts, , z, label, dev] = p.value
-        return `${dev} · ${label}<br/>${fmtTime(ts)}，z ${z}`
+        return `${dev}，${label}<br/>${fmtTime(ts)}，z ${z}`
       },
     },
     xAxis: {

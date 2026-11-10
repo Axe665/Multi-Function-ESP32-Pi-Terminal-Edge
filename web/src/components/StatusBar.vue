@@ -51,7 +51,7 @@ const props = defineProps({
   display: flex;
   align-items: flex-start;
   gap: var(--space-3);
-  padding: var(--space-4) var(--space-5);
+  padding: var(--space-3) var(--space-4);
   border-radius: var(--md-shape-lg);
   border: 1px solid var(--md-card-border);
   border-left-width: 4px;
@@ -71,8 +71,8 @@ const props = defineProps({
 .status-icon {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   font: var(--md-label-large);
   flex: none;

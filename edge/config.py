@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -16,6 +17,9 @@ def _env(key: str, default: str = "") -> str:
 
 DATA_DIR = Path(_env("EDGE_DATA_DIR", str(ROOT / "data")))
 DB_PATH = Path(_env("EDGE_DB", str(DATA_DIR / "edge.db")))
+# CRL 与 broker 证书同目录：mosquitto 的 crl_file 指向这里
+BROKER_CRL = Path(_env("EDGE_MQTT_CERT",
+                       str(ROOT / "docker" / "mosquitto" / "certs" / "edge.crt"))).parent / "crl.pem"
 
 EDGE_ID = _env("EDGE_ID", "edge-lab-01")
 EDGE_NAME = _env("EDGE_NAME", "实验室边节点")
@@ -38,7 +42,28 @@ CLOUD_URL = _cloud_url()
 CLOUD_TOKEN = _env("EDGE_CLOUD_TOKEN")
 
 # 空的 ingest token 表示只接受本机写入，见 README「安全边界」。
-INGEST_TOKEN = _env("EDGE_INGEST_TOKEN")
+def _ingest_token() -> str:
+    """设备写入口的令牌：环境变量优先，否则首次启动生成并落盘。
+
+    文档 §5.7 要求接入有身份；HTTP 兜底通道不能裸奔，所以默认就要令牌。
+    """
+    token = _env("EDGE_INGEST_TOKEN")
+    if token:
+        return token
+    path = DATA_DIR / "ingest_token"
+    try:
+        if path.exists():
+            return path.read_text(encoding="utf-8").strip()
+        token = secrets.token_hex(16)
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        path.write_text(token, encoding="utf-8")
+        path.chmod(0o600)
+        return token
+    except OSError:
+        return ""
+
+
+INGEST_TOKEN = _ingest_token()
 ADMIN_TOKEN = _env("EDGE_ADMIN_TOKEN")
 
 K_MIN = int(_env("EDGE_K_MIN", "5"))

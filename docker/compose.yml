@@ -10,7 +10,7 @@ x-edge: &edge
       condition: service_started
   volumes:
     - edge_data:/app/data
-    - ./mosquitto/certs:/app/certs:ro
+    - ./mosquitto/certs:/app/certs
     - ./cloud-certs:/app/cloud-certs:ro
   networks:
     - default
@@ -50,7 +50,7 @@ services:
       # 8884（内网管理）暂未启用：管理面走 HTTP，不需要第二个 listener
     volumes:
       - ./mosquitto:/mosquitto/config:ro
-      - ./mosquitto/certs:/mosquitto/certs:ro
+      - ./mosquitto/certs:/mosquitto/certs
       - mqtt_data:/mosquitto/data
     deploy:
       resources:

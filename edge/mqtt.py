@@ -90,6 +90,10 @@ class MqttIngest:
             if len(parts) != 4 or parts[0] != "orpi" or parts[1] != "v1":
                 return
             device_id, kind = parts[2], parts[3]
+            # 证书吊销后 broker 可能还没重载 CRL，这里先按 device_id 拦
+            if store.device_revoked(device_id):
+                self.rejected += 1
+                return
             body = json.loads(msg.payload.decode("utf-8"))
         except (ValueError, UnicodeDecodeError):
             self.rejected += 1

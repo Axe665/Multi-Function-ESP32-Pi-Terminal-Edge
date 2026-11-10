@@ -1,8 +1,10 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { api, fmtTime } from '../api'
 import PageHeader from '../components/PageHeader.vue'
 import KpiRow from '../components/KpiRow.vue'
+import ChartBox from '../components/ChartBox.vue'
+import { chartTokens, useTheme } from '../lib/theme'
 import { useSnack } from '../components/useSnack'
 
 const settings = ref(null)
@@ -15,6 +17,55 @@ const paired = ref(0)
 const error = ref('')
 const busy = ref(false)
 const { toast } = useSnack()
+const { theme } = useTheme()
+const tk = computed(() => chartTokens(theme.value))
+
+const outboxOption = computed(() => {
+  const t = tk.value
+  const rows = outbox.value || []
+  const sent = rows.filter((r) => r.sent_at).length
+  const failed = rows.filter((r) => !r.sent_at && r.last_error).length
+  const pending = rows.length - sent - failed
+  return {
+    grid: { left: 4, right: 8, top: 18, bottom: 4, containLabel: true },
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    xAxis: { type: 'category', data: ['已发送', '待发送', '失败'],
+             axisLabel: { fontSize: 11, color: t.axis }, axisLine: { lineStyle: { color: t.split } }, axisTick: { show: false } },
+    yAxis: { type: 'value', minInterval: 1, splitLine: { lineStyle: { color: t.split } },
+             axisLabel: { fontSize: 10, color: t.axis } },
+    series: [{
+      type: 'bar', data: [sent, pending, failed], barMaxWidth: 30,
+      itemStyle: {
+        color: (p) => [t.line, t.palette[2], '#c0392b'][p.dataIndex],
+        borderRadius: [3, 3, 0, 0],
+      },
+      label: { show: true, position: 'top', fontSize: 10, color: t.axis },
+    }],
+  }
+})
+
+const intervalOption = computed(() => {
+  const t = tk.value
+  const ts = (outbox.value || []).map((r) => r.created_at).sort((a, b) => a - b)
+  const buckets = [0, 0, 0, 0]
+  for (let i = 1; i < ts.length; i++) {
+    const mins = (ts[i] - ts[i - 1]) / 60000
+    buckets[mins <= 15 ? 0 : mins <= 30 ? 1 : mins <= 60 ? 2 : 3] += 1
+  }
+  return {
+    grid: { left: 4, right: 8, top: 18, bottom: 4, containLabel: true },
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    xAxis: { type: 'category', data: ['≤15 分', '16–30', '31–60', '>60'],
+             axisLabel: { fontSize: 11, color: t.axis }, axisLine: { lineStyle: { color: t.split } }, axisTick: { show: false } },
+    yAxis: { type: 'value', minInterval: 1, splitLine: { lineStyle: { color: t.split } },
+             axisLabel: { fontSize: 10, color: t.axis } },
+    series: [{
+      type: 'bar', data: buckets, barMaxWidth: 30,
+      itemStyle: { color: t.palette[1], borderRadius: [3, 3, 0, 0] },
+      label: { show: true, position: 'top', fontSize: 10, color: t.axis },
+    }],
+  }
+})
 
 const previewLoading = ref(false)
 
@@ -77,6 +128,23 @@ const cloud = () => [
 
   <KpiRow :items="cloud()" />
 
+  <div class="charts">
+    <section class="md-card">
+      <div class="section-head">
+        <h2>发件箱</h2>
+        <span class="md-muted">{{ outbox.length }} 份</span>
+      </div>
+      <ChartBox :option="outboxOption" height="132px" />
+    </section>
+    <section class="md-card">
+      <div class="section-head">
+        <h2>上报间隔</h2>
+        <span class="md-muted">相邻报表的生成间隔</span>
+      </div>
+      <ChartBox :option="intervalOption" height="132px" />
+    </section>
+  </div>
+
   <div class="duo">
     <section class="md-card">
       <h2>上报</h2>
@@ -127,6 +195,7 @@ const cloud = () => [
       </p>
     </section>
   </div>
+
 
   <section class="md-card access-summary">
     <div class="section-head">
@@ -196,6 +265,11 @@ const cloud = () => [
 
 <style scoped>
 .error { color: var(--md-error); margin-bottom: var(--space-3); }
+.charts {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4); margin-top: var(--space-4);
+}
+@media (max-width: 1000px) { .charts { grid-template-columns: minmax(0, 1fr); } }
 .duo {
   display: grid; grid-template-columns: minmax(0, 1fr);
   gap: var(--space-4);

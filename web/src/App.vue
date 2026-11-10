@@ -76,8 +76,10 @@ const { theme, toggleTheme } = useTheme()
 <style scoped>
 .shell {
   display: grid;
-  grid-template-columns: 200px minmax(0, 1fr);
-  min-height: 100vh;
+  grid-template-columns: clamp(228px, 15vw, 280px) minmax(0, 1fr);
+  height: 100vh;
+  min-height: 0;
+  overflow: hidden;
   background: var(--md-surface);
 }
 
@@ -101,6 +103,7 @@ const { theme, toggleTheme } = useTheme()
 }
 .brand-name {
   font: var(--md-title-small);
+  white-space: nowrap;
   color: var(--md-on-surface);
 }
 .brand-sub {
@@ -148,9 +151,15 @@ const { theme, toggleTheme } = useTheme()
   justify-content: flex-start;
 }
 
+.content > * { flex-shrink: 0; }
 .content {
-  padding: var(--space-5) var(--space-6) var(--space-6);
+  height: 100vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: clamp(14px, 1.4vw, 26px) clamp(16px, 1.8vw, 32px) clamp(16px, 1.8vw, 32px);
   min-width: 0;
+  min-height: 0;
 }
 
 .demo-note {

@@ -2,6 +2,8 @@
 import { computed, onMounted, ref } from 'vue'
 import { api, fmtTime } from '../api'
 import PageHeader from '../components/PageHeader.vue'
+import ChartBox from '../components/ChartBox.vue'
+import { chartTokens, useTheme } from '../lib/theme'
 import { useSnack } from '../components/useSnack'
 
 const disc = ref(null)
@@ -13,11 +15,58 @@ const wifi = ref({ ssid: '', psk: '', country: 'CN' })
 const wifiOut = ref(null)
 const wifiOpen = ref(false)
 const { toast } = useSnack()
+const { theme } = useTheme()
+const tk = computed(() => chartTokens(theme.value))
 
 const linkLabel = { wifi: 'Wi-Fi', ethernet: '有线', offline: '离线', unknown: '未知' }
 const devices = computed(() => disc.value?.devices || [])
 const paired = computed(() => devices.value.filter((d) => d.paired).length)
 const expiring = computed(() => certs.value.filter((c) => c.expiring).length)
+
+// 证书到期分布：30 天内、31–90、91–180、更远
+const certOption = computed(() => {
+  const t = tk.value
+  const n = [0, 0, 0, 0]
+  for (const c of certs.value) {
+    const d = c.days_left ?? 999
+    n[d <= 30 ? 0 : d <= 90 ? 1 : d <= 180 ? 2 : 3] += 1
+  }
+  return {
+    grid: { left: 4, right: 8, top: 18, bottom: 4, containLabel: true },
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    xAxis: { type: 'category', data: ['≤30 天', '31–90', '91–180', '>180'], axisLabel: { fontSize: 11, color: t.axis },
+             axisLine: { lineStyle: { color: t.split } }, axisTick: { show: false } },
+    yAxis: { type: 'value', minInterval: 1, splitLine: { lineStyle: { color: t.split } },
+             axisLabel: { fontSize: 10, color: t.axis } },
+    series: [{
+      type: 'bar', data: n, barMaxWidth: 30,
+      itemStyle: { color: (p) => (p.dataIndex === 0 && p.value ? '#c0392b' : t.line), borderRadius: [3, 3, 0, 0] },
+      label: { show: true, position: 'top', fontSize: 10, color: t.axis },
+    }],
+  }
+})
+
+const linkOption = computed(() => {
+  const t = tk.value
+  const labels = ['有线', 'Wi-Fi', '未知']
+  const n = [0, 0, 0]
+  for (const d of devices.value) {
+    n[d.link === 'ethernet' ? 0 : d.link === 'wifi' ? 1 : 2] += 1
+  }
+  return {
+    grid: { left: 4, right: 8, top: 18, bottom: 4, containLabel: true },
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    xAxis: { type: 'category', data: labels, axisLabel: { fontSize: 11, color: t.axis },
+             axisLine: { lineStyle: { color: t.split } }, axisTick: { show: false } },
+    yAxis: { type: 'value', minInterval: 1, splitLine: { lineStyle: { color: t.split } },
+             axisLabel: { fontSize: 10, color: t.axis } },
+    series: [{
+      type: 'bar', data: n, barMaxWidth: 30,
+      itemStyle: { color: t.palette[1], borderRadius: [3, 3, 0, 0] },
+      label: { show: true, position: 'top', fontSize: 10, color: t.axis },
+    }],
+  }
+})
 
 async function load() {
   try {
@@ -69,6 +118,23 @@ onMounted(load)
     <div class="kpi"><div class="label">吊销</div><div class="value">{{ certs.filter((c) => c.revoked).length }}</div><div class="note">CRL 可下载</div></div>
   </section>
 
+  <div class="charts">
+    <section class="md-card">
+      <div class="section-head">
+        <h2>证书到期分布</h2>
+        <span class="md-muted">按剩余天数分桶</span>
+      </div>
+      <ChartBox :option="certOption" height="132px" />
+    </section>
+    <section class="md-card">
+      <div class="section-head">
+        <h2>链路类型</h2>
+        <span class="md-muted">已登记设备</span>
+      </div>
+      <ChartBox :option="linkOption" height="132px" />
+    </section>
+  </div>
+
   <div class="duo">
     <section class="md-card">
       <div class="section-head">
@@ -106,8 +172,14 @@ onMounted(load)
       </div>
       <p class="md-muted small hint">
         配对码 6 位、10 分钟有效，绑定设备公钥指纹，一次性使用；同一设备 5 次失败锁 10 分钟。
-        终端广播 _orpi-device._tcp，边广播 _orpi-edge._tcp。
       </p>
+
+      <ol class="steps md-muted small">
+        <li><b>发现</b>终端广播 _orpi-device._tcp，组播被挡时退回已登记清单</li>
+        <li><b>配对</b>生成配对码，终端带自己的公钥指纹兑换一次</li>
+        <li><b>签发</b>终端提交 CSR，边签 365 天证书，私钥不出终端</li>
+        <li><b>续期</b>到期前 30 天提醒，终端带新 CSR 调 /devices/{id}/renew，边不代签</li>
+      </ol>
     </section>
 
     <section class="md-card">
@@ -149,9 +221,6 @@ onMounted(load)
         <a class="md-btn md-btn--outline" href="/api/v1/crl.pem" target="_blank" rel="noopener">下载 CRL</a>
         <button class="md-btn md-btn--outline" @click="wifiOpen = !wifiOpen">WiFi 配置</button>
       </div>
-      <p class="md-muted small hint">
-        证书 365 天有效，到期前 30 天标红；续期由终端提交 CSR 调 /devices/{id}/renew，边不代签。
-      </p>
     </section>
   </div>
 
@@ -186,9 +255,19 @@ onMounted(load)
 .label { font: var(--md-label-medium); color: var(--md-on-surface-variant); }
 .value { font: var(--md-headline-small); }
 .note { font: var(--md-body-small); color: var(--md-on-surface-variant); }
+.steps {
+  margin: var(--space-3) 0 0; padding-left: 18px;
+  display: grid; gap: var(--space-2);
+}
+.steps b { color: var(--md-on-surface); font-weight: 500; }
+.charts {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4); margin-top: var(--space-4);
+}
+@media (max-width: 1000px) { .charts { grid-template-columns: minmax(0, 1fr); } }
 .duo {
   display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
-  gap: var(--space-4); align-items: stretch;
+  gap: var(--space-4); align-items: start;
 }
 .section-head {
   display: flex; justify-content: space-between; align-items: baseline;

@@ -138,6 +138,13 @@ HTTPS  POST /ingest/telemetry                                   ← 兜底通道
 | 词频 TF-IDF | jieba 分词 + 停用词，按天重算，查询时用 TF-IDF 加权（跨天高频词降权） | `/api/v1/wordcloud`，页面点词下钻到建议原文 |
 | WiFi 配置生成 | 管理员给无头终端生成 `wpa_supplicant.conf`；口令只在请求里出现，不落库、审计只记长度 | `POST /api/v1/devices/{id}/wifi-config` |
 
+### 最近补的
+
+- **写入口默认要令牌**：首次启动生成 `data/ingest_token`（0600），HTTP `POST /ingest/*` 无令牌直接 401；`/health` 里 `ingest_token` 显示 `set`。
+- **吊销即时生效**：`/devices/{id}/revoke` 重写 `certs/crl.pem`，mosquitto 的 `crlfile` 读它；消息层再按 `device_id` 拒收，不用等 broker 重载。
+- **下发命令真的走 MQTT**：`POST /devices/{id}/cmd` 发布到 `orpi/v1/{id}/cmd` 并写 `device.cmd` 审计；演示环境同时本地补一个窗口。
+- **总览重做**：首屏 6 块图（链路矩阵、每设备 24h 走势、7×24 异常、建议风险、24h 对比、指标覆盖），弹性栅格在 1900 / 1440 / 1366 下都整屏无滚动。
+
 ## 告警怎么判定、怎么关掉
 
 一条告警不是「一个窗口越界」，而是**一段连续的越界窗口**：一段只算一条。
@@ -221,11 +228,11 @@ MQTT 真实报文往返、退避序列与保留期清理、每日快照、SQLCip
 | §5.3 存储 | devices/telemetry/aggregates/advice/word_freq | ✅ 另加 catalog、certs、revoked、audit、outbox、alert_state |
 | §5.4 分析 | 趋势 / 热力 / 词云 / 异常 | ✅ 四项都在页面上，数字全部重算 |
 | §5.5 API | 10 个端点 | ✅ 全部实现，另有 metrics/certs/pair/renew 与告警四个端点 |
-| §5.6 前端 | Vue3 + Vite + ECharts，五页 | ✅ 五页齐全；总览首屏是状态行与待处理异常（确认/静音/审计），装饰图降为右上角缩略图；分析页热力图按基线偏差着色；上云并入设置页；演示说明收进侧栏 |
-| §5.7 设备接入 | CA、配对码、365 天证书、吊销、续期 | ✅ 前四项完成；续期是**设备主动 renew + 30 天提醒**。边不代签是刻意的：代签要托管设备私钥 |
+| §5.6 前端 | Vue3 + Vite + ECharts，五页 | ✅ 五页齐全；总览首屏 6 块图（链路矩阵、每设备 24h 走势、7×24 异常、建议风险、24h 对比、指标覆盖）+ 右栏待处理与建议；接入/设置各 2 块图；分析页热力图按基线偏差着色 |
+| §5.7 设备接入 | CA、配对码、365 天证书、吊销、续期 | ✅ 前四项完成；吊销后重写 `certs/crl.pem`，消息层按 `device_id` 立即拒收；续期是**设备主动 renew + 30 天提醒**，边不代签 |
 | §5.8 边→云 | 每小时批量、幂等、退避 | ✅ 1/5/30 分钟、2 小时退避，7 天 |
 | §5.9 mDNS | 广播 + 发现，TXT 只放 ID/型号/版本/端口/CA 指纹 | ✅ 组播不可用时自动退化为已登记清单 |
-| §5.10 无头与十用户 | 1 带屏 + 2 无头，10 用户轮换 | ✅ 1 带屏 + 2 无头由演示数据体现；10 个隔离用户库属终端会话层，边只看到 `n_subjects` |
+| §5.10 无头与十用户 | 1 带屏 + 2 无头，10 用户轮换 | 部分：演示数据里有 1 带屏 + 2 无头；端仓还没有 headless 构建，也没有 10 用户轮换 |
 
 ## 仍然没做的
 
@@ -233,12 +240,38 @@ MQTT 真实报文往返、退避序列与保留期清理、每日快照、SQLCip
 |---|---|
 | SQLCipher 默认开启 | 驱动已打进镜像（`sqlcipher3-binary`），设 `EDGE_DB_KEY` 即加密，测试验证了密文文件头与错误口令拒绝；不设时仍走明文，避免老库打不开 |
 | mosquitto 的逐设备 ACL | 已用真 broker 验证边自己的客户端证书；"每台设备只能读写自己前缀"还需要一台真终端证书才能验 |
+| broker 重载 CRL | `crlfile` 已挂上，吊销时重写；mosquitto 要等重载/重启才断连，消息层已即时拒收 |
+| 同意开关不生效 | `personalization` / `group_analysis` 已存库、demo 写审计，但分析接口还没读它 |
+| 性能基线 | 本机 `/overview` p95 338 ms、`pg_dump` 0.3 s；目标机 CPU 与 72 h 未测 |
 | 证书自动续期 | 刻意不做边代签：续期由终端提交 CSR 调 `/devices/{id}/renew`，边只负责 30 天提醒 |
 | 多边组网 | 单边单云，不支持一个边管多个云 |
 | 宿主 Avahi / chrony | 文档要求宿主机跑 Avahi 与 chrony；compose 里 mDNS 是容器侧，NTP 由宿主负责 |
 
 演示数据由 `edge/sim.py` 生成（3 台设备 × 7 天 × 5 分钟窗口，`n_subjects` 取 6–10），
 **不是真实测量**；接真机前请清掉 `data/`。
+
+端侧（另一仓）还缺的，本仓只标注、不代做：
+
+- §3 data_schema 与 DB API v3：`ModuleDataApi` 仍然只有 `appendSample`，数据字段
+  在代码里硬编码，没有 `module_records` 表，`module-devkit` 也没有 schema 子命令；
+- §4 HyperVisor：没有过滤层（HMAC 假名、5 分钟窗口、k≥5）、没有 `agg` / `outbox`、
+  没有 `appAdvice`、没有 `advice` 出网通道 34007；
+- §5.10 headless 与 10 用户轮换：没有 headless 构建目标，也没有 `--user-rotate`；
+- §8 的 `device_salt`、L1-out 默认出端、per-subject 删除 token。
+
+所以本仓的 `/ingest` 与 `telemetry.v1` 已经能收，但现在只有 `edge/sim.py` 在发。
+
+## 本机还能补的，和只能等硬件的
+
+| 项 | 本机能否完成 | 现状 |
+|---|---|---|
+| 逐设备 MQTT ACL | 能 | 用边 CA 现签一张测试证书连 8883，验「只能发自己前缀」 |
+| 性能基线（§11.2 / §11.3） | 能，已测一轮 | 边 `/overview` p95 338 ms、云 `/overview` p95 200 ms、`pg_dump` 0.3 s、各容器内存均低于限额；CPU/72 h 需在目标机复测 |
+| 同意开关落地 | 能 | `personalization` / `group_analysis` 已存库、demo 时写审计，但分析接口还没读它 |
+| 本地 9B 模型 | 不能 | 无 NVIDIA 显卡，模型 5.6 GB，等 GPU |
+| 双网 30 s / 10 用户轮换 / 72 h | 不能 | 需要三台终端 |
+| 端侧 §3 / §4 | 不在本仓 | 已分发给端仓 |
+| 备份异地 | 不能 | 需要第二块盘 |
 
 ## 目录
 
