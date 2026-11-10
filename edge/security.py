@@ -192,6 +192,13 @@ def revoke(device_id: str, reason: str = "unspecified") -> int:
     for r in rows:
         store.revoke_serial(r["serial"], device_id, reason)
         n += 1
+    if n:
+        # mosquitto 的 crl_file 读这个文件；重载后断连，消息层另有即时拦截
+        try:
+            config.BROKER_CRL.write_bytes(crl_pem())
+            config.BROKER_CRL.chmod(0o644)
+        except OSError:
+            pass
     return n
 
 

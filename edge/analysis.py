@@ -269,7 +269,14 @@ def overview() -> dict[str, Any]:
     notice = sum(1 for a in pending if a["severity"] == "notice")
     status = "critical" if critical else "notice" if notice else "ok"
 
-    findings = [f for f in (finding(d["device_id"]) for d in devs) if f]
+    # 一台设备一条，带上设备名：前端按设备分行，否则三行看起来是同一句话
+    findings = []
+    for lane in lanes:
+        f = finding(lane["device_id"])
+        if f:
+            f["device_id"] = lane["device_id"]
+            f["device_name"] = lane["name"]
+            findings.append(f)
     return {
         "status": {
             "level": status,

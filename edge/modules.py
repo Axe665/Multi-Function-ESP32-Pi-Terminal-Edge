@@ -19,7 +19,7 @@ class Capability:
 
 
 CAPS: dict[int, Capability] = {c.module_id: c for c in [
-    Capability(80, "planter.environment", "智能盆栽 · 环境看板", "env", (
+    Capability(80, "planter.environment", "智能盆栽环境看板", "env", (
         ("temperature_c", "温度", "°C", "samples", 1),
         ("humidity_rh", "湿度", "%", "samples", 1),
         ("light_lux", "光照", "lx", "samples", 0),
@@ -51,10 +51,10 @@ CAPS: dict[int, Capability] = {c.module_id: c for c in [
 
 # 演示里可能出现的板子：型号 + 是否带屏。模块不预先绑定。
 BOARDS = [
-    {"device_id": "mt-3b-01", "name": "诊室屏 · Pi 3B", "headless": False, "fw": "orpi 1.4.2"},
-    {"device_id": "mt-a64-02", "name": "温室无头 · Pine64", "headless": True, "fw": "orpi 1.4.2"},
-    {"device_id": "mt-rk64-03", "name": "配电无头 · Rock64", "headless": True, "fw": "orpi 1.4.2"},
-    {"device_id": "mt-pi4-04", "name": "备机 · Pi 4", "headless": False, "fw": "orpi 1.5.0"},
+    {"device_id": "mt-3b-01", "name": "诊室屏 Pi 3B", "headless": False, "fw": "orpi 1.4.2"},
+    {"device_id": "mt-a64-02", "name": "温室无头 Pine64", "headless": True, "fw": "orpi 1.4.2"},
+    {"device_id": "mt-rk64-03", "name": "配电无头 Rock64", "headless": True, "fw": "orpi 1.4.2"},
+    {"device_id": "mt-pi4-04", "name": "备机 Pi 4", "headless": False, "fw": "orpi 1.5.0"},
 ]
 
 SCENES = ["health", "env", "energy", "mixed"]

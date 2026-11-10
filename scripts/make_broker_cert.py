@@ -31,7 +31,8 @@ def main() -> None:
     (out / "edge.crt").write_text(client["cert_pem"])
     (out / "edge.key").write_text(client["key_pem"])
     # 容器里的 mosquitto 以 uid 1883 运行，读不到 0600 的私钥；演示证书放 0644
-    for f in ("ca.crt", "broker.crt", "broker.key", "edge.crt", "edge.key"):
+    (out / "crl.pem").write_bytes(security.crl_pem())
+    for f in ("ca.crt", "broker.crt", "broker.key", "edge.crt", "edge.key", "crl.pem"):
         (out / f).chmod(0o644)
     print(f"已签发 {name} 的 broker 证书与 {edge_id} 的客户端证书 → {out}")
 

@@ -1,6 +1,7 @@
 """边节点 HTTP API。设备侧走 /ingest，管理侧给前端用。"""
 from __future__ import annotations
 
+import re
 from typing import Any
 
 
@@ -14,6 +15,11 @@ router = APIRouter(prefix="/api/v1")
 
 
 # ---------------------------------------------------------------- 鉴权
+
+def _model_name(name: str) -> str:
+    m = re.search(r"[A-Za-z0-9][A-Za-z0-9 ._-]*$", name or "")
+    return (m.group(0).strip() if m else name) or ""
+
 
 def admin_guard(authorization: str | None = Header(default=None)) -> None:
     """设了 EDGE_ADMIN_TOKEN 才校验；单机演示默认关闭，见 README。"""
@@ -88,7 +94,8 @@ def discovery() -> dict[str, Any]:
                     "last_seen": base["last_seen"] if base else None})
     for d in seen.values():
         out.append({
-            "device_id": d["device_id"], "model": d["name"].split("·")[-1].strip(),
+            # 名字是「诊室屏 Pi 3B」，型号取末尾那串拉丁字母/数字
+            "device_id": d["device_id"], "model": _model_name(d["name"]),
             "fw": d["fw"], "port": 4580, "address": None, "scene": d["scene"],
             "link": d["link"], "paired": bool(d["paired_at"]),
             "last_seen": d["last_seen"], "source": "registry",
@@ -363,16 +370,23 @@ def command(device_id: str, body: dict[str, Any]) -> dict[str, Any]:
     if not store.device(device_id):
         raise HTTPException(404, "设备不存在")
     cmd = body.get("cmd")
-    if cmd == "report_now":
-        sim.append_window()
-        return {"ok": True, "cmd": cmd, "queued": 1}
-    if cmd == "ping":
-        return {"ok": True, "cmd": cmd, "rtt_ms": 12}
+    if cmd not in ("report_now", "ping", "set_cadence"):
+        raise HTTPException(400, f"不支持的指令: {cmd}")
+
+    payload: dict[str, Any] = {"cmd": cmd}
     if cmd == "set_cadence":
-        seconds = int(body.get("seconds", 300))
+        seconds = max(60, int(body.get("seconds", 300)))
+        payload["seconds"] = seconds
         store.set_settings({"report_cadence_min": max(1, seconds // 60)})
-        return {"ok": True, "cmd": cmd, "cadence_s": seconds}
-    raise HTTPException(400, f"不支持的指令: {cmd}")
+
+    # 真设备走 MQTT；演示里没有终端在听，本地补一个窗口让界面有反应
+    sent = mqtt.mqtt_ingest.publish_cmd(device_id, payload)
+    if cmd == "report_now" and config.DEMO:
+        sim.append_window()
+    store.audit_action("admin", "device.cmd", device_id, {"cmd": cmd, "mqtt": sent})
+    return {"ok": bool(sent) or config.DEMO, "cmd": cmd,
+            "via": "mqtt" if sent else "sim" if config.DEMO else "none",
+            **({"seconds": payload["seconds"]} if cmd == "set_cadence" else {})}
 
 
 @router.get("/outbox", dependencies=admin)

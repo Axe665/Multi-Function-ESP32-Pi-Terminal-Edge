@@ -20,8 +20,8 @@ defineProps({ variant: { type: String, default: 'edge' } })
 
 <style scoped>
 .brand-mark {
-  width: 28px;
-  height: 28px;
+  width: clamp(32px, 2.2vw, 44px);
+  height: clamp(32px, 2.2vw, 44px);
   display: block;
   flex: none;
 }
