@@ -79,6 +79,34 @@ class AnalysisTest(unittest.TestCase):
         self.assertIn("consecutive", found)
         self.assertNotIn("isolated", found)
 
+    def test_anomalies_use_mad_gate(self):
+        """稳健 z 能抓住基线 z 为 0、但相对自身波动明显偏高的连续窗口。"""
+        dev = store.devices()[0]["device_id"]
+        base = store.now_ms() - 3 * 3600_000
+        step = config.WINDOW_MS
+        with store.connect() as conn:
+            conn.execute("DELETE FROM aggregates WHERE device_id=? AND metric='mad_metric'", (dev,))
+            for i in range(20):
+                mean = 20.0 + (0.1 if i % 2 else -0.1)
+                conn.execute(
+                    """INSERT OR REPLACE INTO aggregates
+                       (device_id, metric, module_id, ts_from, ts_to, n_subjects,
+                        n_samples, mean, slope, z, k)
+                       VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+                    (dev, "mad_metric", 1, base + i * step, base + (i + 1) * step,
+                     9, 360, mean, 0.0, 0.0, 9))
+            for i in (20, 21):
+                conn.execute(
+                    """INSERT OR REPLACE INTO aggregates
+                       (device_id, metric, module_id, ts_from, ts_to, n_subjects,
+                        n_samples, mean, slope, z, k)
+                       VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+                    (dev, "mad_metric", 1, base + i * step, base + (i + 1) * step,
+                     9, 360, 40.0, 0.0, 0.0, 9))
+        found = {r["metric"]: r for r in store.anomalies(base - 1)}
+        self.assertIn("mad_metric", found)
+        self.assertGreater(abs(found["mad_metric"]["robust_z"]), 3.5)
+
     def test_overview_counts_agree(self):
         o = analysis.overview()
         self.assertEqual(o["devices_total"], len(o["lanes"]))

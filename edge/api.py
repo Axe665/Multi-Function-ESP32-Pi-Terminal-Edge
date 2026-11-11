@@ -479,6 +479,8 @@ def health() -> dict[str, Any]:
         "scheduler": {"ticks": scheduler.scheduler.ticks,
                       "last": scheduler.scheduler.last},
         "db_cipher": "sqlcipher" if config.DB_KEY else "plain",
+        "db_key": config.DB_KEY_SOURCE or None,
+        "db_plaintext_existing": config.DB_PLAINTEXT_EXISTING,
         "disk_free_mb": ingest.disk_free_mb(),
         "ca_fp": security.ca_fingerprint(),
         "certs_expiring": len(security.expiring()),
