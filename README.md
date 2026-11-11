@@ -238,6 +238,8 @@ HTTPS  POST /ingest/telemetry                                   ← 兜底通道
 |---|---|---|
 | `orpi.telemetry.v1`（端→边） | `contracts/wire/telemetry.v1.json` | 端仓，本仓 vendor |
 | `orpi.advice.v1`（端→边） | `contracts/wire/advice.v1.json` | 端仓；端仓未发布前由本仓代为维护 |
+| `orpi.status.v1`（端→边） | `contracts/wire/status.v1.json` | 端仓；本仓 vendor |
+| `orpi.cmd.v1`（边→端） | `contracts/wire/cmd.v1.json` | **本仓** |
 | `orpi.edge.report.v1`（边→云） | `contracts/wire/edge-report.v1.json` | **本仓** |
 
 `python3 scripts/sync_contracts.py --check` 校验 vendor 副本没漂移。
@@ -248,7 +250,7 @@ HTTPS  POST /ingest/telemetry                                   ← 兜底通道
 python3 -m unittest discover -s tests -t . -v
 ```
 
-**56 个用例**：契约与示例（含 advice）、摄取边界（原始字段 / 批次与行级 k<5 / 幂等 / 限速 / 磁盘水位）、分析口径
+**57 个用例**：契约与示例（含 advice / status / cmd）、摄取边界（原始字段 / 批次与行级 k<5 / 幂等 / 限速 / 磁盘水位）、分析口径
 （热力图不重复、报表样本数等于日聚合之和）、CA 与配对与 CRL、
 MQTT 真实报文往返、mDNS 只收 CA 指纹对得上的云、退避序列、发件箱 7 天过期、保留期清理、每日快照、
 SQLCipher 加密与错误口令拒绝、异常需连续窗口、告警合并与确认/静音/审计。

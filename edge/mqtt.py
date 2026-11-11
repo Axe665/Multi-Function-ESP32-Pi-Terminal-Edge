@@ -16,7 +16,7 @@ try:
 except ImportError:  # pragma: no cover - 精简部署里可以不装
     mqtt = None  # type: ignore[assignment]
 
-from . import catalog, config, ingest, store
+from . import catalog, config, ingest, models, store
 
 TELEMETRY = "orpi/v1/{dev}/telemetry"
 STATUS = "orpi/v1/{dev}/status"
@@ -129,7 +129,7 @@ class MqttIngest:
 
     def _advice(self, device_id: str, body: dict[str, Any]) -> None:
         """设备侧就地生成的建议（文档 §5.2 的 advice 主题），与 telemetry 里的建议同一张表。"""
-        from . import models, privacy
+        from . import privacy
 
         items = body.get("advice") if isinstance(body.get("advice"), list) else [body]
         saved = 0
@@ -150,14 +150,17 @@ class MqttIngest:
 
     def _status(self, device_id: str, body: dict[str, Any]) -> None:
         """status 里带模块清单：可以是 [83, 80]，也可以是带 capabilities 的对象。"""
+        try:
+            msg = models.StatusMessage.model_validate(body)
+        except ValidationError:
+            self.rejected += 1
+            return
         store.ensure_device(device_id)
         store.touch_device(device_id, store.now_ms())
-        store.set_status(device_id, body.get("fw") or body.get("version"),
-                         body.get("queue_depth") if isinstance(body.get("queue_depth"), int) else None)
-        link = body.get("link")
-        if isinstance(link, str) and link in ("wifi", "ethernet", "offline"):
-            store.set_link(device_id, link)
-        modules = body.get("modules")
+        store.set_status(device_id, msg.fw or msg.version, msg.queue_depth)
+        if msg.link:
+            store.set_link(device_id, msg.link)
+        modules = msg.modules
         if not isinstance(modules, list):
             return
         ids: list[int] = []
@@ -183,8 +186,13 @@ class MqttIngest:
     def publish_cmd(self, device_id: str, payload: dict[str, Any]) -> bool:
         if not (self.client and self.connected):
             return False
+        try:
+            msg = models.Command.model_validate(payload)
+        except ValidationError:
+            return False
         info = self.client.publish(CMD.format(dev=device_id),
-                                   json.dumps(payload, ensure_ascii=False), qos=1)
+                                   json.dumps(msg.model_dump(exclude_none=True),
+                                              ensure_ascii=False), qos=1)
         return info.rc == 0
 
     def status(self) -> dict[str, Any]:

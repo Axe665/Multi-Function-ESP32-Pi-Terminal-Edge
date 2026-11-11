@@ -1,0 +1,8 @@
+{
+  "schema": "orpi.status.v1",
+  "fw": "orpi 1.4.2",
+  "online": true,
+  "link": "wifi",
+  "queue_depth": 3,
+  "modules": [83, 80]
+}

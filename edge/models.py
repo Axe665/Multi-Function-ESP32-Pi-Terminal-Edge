@@ -1,11 +1,11 @@
-"""线上契约的 Pydantic 模型（telemetry.v1 / edge-report.v1）。
+"""线上契约的 Pydantic 模型（telemetry / edge-report / advice / status / cmd）。
 
-两份契约都禁止额外字段：出现 userId、原始值序列这类字段直接 422，
-即使以后有人往载荷里多塞字段也不会被静默接受。
+线上载荷都禁止额外字段：出现 userId、原始值序列这类字段直接 422，
+即使以后有人往载荷里多塞字段也不会被静默接受。status 例外，留给固件扩展。
 """
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -160,3 +160,22 @@ class EdgeReport(Strict):
     advice: list[ReportAdvice] = Field(default_factory=list, max_length=256)
     word_freq: list[WordFreq] = Field(default_factory=list, max_length=512)
     privacy: ReportPrivacy
+
+
+class StatusMessage(BaseModel):
+    """orpi.status.v1 —— 端 → 边。字段都可选，额外字段留给后续固件。"""
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+    schema_: Literal["orpi.status.v1"] | None = Field(default=None, alias="schema")
+    fw: str | None = Field(default=None, max_length=64)
+    version: str | None = Field(default=None, max_length=64)
+    online: bool | None = None
+    link: Literal["wifi", "ethernet", "offline"] | None = None
+    queue_depth: int | None = Field(default=None, ge=0)
+    modules: list[Any] | None = None
+
+
+class Command(Strict):
+    """orpi.cmd.v1 —— 边 → 端。"""
+    cmd: Literal["report_now", "ping", "set_cadence"]
+    seconds: int | None = Field(default=None, ge=60)
