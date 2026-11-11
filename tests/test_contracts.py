@@ -99,6 +99,15 @@ class IngestTest(unittest.TestCase):
         self.assertIn("user_id", r.json()["detail"]["fields"])
         self.assertGreaterEqual(store.counters().get("raw_rejected", 0), 1)
 
+    def test_min_max_rejected_and_counted(self):
+        # 文档 §8.2：出端前必须去掉 min/max，出现就算事故
+        bad = dict(self.payload, min=10, max=99)
+        r = self.client.post("/api/v1/ingest/telemetry", json=bad)
+        self.assertEqual(r.status_code, 422)
+        self.assertEqual(r.json()["detail"]["code"], "RAW_PAYLOAD_REJECTED")
+        self.assertIn("min", r.json()["detail"]["fields"])
+        self.assertIn("max", r.json()["detail"]["fields"])
+
     def test_k_below_min_is_suppressed(self):
         low = json.loads(json.dumps(self.payload))
         low["window"] = {"from": 1, "to": 2, "step_ms": 1000}

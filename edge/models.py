@@ -13,6 +13,7 @@ RISK = Literal["info", "watch", "alert"]
 
 # 出端载荷里出现这些键即视为事故（8.1 硬规则）。
 RAW_KEYS = {"user_id", "userId", "user_name", "userName", "subject",
+            "min", "max",   # 文档 §8.2：出端前去掉 min/max
             "values", "raw", "raw_samples", "samples", "records"}
 
 
