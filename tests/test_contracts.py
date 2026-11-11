@@ -94,6 +94,16 @@ class IngestTest(unittest.TestCase):
         self.assertFalse(r.json()["accepted"])
         self.assertEqual(r.json()["code"], "suppressed")
 
+    def test_low_k_row_is_suppressed(self):
+        """批次 k 正常、某一行 k<5：云端按行拒收，边也不能先存下来。"""
+        low = json.loads(json.dumps(self.payload))
+        low["window"] = {"from": 3, "to": 4, "step_ms": 1000}
+        low["aggregates"][0]["k"] = 4
+        r = self.client.post("/api/v1/ingest/telemetry", json=low)
+        self.assertEqual(r.status_code, 200)
+        self.assertFalse(r.json()["accepted"])
+        self.assertEqual(r.json()["code"], "suppressed")
+
     def test_schema_violation(self):
         broken = json.loads(json.dumps(self.payload))
         broken["schema"] = "orpi.telemetry.v2"

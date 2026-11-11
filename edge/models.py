@@ -134,6 +134,8 @@ class ReportPrivacy(Strict):
     suppressed_buckets: int = 0
     raw_rejected: int = 0
     subjects_total: int = 0
+    # 关掉个性化时置 false（文档 §8.5）；v1 内加可选字段，默认 true 保持兼容
+    personalization: bool = True
 
 
 class Period(Strict):

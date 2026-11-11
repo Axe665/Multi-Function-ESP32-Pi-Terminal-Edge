@@ -93,7 +93,8 @@
         "k_min": { "type": "integer", "minimum": 5 },
         "suppressed_buckets": { "type": "integer", "minimum": 0 },
         "raw_rejected": { "type": "integer", "minimum": 0 },
-        "subjects_total": { "type": "integer", "minimum": 0 }
+        "subjects_total": { "type": "integer", "minimum": 0 },
+        "personalization": { "type": "boolean", "default": true }
       }
     }
   }
