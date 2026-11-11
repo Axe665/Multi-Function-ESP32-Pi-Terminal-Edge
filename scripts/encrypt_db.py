@@ -57,7 +57,8 @@ def main() -> int:
         plain.execute("PRAGMA wal_checkpoint(TRUNCATE)")
     backup = db.with_suffix(db.suffix + f".plain-{time.strftime('%Y%m%d%H%M%S')}.bak")
     shutil.copy2(db, backup)
-    print(f"已备份：{backup}")
+    backup.chmod(0o600)  # 明文备份只给自己读
+    print(f"已备份：{backup}（验证无误后请离线保存或删除）")
 
     tmp = db.with_suffix(db.suffix + ".enc.tmp")
     for p in (tmp, Path(str(tmp) + "-wal"), Path(str(tmp) + "-shm")):
