@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import hashlib
+import shutil
 from typing import Any
 
 from pydantic import ValidationError
@@ -39,8 +40,27 @@ def raw_hits(node: Any, path: str = "") -> list[str]:
     return hits
 
 
+def disk_free_mb() -> int:
+    try:
+        return int(shutil.disk_usage(config.DATA_DIR).free / (1024 * 1024))
+    except OSError:
+        return -1
+
+
+def storage_ok() -> bool:
+    """文档 §8.4：磁盘水位低于阈值时拒收，别把库写爆。"""
+    if config.MIN_FREE_MB <= 0:
+        return True
+    free = disk_free_mb()
+    return free < 0 or free >= config.MIN_FREE_MB
+
+
 def process(body: dict[str, Any]) -> dict[str, Any]:
     """返回 {accepted, batch_id, code}；不合规抛 IngestError。"""
+    if not storage_ok():
+        store.bump("disk_low")
+        raise IngestError("DISK_LOW", "边节点磁盘余量不足，暂时拒收",
+                          [f"free_mb={disk_free_mb()}"])
     hits = raw_hits(body)
     if hits:
         store.bump("raw_rejected")

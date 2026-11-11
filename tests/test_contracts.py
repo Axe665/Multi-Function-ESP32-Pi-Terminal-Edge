@@ -40,6 +40,12 @@ class ContractTest(unittest.TestCase):
         self.assertTrue(all(r.k >= 5 for r in rep.telemetry_daily))
         self.assertGreaterEqual(rep.privacy.k_min, 5)
 
+    def test_advice_example_validates(self):
+        item = load("advice.v1.json")["advice"][0]
+        msg = models.Advice.model_validate(item)
+        self.assertEqual(msg.risk, "watch")
+        self.assertEqual(msg.source, "local")
+
     def test_report_example_has_no_raw_fields(self):
         text = json.dumps(load("edge-report.v1.json"), ensure_ascii=False)
         for key in ("user_id", "subject", "values", "raw_samples"):
@@ -104,11 +110,74 @@ class IngestTest(unittest.TestCase):
         self.assertFalse(r.json()["accepted"])
         self.assertEqual(r.json()["code"], "suppressed")
 
+    def test_ingest_rate_limit(self):
+        from edge import roles
+
+        roles._hits.clear()
+        config.INGEST_RATE_PER_MIN = 2
+        try:
+            codes = [self.client.post("/api/v1/ingest/telemetry", json=self.payload).status_code
+                     for _ in range(3)]
+        finally:
+            config.INGEST_RATE_PER_MIN = 120
+            roles._hits.clear()
+        self.assertEqual(codes[:2], [200, 200])
+        self.assertEqual(codes[2], 429)
+
+    def test_disk_low_is_rejected(self):
+        config.MIN_FREE_MB = 10 ** 9
+        try:
+            r = self.client.post("/api/v1/ingest/telemetry", json=self.payload)
+        finally:
+            config.MIN_FREE_MB = 512
+        self.assertEqual(r.status_code, 507)
+        self.assertEqual(r.json()["detail"]["code"], "DISK_LOW")
+
     def test_schema_violation(self):
         broken = json.loads(json.dumps(self.payload))
         broken["schema"] = "orpi.telemetry.v2"
         r = self.client.post("/api/v1/ingest/telemetry", json=broken)
         self.assertEqual(r.status_code, 422)
+
+
+class ConsentApiTest(unittest.TestCase):
+    """文档 §8.5：群体分析关掉后，分析类端点只留在线/健康计数。"""
+
+    @classmethod
+    def setUpClass(cls):
+        store.init_db()
+        store.ensure_device("mt-consent")
+        cls.client = TestClient(app)
+
+    def test_group_off_gates_analysis_endpoints(self):
+        store.set_settings({"group_analysis": False})
+        try:
+            devs = self.client.get("/api/v1/devices").json()
+            self.assertTrue(all(d["metrics"] == [] for d in devs))
+            detail = self.client.get("/api/v1/devices/mt-consent").json()
+            self.assertTrue(detail["insufficient"])
+            self.assertEqual(detail["metrics"], [])
+            self.assertEqual(self.client.get("/api/v1/anomalies").json(), [])
+            self.assertEqual(self.client.get("/api/v1/advice").json(), [])
+            self.assertEqual(self.client.get("/api/v1/batches").json(), [])
+            from edge import catalog
+            catalog.upsert("mt-consent", "consent_metric", 1, label="指标", unit="u")
+            heat = self.client.get(
+                "/api/v1/heatmap?device=mt-consent&metric=consent_metric").json()
+            self.assertTrue(heat["insufficient"])
+            self.assertEqual(heat["cells"], [])
+            series = self.client.get(
+                "/api/v1/devices/mt-consent/series?metric=consent_metric").json()
+            self.assertTrue(series["insufficient"])
+            self.assertEqual(series["points"], [])
+        finally:
+            store.set_settings({"group_analysis": True})
+
+    def test_group_on_returns_normal_shape(self):
+        store.set_settings({"group_analysis": True})
+        detail = self.client.get("/api/v1/devices/mt-consent").json()
+        self.assertNotIn("insufficient", detail)
+        self.assertIsInstance(detail["metrics"], list)
 
 
 class HealthTest(unittest.TestCase):

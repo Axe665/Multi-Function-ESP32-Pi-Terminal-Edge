@@ -14,6 +14,11 @@ from . import (analysis, catalog, cloudpush, config, ingest, mdns, models,
 router = APIRouter(prefix="/api/v1")
 
 
+def _group_on() -> bool:
+    """文档 §8.5：群体分析关闭时只留在线/健康计数。"""
+    return bool(store.get_settings().get("group_analysis", False))
+
+
 # ---------------------------------------------------------------- 鉴权
 
 def _model_name(name: str) -> str:
@@ -78,7 +83,7 @@ def ingest_telemetry(body: dict[str, Any]) -> dict[str, Any]:
         detail: dict[str, Any] = {"code": e.code, "message": e.message}
         if e.fields:
             detail["fields" if e.code == "RAW_PAYLOAD_REJECTED" else "errors"] = e.fields
-        raise HTTPException(422, detail)
+        raise HTTPException(507 if e.code == "DISK_LOW" else 422, detail)
 
 
 @router.get("/discovery", dependencies=admin)
@@ -219,7 +224,7 @@ def metric_catalog() -> list[dict[str, Any]]:
 def devices() -> list[dict[str, Any]]:
     out = []
     for d in store.devices():
-        latest = store.latest_aggregates(d["device_id"])
+        latest = store.latest_aggregates(d["device_id"]) if _group_on() else []
         out.append({**d,
                     "module_list": _module_list(d["device_id"], d["modules"]),
                     "metrics": [{
@@ -238,6 +243,11 @@ def device_detail(device_id: str) -> dict[str, Any]:
     d = store.device(device_id)
     if not d:
         raise HTTPException(404, "设备不存在")
+    if not _group_on():
+        return {"device": d, "modules": _module_list(device_id, d["modules"]),
+                "metrics": [], "k_min": 0, "finding": None, "batches": [], "advice": [],
+                "insufficient": True,
+                "reason": "群体分析已关闭，只保留在线与健康计数"}
     latest = {a["metric"]: a for a in store.latest_aggregates(device_id)}
     metrics = []
     for m in catalog.for_device(device_id):
@@ -267,6 +277,8 @@ def device_series(device_id: str, metric: str,
         raise HTTPException(404, "设备不存在")
     if not catalog.get(device_id, metric):
         raise HTTPException(404, "这台设备没有这个指标")
+    if not _group_on():
+        return analysis.empty_trend(device_id, metric)
     if from_ and to and to > from_:
         return analysis.trend_range(device_id, metric, from_, to)
     return analysis.trend(device_id, metric, hours)
@@ -276,6 +288,11 @@ def device_series(device_id: str, metric: str,
 def heatmap(device: str, metric: str, days: int = Query(default=7, ge=1, le=30)) -> dict[str, Any]:
     if not catalog.get(device, metric):
         raise HTTPException(404, "这台设备没有这个指标")
+    if not _group_on():
+        return {"metric": metric, "label": catalog.label(device, metric),
+                "unit": catalog.unit(device, metric), "days": days,
+                "cells": [], "k_min": 0, "insufficient": True,
+                "reason": "群体分析已关闭，只保留在线与健康计数"}
     since = store.now_ms() - days * 86_400_000
     cells = store.heatmap(device, metric, since)
     return {
@@ -298,12 +315,16 @@ def wordcloud(days: int = Query(default=7, ge=1, le=30)) -> dict[str, Any]:
 @router.get("/advice", dependencies=admin)
 def advice(device: str | None = None, risk: str | None = None,
            limit: int = Query(default=30, ge=1, le=100)) -> list[dict[str, Any]]:
+    if not _group_on():
+        return []
     return store.advice(device, risk, limit)
 
 
 @router.get("/batches", dependencies=admin)
 def batches(device: str | None = None,
             limit: int = Query(default=20, ge=1, le=100)) -> list[dict[str, Any]]:
+    if not _group_on():
+        return []
     return store.batches(device, limit)
 
 
@@ -362,6 +383,8 @@ def unmute(body: dict[str, Any]) -> dict[str, Any]:
 
 @router.get("/anomalies", dependencies=admin)
 def anomalies(days: int = Query(default=7, ge=1, le=30)) -> list[dict[str, Any]]:
+    if not _group_on():
+        return []
     rows = store.anomalies(store.now_ms() - days * 86_400_000, 60)
     return [{**r, "label": catalog.label(r["device_id"], r["metric"])} for r in rows]
 
@@ -456,6 +479,7 @@ def health() -> dict[str, Any]:
         "scheduler": {"ticks": scheduler.scheduler.ticks,
                       "last": scheduler.scheduler.last},
         "db_cipher": "sqlcipher" if config.DB_KEY else "plain",
+        "disk_free_mb": ingest.disk_free_mb(),
         "ca_fp": security.ca_fingerprint(),
         "certs_expiring": len(security.expiring()),
         "text_scrubbed": c.get("text_scrubbed", 0),

@@ -79,7 +79,12 @@ const option = computed(() => {
 
   <p v-if="error" class="error">{{ error }}</p>
 
-  <section class="md-card" v-if="detail">
+  <section v-if="detail?.insufficient" class="md-card sample-off">
+    <b>样本不足</b>
+    <span class="md-muted">群体分析已关闭，只保留在线与健康计数；管理员开启后才显示趋势、指标与批次。</span>
+  </section>
+
+  <section class="md-card" v-if="detail && !detail.insufficient">
     <div class="section-head">
       <h2>趋势</h2>
       <select v-model="metric" class="md-field" aria-label="选择指标">
@@ -91,7 +96,7 @@ const option = computed(() => {
     <ChartBox :option="option" height="260px" />
   </section>
 
-  <section class="md-card meta" v-if="detail">
+  <section class="md-card meta" v-if="detail && !detail.insufficient">
     <h2>指标</h2>
     <div class="md-list">
       <div v-for="m in detail.metrics" :key="m.metric" class="md-list-row">

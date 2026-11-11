@@ -136,6 +136,7 @@ class Mdns:
         self.info: Any = None
         self.error: str | None = None
         self.cloud_url: str | None = None
+        self.cloud = _CloudListener()
 
     def start(self) -> bool:
         if Zeroconf is None or not config.MDNS_ENABLED:
@@ -153,7 +154,7 @@ class Mdns:
             )
             self.zc.register_service(self.info)
             # 文档 §5.8：云地址优先 mDNS 发现，静态地址兜底
-            ServiceBrowser(self.zc, CLOUD_TYPE, _CloudListener())
+            ServiceBrowser(self.zc, CLOUD_TYPE, self.cloud)
             self.error = None
             return True
         except Exception as e:  # noqa: BLE001 —— 组播被禁用时不能拖垮服务
@@ -179,16 +180,18 @@ class Mdns:
         return list(found.values())
 
     def discover_cloud(self, timeout: float = 1.0) -> str | None:
-        """同步找一次云；找不到返回 None（调用方继续用静态地址）。"""
+        """优先用后台已经发现的地址；没有就同步找一次。"""
+        if self.cloud.url:
+            self.cloud_url = self.cloud.url
+            return self.cloud_url
         if not self.zc:
             return None
-        listener = _CloudListener()
-        browser = ServiceBrowser(self.zc, CLOUD_TYPE, listener)
+        browser = ServiceBrowser(self.zc, CLOUD_TYPE, self.cloud)
         import time
         time.sleep(timeout)
         browser.cancel()
-        self.cloud_url = listener.url
-        return listener.url
+        self.cloud_url = self.cloud.url
+        return self.cloud_url
 
     def status(self) -> dict[str, Any]:
         return {
@@ -196,10 +199,10 @@ class Mdns:
             "service": EDGE_TYPE,
             "ca_fp": edge_txt()[b"ca_fp"].decode(),
             "error": self.error,
-            # 云侧：地址用静态的还是 mDNS 发现的，以及最近一次被拒的假云
+            # 云侧：地址优先 mDNS，静态兜底；以及最近一次被拒的假云
             "cloud": {
-                "url": config.CLOUD_URL or self.cloud_url,
-                "source": "static" if config.CLOUD_URL else ("mdns" if self.cloud_url else None),
+                "url": self.cloud_url or config.CLOUD_URL,
+                "source": "mdns" if self.cloud_url else ("static" if config.CLOUD_URL else None),
                 "pinned_fp": pinned_cloud_fp(),
                 "rejected": cloud_reject_reason(),
             },

@@ -209,7 +209,12 @@ const wordOption = computed(() => {
 
   <p v-if="error" class="error">读不到分析数据：{{ error }}</p>
 
-  <section class="md-panel">
+  <section v-if="wordsOff" class="md-panel sample-off">
+    <b>样本不足</b>
+    <span class="md-muted">群体分析已关闭，只保留在线与健康计数（当前 {{ devices.length }} 台设备）；热力图、异常与词云都不显示。</span>
+  </section>
+
+  <section class="md-panel" v-if="!wordsOff">
     <div class="section-head">
       <h2>时段热力图</h2>
       <span class="md-muted">
@@ -219,7 +224,7 @@ const wordOption = computed(() => {
     <ChartBox :option="heatOption" height="304px" />
   </section>
 
-  <div class="duo">
+  <div class="duo" v-if="!wordsOff">
     <section class="md-panel">
       <div class="section-head">
         <h2>异常窗口</h2>
@@ -250,7 +255,7 @@ const wordOption = computed(() => {
     </section>
   </div>
 
-  <section v-if="picked" class="md-panel drill">
+  <section v-if="picked && !wordsOff" class="md-panel drill">
     <div class="section-head">
       <h3>「{{ picked }}」相关的建议</h3>
       <button class="md-btn md-btn--text" @click="picked = ''">收起</button>

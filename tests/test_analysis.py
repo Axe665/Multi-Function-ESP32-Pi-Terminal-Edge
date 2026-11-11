@@ -115,6 +115,21 @@ class AnalysisTest(unittest.TestCase):
             store.set_settings({"personalization": True})
         self.assertTrue(analysis.build_report()["advice"])
 
+    def test_consent_switch_gates_group_analysis(self):
+        """文档 §8.5：关掉群体分析后只上报在线/健康计数。"""
+        store.set_settings({"group_analysis": False})
+        try:
+            report = analysis.build_report()
+            self.assertEqual(report["telemetry_daily"], [])
+            self.assertEqual(report["advice"], [])
+            self.assertEqual(report["word_freq"], [])
+            self.assertFalse(report["privacy"]["group_analysis"])
+            self.assertTrue(analysis.overview()["insufficient"])
+            models.EdgeReport.model_validate(report)
+        finally:
+            store.set_settings({"group_analysis": True})
+        self.assertTrue(analysis.build_report()["telemetry_daily"])
+
 
 if __name__ == "__main__":
     unittest.main()

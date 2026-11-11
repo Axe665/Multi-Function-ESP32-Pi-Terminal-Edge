@@ -55,6 +55,8 @@ class Advice(Strict):
     risk: RISK = "info"
     confidence: float = Field(ge=0, le=1, default=0.5)
     source: Literal["local", "cloud", "api"] = "local"
+    # advice 主题单独发时可以带产生时间；telemetry 里的 advice 不带
+    created_at: int | None = None
 
 
 class Privacy(Strict):
@@ -136,6 +138,8 @@ class ReportPrivacy(Strict):
     subjects_total: int = 0
     # 关掉个性化时置 false（文档 §8.5）；v1 内加可选字段，默认 true 保持兼容
     personalization: bool = True
+    # 关掉群体分析时置 false：只上报在线/健康计数，分析数据为空
+    group_analysis: bool = True
 
 
 class Period(Strict):

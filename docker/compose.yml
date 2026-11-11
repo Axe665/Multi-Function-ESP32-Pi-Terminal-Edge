@@ -47,7 +47,8 @@ services:
     restart: unless-stopped
     ports:
       - "8883:8883"
-      # 8884（内网管理）暂未启用：管理面走 HTTP，不需要第二个 listener
+      # 8884 仅内网管理：只绑宿主 loopback，仍走同一套 mTLS
+      - "127.0.0.1:8884:8884"
     volumes:
       - ./mosquitto:/mosquitto/config:ro
       - ./mosquitto/certs:/mosquitto/certs

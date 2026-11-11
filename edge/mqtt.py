@@ -9,6 +9,8 @@ import json
 import ssl
 from typing import Any
 
+from pydantic import ValidationError
+
 try:
     import paho.mqtt.client as mqtt
 except ImportError:  # pragma: no cover - 精简部署里可以不装
@@ -108,6 +110,10 @@ class MqttIngest:
         if kind != "telemetry":
             return
 
+        if not ingest.storage_ok():
+            self.rejected += 1
+            return
+
         try:
             result = ingest.process(body)
         except ingest.IngestError as e:
@@ -123,21 +129,22 @@ class MqttIngest:
 
     def _advice(self, device_id: str, body: dict[str, Any]) -> None:
         """设备侧就地生成的建议（文档 §5.2 的 advice 主题），与 telemetry 里的建议同一张表。"""
-        from . import privacy
+        from . import models, privacy
 
         items = body.get("advice") if isinstance(body.get("advice"), list) else [body]
         saved = 0
         for a in items:
-            text = str(a.get("text") or "").strip()
-            if not text:
+            try:
+                item = models.Advice.model_validate(a)
+            except ValidationError:
+                self.rejected += 1
                 continue
-            clean, hits = privacy.scrub(text)
+            clean, hits = privacy.scrub(item.text)
             if hits:
                 store.bump("text_scrubbed", sum(hits.values()))
-            saved += store.add_advice(device_id, clean, str(a.get("risk") or "info"),
-                                      float(a.get("confidence") or 0.5),
-                                      str(a.get("source") or "local"),
-                                      int(a.get("created_at") or store.now_ms()))
+            saved += store.add_advice(device_id, clean, item.risk,
+                                      item.confidence, item.source,
+                                      int(item.created_at or store.now_ms()))
         if saved:
             self.received += saved
 

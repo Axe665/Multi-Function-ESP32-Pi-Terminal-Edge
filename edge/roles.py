@@ -11,11 +11,13 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import os
+import time
 
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import api, config, mdns, mqtt, scheduler, sim, store
+from . import api, config, ingest, mdns, mqtt, scheduler, sim, store
 
 DESCRIPTION = """\
 边节点管理软件：接收端侧假名聚合、做趋势/热力/词云分析、按小时打包上报云端。
@@ -26,6 +28,24 @@ DESCRIPTION = """\
 
 # ingest 只留写入口与健康检查，其余都归 api 服务
 INGEST_PATHS = ("/api/v1/ingest", "/api/v1/health")
+
+# 写入口限速：按客户端 IP 每分钟计数（文档 §8.4）。进程内即可，
+# 边是单机单副本，不做分布式桶。
+_hits: dict[tuple[str, str], list[float]] = {}
+
+
+def _rate_limited(path: str, ip: str) -> bool:
+    limit = config.INGEST_RATE_PER_MIN
+    if limit <= 0:
+        return False
+    now = time.time()
+    key = (path, ip)
+    seen = [t for t in _hits.get(key, []) if now - t < 60]
+    if len(seen) >= limit:
+        return True
+    seen.append(now)
+    _hits[key] = seen
+    return False
 
 
 async def _ticker() -> None:
@@ -70,6 +90,23 @@ def create_app(role: str = "all") -> FastAPI:
     app = FastAPI(title=f"Modular Terminal Edge ({role})", version="1.0.0",
                   description=DESCRIPTION, docs_url="/api/docs", redoc_url=None,
                   lifespan=_lifespan_ingest() if role in ("ingest", "all") else None)
+
+    @app.middleware("http")
+    async def ingest_guard(request: Request, call_next):
+        if request.url.path.startswith("/api/v1/ingest") and request.method != "OPTIONS":
+            if not ingest.storage_ok():
+                return JSONResponse({"detail": {
+                    "code": "DISK_LOW",
+                    "message": f"边节点磁盘余量不足（{ingest.disk_free_mb()} MB），暂时拒收",
+                }}, status_code=507)
+            ip = request.client.host if request.client else "-"
+            if _rate_limited(request.url.path, ip):
+                return JSONResponse({"detail": {
+                    "code": "RATE_LIMITED",
+                    "message": f"写入口超过 {config.INGEST_RATE_PER_MIN} 次/分，稍后再试",
+                }}, status_code=429, headers={"Retry-After": "60"})
+        return await call_next(request)
+
     if role == "ingest":
         # 只留写入口：新版本 FastAPI 的 include_router 不再展开路由，先筛再挂
         subset = APIRouter()

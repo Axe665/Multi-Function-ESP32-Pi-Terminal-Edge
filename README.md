@@ -148,6 +148,7 @@ HTTPS  POST /ingest/telemetry                                   ← 兜底通道
 | 定时上云 | 每小时生成报表 + 到期队列投递 | `tests/test_scheduler.py` |
 | 退避与保留期 | 1/5/30 分钟、2 小时，7 天发不出去就丢弃；L2 聚合保留 180 天、L3 文本 365 天 | 同上 |
 | 隐私闸门 | 批次与每一行的 k<5 都拦、原始字段整份 422、min/max/subject 不出端 | `tests/test_contracts.py` |
+| 写入口防护 | 每 IP 120 次/分；磁盘余量低于 512 MB 回 507；MQTT 同样按水位拒收 | 同上 |
 | 证书校验 | 出站前用同一份契约再验一次 | `cloudpush.send` |
 | 指标目录 | 端报什么就登记什么，前端下拉框动态生成 | `edge/catalog.py` + `/api/v1/metrics` |
 | 磁盘加密 | 设 `EDGE_DB_KEY` 时强制走 SQLCipher，没驱动就拒绝启动 | `store._driver` |
@@ -170,7 +171,7 @@ HTTPS  POST /ingest/telemetry                                   ← 兜底通道
   [PASS] 别人的遥测被拒     [PASS] 读不到别人的遥测
   [PASS] 通配订阅读不到东西
   ```
-- **同意开关真的生效**（文档 §8.5）：关掉 `group_analysis` 后 `/overview` 只回在线/健康/匿名计数并标 `insufficient`，总览显示「样本不足」，`/wordcloud` 不回词；关掉 `personalization` 后报表里的 `advice` 与 `word_freq` 清空，建议只留本地。开关变更写 `consent.change` 审计（改动前后、操作者）。
+- **同意开关真的生效**（文档 §8.5）：关掉 `group_analysis` 后，总览只回在线/健康/匿名计数，设备详情、趋势、热力、异常、建议、批次、词云全部返回空并标 `insufficient`，上云报表也只带设备在线状态；关掉 `personalization` 后报表里的 `advice` 与 `word_freq` 清空，建议只留本地。开关变更写 `consent.change` 审计（改动前后、操作者）。
 - **假云进不来**：mDNS 只解决地址，不解决信任。边发现 `_orpi-cloud._tcp` 时拿 TXT 里的 `ca_fp` 和预置的
   `cloud-ca.crt` 比（同一口径：证书 DER 的 SHA256 前 16 hex），对不上就不换上报地址，写 `mdns.cloud_rejected`
   审计；`/api/v1/discovery` 的 `edge.cloud` 里能看到 `pinned_fp`、当前用的是静态还是 mDNS、最近被拒的原因。
@@ -236,6 +237,7 @@ HTTPS  POST /ingest/telemetry                                   ← 兜底通道
 | 契约 | 位置 | 谁拥有 |
 |---|---|---|
 | `orpi.telemetry.v1`（端→边） | `contracts/wire/telemetry.v1.json` | 端仓，本仓 vendor |
+| `orpi.advice.v1`（端→边） | `contracts/wire/advice.v1.json` | 端仓；端仓未发布前由本仓代为维护 |
 | `orpi.edge.report.v1`（边→云） | `contracts/wire/edge-report.v1.json` | **本仓** |
 
 `python3 scripts/sync_contracts.py --check` 校验 vendor 副本没漂移。
@@ -246,7 +248,7 @@ HTTPS  POST /ingest/telemetry                                   ← 兜底通道
 python3 -m unittest discover -s tests -t . -v
 ```
 
-**49 个用例**：契约与示例、摄取边界（原始字段 / 批次与行级 k<5 / 幂等）、分析口径
+**56 个用例**：契约与示例（含 advice）、摄取边界（原始字段 / 批次与行级 k<5 / 幂等 / 限速 / 磁盘水位）、分析口径
 （热力图不重复、报表样本数等于日聚合之和）、CA 与配对与 CRL、
 MQTT 真实报文往返、mDNS 只收 CA 指纹对得上的云、退避序列、发件箱 7 天过期、保留期清理、每日快照、
 SQLCipher 加密与错误口令拒绝、异常需连续窗口、告警合并与确认/静音/审计。
@@ -255,7 +257,7 @@ SQLCipher 加密与错误口令拒绝、异常需连续窗口、告警合并与�
 
 | 文档条目 | 要求 | 现状 |
 |---|---|---|
-| §5.1 部署形态 | Compose 四服务、每日快照 | ✅ 四个服务齐全；每日快照保留 7 份（`data/snapshots/`），路径可用 `EDGE_DATA_DIR` 指到 `/srv/...` |
+| §5.1 部署形态 | Compose 四服务、每日快照 | ✅ 四个服务齐全；8884 管理口只绑宿主 loopback、仍走 mTLS；每日快照保留 7 份（`data/snapshots/`），路径可用 `EDGE_DATA_DIR` 指到 `/srv/...` |
 | §5.2 接入与主题 | 5 个主题、QoS1、retained status、幂等 | ✅ 全部实现，ACK 回执带 batch_id |
 | §5.3 存储 | devices/telemetry/aggregates/advice/word_freq | ✅ 另加 catalog、certs、revoked、audit、outbox、alert_state |
 | §5.4 分析 | 趋势 / 热力 / 词云 / 异常 | ✅ 四项都在页面上，数字全部重算 |
@@ -263,7 +265,8 @@ SQLCipher 加密与错误口令拒绝、异常需连续窗口、告警合并与�
 | §5.6 前端 | Vue3 + Vite + ECharts，五页 | ✅ 五页齐全；总览首屏 6 块图（链路矩阵、每设备 24h 走势、7×24 异常、建议风险、24h 对比、指标覆盖）+ 右栏待处理与建议；接入/设置各 2 块图；分析页热力图按基线偏差着色 |
 | §5.7 设备接入 | CA、配对码、365 天证书、吊销、续期 | ✅ 前四项完成；吊销后重写 `certs/crl.pem`，消息层按 `device_id` 立即拒收；续期是**设备主动 renew + 30 天提醒**，边不代签 |
 | §5.8 边→云 | 每小时批量、幂等、退避 | ✅ 1/5/30 分钟、2 小时退避，7 天 |
-| §5.9 mDNS | 广播 + 发现，TXT 只放 ID/型号/版本/端口/CA 指纹 | ✅ 组播不可用时自动退化为已登记清单；发现云时比对广播里的 `ca_fp` 与预置 `cloud-ca`，对不上就当假云丢弃（§8.4） |
+| §5.9 mDNS | 广播 + 发现，TXT 只放 ID/型号/版本/端口/CA 指纹 | ✅ 云地址优先用 mDNS 发现的，静态地址兜底；只靠 mDNS 也能触发定时上云；发现云时比对 `ca_fp`，对不上就当假云丢弃（§8.4） |
+| §8.4 写入口防护 | 限速 + 单条/单批上限 + 磁盘水位 | ✅ 单批上限在 schema 里；每 IP 120 次/分；磁盘余量低于 512 MB 时 HTTP 回 507、MQTT 直接拒收 |
 | §5.10 无头与十用户 | 1 带屏 + 2 无头，10 用户轮换 | 部分：演示数据里有 1 带屏 + 2 无头；端仓还没有 headless 构建，也没有 10 用户轮换 |
 
 ## 仍然没做的
