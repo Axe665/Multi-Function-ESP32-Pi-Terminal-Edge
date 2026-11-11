@@ -262,7 +262,7 @@ SQLCipher 加密与错误口令拒绝、异常需连续窗口、告警合并与�
 | §5.1 部署形态 | Compose 四服务、每日快照 | ✅ 四个服务齐全；8884 管理口只绑宿主 loopback、仍走 mTLS；每日快照保留 7 份（`data/snapshots/`），路径可用 `EDGE_DATA_DIR` 指到 `/srv/...` |
 | §5.2 接入与主题 | 5 个主题、QoS1、retained status、幂等 | ✅ 全部实现，ACK 回执带 batch_id |
 | §5.3 存储 | devices/telemetry/aggregates/advice/word_freq | ✅ 另加 catalog、certs、revoked、audit、outbox、alert_state |
-| §5.4 分析 | 趋势 / 热力 / 词云 / 异常 | ✅ 四项都在页面上，数字全部重算 |
+| §5.4 分析 | 趋势 / 热力 / 词云 / 异常 | ✅ 四项都在页面上，数字全部重算；异常用 7 天同时段基线 z + 连续 2 窗口，未上 MAD |
 | §5.5 API | 10 个端点 | ✅ 全部实现，另有 metrics/certs/pair/renew 与告警四个端点 |
 | §5.6 前端 | Vue3 + Vite + ECharts，五页 | ✅ 五页齐全；总览首屏 6 块图（链路矩阵、每设备 24h 走势、7×24 异常、建议风险、24h 对比、指标覆盖）+ 右栏待处理与建议；接入/设置各 2 块图；分析页热力图按基线偏差着色 |
 | §5.7 设备接入 | CA、配对码、365 天证书、吊销、续期 | ✅ 前四项完成；吊销后重写 `certs/crl.pem`，消息层按 `device_id` 立即拒收；续期是**设备主动 renew + 30 天提醒**，边不代签 |
@@ -281,6 +281,7 @@ SQLCipher 加密与错误口令拒绝、异常需连续窗口、告警合并与�
 | 证书自动续期 | 刻意不做边代签：续期由终端提交 CSR 调 `/devices/{id}/renew`，边只负责 30 天提醒 |
 | 多边组网 | 单边单云，不支持一个边管多个云 |
 | 宿主 Avahi / chrony | 文档要求宿主机跑 Avahi 与 chrony；compose 里 mDNS 是容器侧，NTP 由宿主负责 |
+| 稳健 z（MAD） | 文档 §5.4 写「稳健 z + 连续窗口」；当前用 7 天同时段基线的 z，连续 2 个窗口 ≥2.5 才算异常，没有 MAD |
 
 演示数据由 `edge/sim.py` 生成（3 台设备 × 7 天 × 5 分钟窗口，`n_subjects` 取 6–10），
 **不是真实测量**；接真机前请清掉 `data/`。
