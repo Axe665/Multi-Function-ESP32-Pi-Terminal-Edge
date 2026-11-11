@@ -104,6 +104,20 @@ class CloudPinTest(unittest.TestCase):
         lis.add_service(Zc(Info("deadbeefdeadbeef")), mdns.CLOUD_TYPE, "x._orpi-cloud._tcp.local.")
         self.assertEqual(lis.url, "https://127.0.0.1:8443")
 
+    def test_status_reports_background_discovery(self):
+        """后台 listener 已经找到云时，不用等 discover_cloud 也能在 /discovery 看到。"""
+        old_found = mdns.mdns.cloud_url
+        old_url = mdns.mdns.cloud.url
+        mdns.mdns.cloud_url = None
+        mdns.mdns.cloud.url = "https://lan:8443"
+        try:
+            st = mdns.mdns.status()["cloud"]
+            self.assertEqual(st["source"], "mdns")
+            self.assertEqual(st["url"], "https://lan:8443")
+        finally:
+            mdns.mdns.cloud_url = old_found
+            mdns.mdns.cloud.url = old_url
+
 
 if __name__ == "__main__":
     unittest.main()

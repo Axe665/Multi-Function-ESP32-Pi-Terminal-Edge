@@ -201,8 +201,9 @@ class Mdns:
             "error": self.error,
             # 云侧：地址优先 mDNS，静态兜底；以及最近一次被拒的假云
             "cloud": {
-                "url": self.cloud_url or config.CLOUD_URL,
-                "source": "mdns" if self.cloud_url else ("static" if config.CLOUD_URL else None),
+                "url": self.cloud_url or self.cloud.url or config.CLOUD_URL,
+                "source": "mdns" if (self.cloud_url or self.cloud.url)
+                          else ("static" if config.CLOUD_URL else None),
                 "pinned_fp": pinned_cloud_fp(),
                 "rejected": cloud_reject_reason(),
             },
