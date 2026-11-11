@@ -151,7 +151,7 @@ HTTPS  POST /ingest/telemetry                                   ← 兜底通道
 | 写入口防护 | 每 IP 120 次/分；磁盘余量低于 512 MB 回 507；MQTT 同样按水位拒收 | 同上 |
 | 证书校验 | 出站前用同一份契约再验一次 | `cloudpush.send` |
 | 指标目录 | 端报什么就登记什么，前端下拉框动态生成 | `edge/catalog.py` + `/api/v1/metrics` |
-| 磁盘加密 | 新装自动生成 `data/edge.key` 并走 SQLCipher；已有明文库不自动迁移，启动时标 `db_plaintext_existing`，迁移用 `scripts/encrypt_db.py` | `store._ensure_key` |
+| 磁盘加密 | 新装自动生成 `data/edge.key` 并走 SQLCipher；已有明文库不自动迁移，启动时标 `db_plaintext_existing`，迁移用 `scripts/encrypt_db.py`；迁移后重启复用同一把 key | `store._ensure_key` |
 | 每日快照 | 每天一份 SQLite 快照，保留最近 7 份；加密库用 `VACUUM INTO` 生成同样加密的副本 | `store.snapshot` + `tests/test_scheduler.py` |
 | 演示模式 | 演示环境显式开启群体分析并写审计（时间/操作者/构建号）；侧栏底部标注「演示数据」 | `edge/sim.py`、`/api/v1/health` 的 `demo` |
 | 告警状态机 | 连续越界窗口合并成一条；确认、静音、取消静音都写审计 | `tests/test_alerts.py` |
@@ -161,7 +161,7 @@ HTTPS  POST /ingest/telemetry                                   ← 兜底通道
 ### 最近补的
 
 - **MAD 异常口径**：每个窗口拿过去 24 h 的 mean 算 median/MAD，稳健 z = 0.6745·(x−med)/MAD，阈值 3.5、连续 2 窗口；样本 <5 或 MAD=0 时回退基线 z（阈值 2.5）。页面仍显示基线 z，异常点额外带 `robust_z`。
-- **新装默认加密**：`EDGE_AUTO_ENCRYPT=1` 时自动生成 `data/edge.key`（0600）并走 SQLCipher；老明文库不自动迁移，`/health` 标 `db_plaintext_existing`，跑 `scripts/encrypt_db.py` 会先备份再校验行数；加密库的每日快照改用 `VACUUM INTO`。
+- **新装默认加密**：`EDGE_AUTO_ENCRYPT=1` 时自动生成 `data/edge.key`（0600）并走 SQLCipher；老明文库不自动迁移，`/health` 标 `db_plaintext_existing`，跑 `scripts/encrypt_db.py` 会先备份再校验行数；迁移后 key 与库同卷，重启直接复用；加密库的每日快照改用 `VACUUM INTO`。
 - **吊销 5 s 内断连**：`scripts/install_crl_reload.sh` 装 systemd user timer，`crl.pem` 内容一变就 `docker kill -s HUP mt-mqtt`，不用挂 docker socket。
 - **同意开关不再把报表卡死**：关掉个性化后 `privacy.personalization=false` 是契约里的可选字段，自己那层严格校验不会再把它拦下来；行级 `k<5` 也在边就拦掉，不会存下来再让云端整份 422；发件箱按文档 §5.8 只重试 7 天，过期记 `outbox_expired` 后丢弃。
 - **写入口默认要令牌**：首次启动生成 `data/ingest_token`（0600），HTTP `POST /ingest/*` 无令牌直接 401；`/health` 里 `ingest_token` 显示 `set`。
@@ -253,7 +253,7 @@ HTTPS  POST /ingest/telemetry                                   ← 兜底通道
 python3 -m unittest discover -s tests -t . -v
 ```
 
-**59 个用例**：契约与示例（含 advice / status / cmd）、摄取边界（原始字段 / 批次与行级 k<5 / 幂等 / 限速 / 磁盘水位）、分析口径
+**61 个用例**：契约与示例（含 advice / status / cmd）、摄取边界（原始字段 / 批次与行级 k<5 / 幂等 / 限速 / 磁盘水位）、分析口径
 （热力图不重复、报表样本数等于日聚合之和）、CA 与配对与 CRL、
 MQTT 真实报文往返、mDNS 只收 CA 指纹对得上的云、退避序列、发件箱 7 天过期、保留期清理、每日快照、
 SQLCipher 加密与错误口令拒绝、异常需连续窗口、告警合并与确认/静音/审计。
@@ -282,7 +282,7 @@ SQLCipher 加密与错误口令拒绝、异常需连续窗口、告警合并与�
 | 性能基线 | 本机 `/overview` p95 338 ms、`pg_dump` 0.3 s；目标机 CPU 与 72 h 未测 |
 | 证书自动续期 | 刻意不做边代签：续期由终端提交 CSR 调 `/devices/{id}/renew`，边只负责 30 天提醒 |
 | 多边组网 | 单边单云，不支持一个边管多个云 |
-| 宿主 Avahi / chrony | 文档要求宿主机跑 Avahi 与 chrony；compose 里 mDNS 是容器侧，NTP 由宿主负责 |
+| 宿主 Avahi / chrony | 已加 `scripts/verify_host.sh`；本机 avahi-daemon + chrony 都 active，目标机还没跑过 |
 
 
 演示数据由 `edge/sim.py` 生成（3 台设备 × 7 天 × 5 分钟窗口，`n_subjects` 取 6–10），
