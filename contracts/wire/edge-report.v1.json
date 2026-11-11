@@ -94,7 +94,8 @@
         "suppressed_buckets": { "type": "integer", "minimum": 0 },
         "raw_rejected": { "type": "integer", "minimum": 0 },
         "subjects_total": { "type": "integer", "minimum": 0 },
-        "personalization": { "type": "boolean", "default": true }
+        "personalization": { "type": "boolean", "default": true },
+        "group_analysis": { "type": "boolean", "default": true }
       }
     }
   }

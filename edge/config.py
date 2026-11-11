@@ -67,6 +67,9 @@ INGEST_TOKEN = _ingest_token()
 ADMIN_TOKEN = _env("EDGE_ADMIN_TOKEN")
 
 K_MIN = int(_env("EDGE_K_MIN", "5"))
+# 文档 §8.4：写入口限速 + 磁盘水位（0 表示关闭）
+INGEST_RATE_PER_MIN = int(_env("EDGE_INGEST_RATE", "120"))
+MIN_FREE_MB = int(_env("EDGE_MIN_FREE_MB", "512"))
 
 # ---- MQTT（端 → 边 的主通道）----
 MQTT_HOST = _env("EDGE_MQTT_HOST")

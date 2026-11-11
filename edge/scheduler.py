@@ -57,7 +57,7 @@ def tick(now: int | None = None) -> dict[str, Any]:
     settings = store.get_settings()
     out: dict[str, Any] = {"report": None, "drain": None, "pruned": None}
 
-    if config.CLOUD_URL and settings.get("cloud_enabled", True):
+    if cloudpush.configured() and settings.get("cloud_enabled", True):
         with store.connect() as conn:
             last = conn.execute("SELECT MAX(created_at) AS m FROM outbox").fetchone()["m"] or 0
         if now - last >= config.PUSH_INTERVAL_MS:

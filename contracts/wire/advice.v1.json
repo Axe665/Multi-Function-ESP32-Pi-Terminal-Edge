@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "orpi.advice.v1",
+  "title": "orpi.advice.v1",
+  "description": "orpi/v1/{deviceId}/advice 的载荷。端在本地生成的建议，可单条也可包在 advice 数组里。",
+  "anyOf": [
+    { "$ref": "#/$defs/item" },
+    {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["advice"],
+      "properties": {
+        "advice": {
+          "type": "array",
+          "maxItems": 16,
+          "items": { "$ref": "#/$defs/item" }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text"],
+      "properties": {
+        "text": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "risk": { "enum": ["info", "watch", "alert"], "default": "info" },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.5 },
+        "source": { "enum": ["local", "cloud", "api"], "default": "local" },
+        "created_at": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

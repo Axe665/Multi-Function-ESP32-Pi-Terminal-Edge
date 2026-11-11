@@ -8,16 +8,35 @@ import httpx
 from . import config, models, store
 
 
+def _candidates() -> list[str]:
+    """文档 §5.8/§5.9：mDNS 发现的云优先，静态地址兜底。"""
+    from . import mdns
+
+    found = mdns.mdns.discover_cloud()
+    out = [found] if found else []
+    if config.CLOUD_URL and config.CLOUD_URL not in out:
+        out.append(config.CLOUD_URL)
+    return out
+
+
+def configured() -> bool:
+    """定时任务用：静态地址或已经发现的 mDNS 地址有一个就算配好。"""
+    from . import mdns
+
+    return bool(config.CLOUD_URL or mdns.mdns.cloud_url or mdns.mdns.cloud.url)
+
+
 def send(payload: dict) -> dict:
     """返回 {ok, status, detail}。失败不抛异常，交给发件箱退避。"""
-    url = config.CLOUD_URL
-    if not url:
-        from . import mdns
-        url = mdns.mdns.discover_cloud() or ""
-    if not url:
+    candidates = _candidates()
+    if not candidates:
         return {"ok": False, "status": "not_configured",
                 "detail": "没有配置 EDGE_CLOUD_URL，mDNS 也没发现 _orpi-cloud._tcp，报表留在发件箱"}
-    models.EdgeReport.model_validate(payload)  # 出站前用同一份契约再验一次
+
+    try:
+        models.EdgeReport.model_validate(payload)  # 出站前用同一份契约再验一次
+    except Exception as e:  # noqa: BLE001 —— 坏报文留在发件箱里，别把调度线程带崩
+        return {"ok": False, "status": "invalid_payload", "detail": str(e)[:200]}
 
     headers = {"Authorization": f"Bearer {config.CLOUD_TOKEN}"} if config.CLOUD_TOKEN else {}
     # trust_env=False：边→云是内网调用，不能踩到宿主机上的 HTTP_PROXY
@@ -29,17 +48,24 @@ def send(payload: dict) -> dict:
         ctx.load_cert_chain(config.CLOUD_CERT, config.CLOUD_KEY)
         client_kwargs["verify"] = ctx
 
-    try:
-        with httpx.Client(**client_kwargs) as c:
-            r = c.post(f"{url}/api/v1/ingest/edge-report",
-                       json=payload, headers=headers)
-    except (httpx.HTTPError, ValueError) as e:
-        return {"ok": False, "status": "unreachable", "detail": str(e)[:200]}
-
-    if r.status_code >= 400:
-        return {"ok": False, "status": f"http_{r.status_code}", "detail": r.text[:200]}
-    return {"ok": True, "status": "ok", "detail": r.text[:200],
-            "bytes": len(r.content)}
+    last: dict = {"ok": False, "status": "unreachable", "detail": "没有可用的云地址"}
+    for url in candidates:
+        try:
+            with httpx.Client(**client_kwargs) as c:
+                r = c.post(f"{url}/api/v1/ingest/edge-report",
+                           json=payload, headers=headers)
+        except (httpx.HTTPError, ValueError) as e:
+            last = {"ok": False, "status": "unreachable", "detail": str(e)[:200]}
+            continue
+        if r.status_code >= 400:
+            last = {"ok": False, "status": f"http_{r.status_code}", "detail": r.text[:200]}
+            # 4xx 是载荷/令牌问题，换地址也没用，别再试
+            if 400 <= r.status_code < 500:
+                break
+            continue
+        return {"ok": True, "status": "ok", "detail": r.text[:200],
+                "bytes": len(r.content), "url": url}
+    return last
 
 
 def push_now() -> dict:

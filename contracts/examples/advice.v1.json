@@ -1,0 +1,11 @@
+{
+  "advice": [
+    {
+      "text": "近 7 天收缩压缓慢上升，建议复测并关注晨间读数",
+      "risk": "watch",
+      "confidence": 0.72,
+      "source": "local",
+      "created_at": 1762200000000
+    }
+  ]
+}

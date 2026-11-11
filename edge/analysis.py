@@ -119,6 +119,18 @@ def trend(device_id: str, metric: str, hours: int = 24) -> dict[str, Any]:
     }
 
 
+def empty_trend(device_id: str, metric: str) -> dict[str, Any]:
+    """群体分析关闭时给前端一个空趋势，形状和 trend() 一致。"""
+    info = catalog.get(device_id, metric) or {}
+    return {"metric": metric, "points": [], "baseline": 0.0, "delta": 0.0,
+            "slope": 0.0, "current": 0.0, "k": 0,
+            "unit": info.get("unit", ""), "label": info.get("label") or metric,
+            "decimals": info.get("decimals", 1),
+            "module_id": info.get("module_id", 0),
+            "anomalies": [], "insufficient": True,
+            "reason": "群体分析已关闭，只保留在线与健康计数"}
+
+
 def trend_range(device_id: str, metric: str, start_ms: int, end_ms: int) -> dict[str, Any]:
     """文档 §5.5 的 from/to 形式：按跨度自动选步长。"""
     span = max(1, end_ms - start_ms)
@@ -178,6 +190,7 @@ def build_report() -> dict[str, Any]:
     words = [dict(r) for r in rows][:512]
 
     c = store.counters()
+    settings = store.get_settings()
     payload = {
         "schema": "orpi.edge.report.v1",
         "report_id": "",
@@ -204,15 +217,21 @@ def build_report() -> dict[str, Any]:
             "raw_rejected": c.get("raw_rejected", 0),
             "subjects_total": sum(max([a["n_subjects"] for a in daily if a["device_id"] == d["device_id"]] or [0])
                                   for d in devices),
+            "personalization": bool(settings.get("personalization", True)),
+            "group_analysis": bool(settings.get("group_analysis", False)),
         },
     }
     seed = f"{config.EDGE_ID}|{payload['period']['from']}|{payload['period']['to']}"
     payload["report_id"] = hashlib.sha256(seed.encode()).hexdigest()[:16]
-    if not store.get_settings().get("personalization", True):
+    if not settings.get("personalization", True):
         # 文档 §8.5：关掉个性化后建议只留本地，不上云
         payload["advice"] = []
         payload["word_freq"] = []
-        payload["privacy"]["personalization"] = False
+    if not settings.get("group_analysis", False):
+        # 文档 §8.5：群体分析关掉后只上报在线/健康计数，分析数据不出端
+        payload["telemetry_daily"] = []
+        payload["advice"] = []
+        payload["word_freq"] = []
     assert payload["report_id"], "report_id 不能为空"
     return payload
 

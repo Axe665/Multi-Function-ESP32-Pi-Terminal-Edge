@@ -54,6 +54,38 @@ class BackoffTest(unittest.TestCase):
             left = conn.execute("SELECT COUNT(*) FROM outbox WHERE report_id='r-old'").fetchone()[0]
         self.assertEqual(left, 0)
 
+    def test_mdns_candidate_precedes_static(self):
+        from edge import cloudpush, mdns
+
+        old_static = config.CLOUD_URL
+        old_url = mdns.mdns.cloud.url
+        old_found = mdns.mdns.cloud_url
+        config.CLOUD_URL = "https://static:8443"
+        mdns.mdns.cloud.url = "https://lan:8443"
+        try:
+            self.assertEqual(cloudpush._candidates(),
+                             ["https://lan:8443", "https://static:8443"])
+            self.assertTrue(cloudpush.configured())
+        finally:
+            config.CLOUD_URL = old_static
+            mdns.mdns.cloud.url = old_url
+            mdns.mdns.cloud_url = old_found
+
+    def test_configured_with_only_mdns(self):
+        from edge import cloudpush, mdns
+
+        old_static = config.CLOUD_URL
+        old_url = mdns.mdns.cloud.url
+        old_found = mdns.mdns.cloud_url
+        config.CLOUD_URL = ""
+        mdns.mdns.cloud.url = "https://lan:8443"
+        try:
+            self.assertTrue(cloudpush.configured())
+        finally:
+            config.CLOUD_URL = old_static
+            mdns.mdns.cloud.url = old_url
+            mdns.mdns.cloud_url = old_found
+
 
 class SnapshotTest(unittest.TestCase):
     def test_snapshot_written_once_per_day(self):
