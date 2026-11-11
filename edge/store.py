@@ -2,9 +2,12 @@
 from __future__ import annotations
 
 import json
+import os
+import secrets
 import sqlite3
 import time
 from contextlib import contextmanager
+from statistics import median
 from typing import Any, Iterable
 
 from . import config
@@ -153,22 +156,68 @@ def now_ms() -> int:
     return int(time.time() * 1000)
 
 
+def _sqlcipher():
+    try:
+        from sqlcipher3 import dbapi2 as cipher  # type: ignore
+    except ImportError:
+        return None
+    return cipher
+
+
+_key_checked = False
+
+
+def _ensure_key() -> None:
+    """新装默认加密：没有 EDGE_DB_KEY 时自动生成 data/edge.key。
+
+    老明文库不自动迁移（避免启动时重写），只标记 DB_PLAINTEXT_EXISTING，
+    由运维跑 scripts/encrypt_db.py。没有 sqlcipher3 驱动时保持明文。
+    """
+    global _key_checked
+    if _key_checked:
+        return
+    _key_checked = True
+    if config.DB_KEY or not config.AUTO_ENCRYPT or _sqlcipher() is None:
+        return
+    if config.DB_PATH.exists() and config.DB_PATH.stat().st_size > 0:
+        config.DB_PLAINTEXT_EXISTING = True
+        return
+
+    key_file = config.DATA_DIR / "edge.key"
+    try:
+        config.DATA_DIR.mkdir(parents=True, exist_ok=True)
+        if not key_file.exists():
+            try:
+                fd = os.open(key_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            except FileExistsError:
+                pass
+            else:
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    f.write(secrets.token_hex(32))
+        key = key_file.read_text(encoding="utf-8").strip()
+    except OSError:
+        return
+    if key:
+        config.DB_KEY = key
+        config.DB_KEY_SOURCE = "file"
+
+
 def _driver():
     """设了 EDGE_DB_KEY 就必须用 SQLCipher；没有驱动直接失败，不写明文。"""
     if not config.DB_KEY:
         return sqlite3
-    try:
-        from sqlcipher3 import dbapi2 as cipher  # type: ignore
-    except ImportError as e:  # pragma: no cover - 取决于部署环境
+    cipher = _sqlcipher()
+    if cipher is None:  # pragma: no cover - 取决于部署环境
         raise RuntimeError(
             "EDGE_DB_KEY 已设置但缺少 sqlcipher3 驱动；"
-            "请安装 libsqlcipher-dev + pysqlcipher3，或取消该变量") from e
+            "请安装 libsqlcipher-dev + pysqlcipher3，或取消该变量")
     return cipher
 
 
 @contextmanager
 def connect():
     config.ensure_dirs()
+    _ensure_key()
     driver = _driver()
     conn = driver.connect(str(config.DB_PATH), timeout=10)
     if config.DB_KEY:
@@ -297,19 +346,24 @@ def insert_batch(device_id: str, batch_id: str, ts_from: int, ts_to: int,
 
 
 def snapshot(keep: int = 7) -> str | None:
-    """每日一次 SQLite 快照，保留最近 keep 份（文档 §5.1）。"""
+    """每日一次 SQLite 快照，保留最近 keep 份（文档 §5.1）。
+
+    SQLCipher 库用 VACUUM INTO 生成同样加密的副本；明文库仍走 backup。
+    """
     import datetime as dt
     import sqlite3
 
-    if config.DB_KEY:  # SQLCipher 库不能用标准 sqlite3 备份，交给运维
-        return None
     out = config.DATA_DIR / "snapshots"
     out.mkdir(parents=True, exist_ok=True)
     name = out / f"edge-{dt.date.today():%Y%m%d}.db"
     if name.exists():
         return name.name
-    with connect() as src, sqlite3.connect(name) as dst:
-        src.backup(dst)
+    if config.DB_KEY:
+        with connect() as src:
+            src.execute("VACUUM INTO ?", (str(name),))
+    else:
+        with connect() as src, sqlite3.connect(name) as dst:
+            src.backup(dst)
     for old in sorted(out.glob("edge-*.db"))[:-keep]:
         old.unlink(missing_ok=True)
     return name.name
@@ -469,22 +523,55 @@ def advice(device_id: str | None = None, risk: str | None = None,
 
 
 def anomalies(since_ms: int, limit: int = 40) -> list[dict[str, Any]]:
-    """文档 §5.4：稳健 z + 连续窗口。只有相邻两个窗口都越界才算异常。"""
+    """文档 §5.4：稳健 z（MAD）+ 连续窗口。
+
+    每个窗口拿过去 24 h 的 mean 算 median / MAD，稳健 z = 0.6745*(x-med)/MAD；
+    样本 <5 或 MAD=0 时退回端上报的基线 z。只有相邻两个窗口都越界才算异常。
+    """
+    from collections import defaultdict
+
+    history_since = since_ms - 24 * 3_600_000
     with connect() as conn:
-        rows = conn.execute(
+        rows = [dict(r) for r in conn.execute(
             """SELECT device_id, metric, ts_from, z, mean FROM aggregates
                WHERE ts_from>=? ORDER BY device_id, metric, ts_from""",
-            (since_ms,)).fetchall()
-    out: list[dict[str, Any]] = []
-    prev: dict[tuple[str, str], Any] = {}
+            (history_since,)).fetchall()]
+
+    by_key: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     for r in rows:
-        key = (r["device_id"], r["metric"])
-        p = prev.get(key)
-        if abs(r["z"]) >= 2.5 and p is not None and abs(p["z"]) >= 2.5 \
-                and r["ts_from"] - p["ts_from"] <= 2 * config.WINDOW_MS:
-            out.append({**dict(r), "windows": 2,
-                        "ts_to": r["ts_from"] + config.WINDOW_MS})
-        prev[key] = r
+        by_key[(r["device_id"], r["metric"])].append(r)
+
+    out: list[dict[str, Any]] = []
+    for xs in by_key.values():
+        for i, r in enumerate(xs):
+            window = [p["mean"] for p in xs[max(0, i - 288):i]
+                      if p["ts_from"] >= r["ts_from"] - 24 * 3_600_000]
+            if len(window) >= 5:
+                med = median(window)
+                mad = median([abs(x - med) for x in window])
+                if mad > 0:
+                    r["robust_z"] = round(0.6745 * (r["mean"] - med) / mad, 3)
+                    r["robust"] = True
+                    r["gate"] = 3.5
+                else:
+                    r["robust_z"] = r["z"]
+                    r["robust"] = False
+                    r["gate"] = 2.5
+            else:
+                r["robust_z"] = r["z"]
+                r["robust"] = False
+                r["gate"] = 2.5
+
+        prev: dict[str, Any] | None = None
+        for r in xs:
+            if (abs(r["robust_z"]) >= r["gate"] and prev is not None
+                    and abs(prev["robust_z"]) >= prev["gate"]
+                    and r["ts_from"] - prev["ts_from"] <= 2 * config.WINDOW_MS):
+                out.append({**r, "windows": 2,
+                            "ts_to": r["ts_from"] + config.WINDOW_MS})
+            prev = r
+
+    out = [r for r in out if r["ts_from"] >= since_ms]
     out.sort(key=lambda x: -x["ts_from"])
     return out[:limit]
 
@@ -521,8 +608,9 @@ def _alert_states() -> dict[tuple[str, str, int], dict[str, Any]]:
 def alert_feed(since_ms: int, stale_ms: int, at: int | None = None) -> list[dict[str, Any]]:
     """一条告警 = 一段连续越界的窗口，而不是每个窗口一条。
 
-    注意：单窗口 |z|≥2。严重：段内有两个相隔不超过 2 个窗口的 |z|≥2.5，
-    与 anomalies() 的判定一致。已恢复在读取时按后续窗口算，不落库。
+    注意：单窗口 |z|≥2。严重：段内有两个相隔不超过 2 个窗口的 |z|≥2.5。
+    这里用端上报的基线 z；MAD 稳健 z 只用于异常页的时间轴（anomalies）。
+    已恢复在读取时按后续窗口算，不落库。
     """
     now = at if at is not None else now_ms()
     with connect() as conn:

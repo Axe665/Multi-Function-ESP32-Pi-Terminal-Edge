@@ -151,8 +151,8 @@ HTTPS  POST /ingest/telemetry                                   ← 兜底通道
 | 写入口防护 | 每 IP 120 次/分；磁盘余量低于 512 MB 回 507；MQTT 同样按水位拒收 | 同上 |
 | 证书校验 | 出站前用同一份契约再验一次 | `cloudpush.send` |
 | 指标目录 | 端报什么就登记什么，前端下拉框动态生成 | `edge/catalog.py` + `/api/v1/metrics` |
-| 磁盘加密 | 设 `EDGE_DB_KEY` 时强制走 SQLCipher，没驱动就拒绝启动 | `store._driver` |
-| 每日快照 | 每天一份 SQLite 快照，保留最近 7 份；设了 `EDGE_DB_KEY` 时交给运维脚本 | `store.snapshot` + `tests/test_scheduler.py` |
+| 磁盘加密 | 新装自动生成 `data/edge.key` 并走 SQLCipher；已有明文库不自动迁移，启动时标 `db_plaintext_existing`，迁移用 `scripts/encrypt_db.py` | `store._ensure_key` |
+| 每日快照 | 每天一份 SQLite 快照，保留最近 7 份；加密库用 `VACUUM INTO` 生成同样加密的副本 | `store.snapshot` + `tests/test_scheduler.py` |
 | 演示模式 | 演示环境显式开启群体分析并写审计（时间/操作者/构建号）；侧栏底部标注「演示数据」 | `edge/sim.py`、`/api/v1/health` 的 `demo` |
 | 告警状态机 | 连续越界窗口合并成一条；确认、静音、取消静音都写审计 | `tests/test_alerts.py` |
 | 词频 TF-IDF | jieba 分词 + 停用词，按天重算，查询时用 TF-IDF 加权（跨天高频词降权） | `/api/v1/wordcloud`，页面点词下钻到建议原文 |
@@ -160,6 +160,9 @@ HTTPS  POST /ingest/telemetry                                   ← 兜底通道
 
 ### 最近补的
 
+- **MAD 异常口径**：每个窗口拿过去 24 h 的 mean 算 median/MAD，稳健 z = 0.6745·(x−med)/MAD，阈值 3.5、连续 2 窗口；样本 <5 或 MAD=0 时回退基线 z（阈值 2.5）。页面仍显示基线 z，异常点额外带 `robust_z`。
+- **新装默认加密**：`EDGE_AUTO_ENCRYPT=1` 时自动生成 `data/edge.key`（0600）并走 SQLCipher；老明文库不自动迁移，`/health` 标 `db_plaintext_existing`，跑 `scripts/encrypt_db.py` 会先备份再校验行数；加密库的每日快照改用 `VACUUM INTO`。
+- **吊销 5 s 内断连**：`scripts/install_crl_reload.sh` 装 systemd user timer，`crl.pem` 内容一变就 `docker kill -s HUP mt-mqtt`，不用挂 docker socket。
 - **同意开关不再把报表卡死**：关掉个性化后 `privacy.personalization=false` 是契约里的可选字段，自己那层严格校验不会再把它拦下来；行级 `k<5` 也在边就拦掉，不会存下来再让云端整份 422；发件箱按文档 §5.8 只重试 7 天，过期记 `outbox_expired` 后丢弃。
 - **写入口默认要令牌**：首次启动生成 `data/ingest_token`（0600），HTTP `POST /ingest/*` 无令牌直接 401；`/health` 里 `ingest_token` 显示 `set`。
 - **吊销即时生效**：`/devices/{id}/revoke` 重写 `certs/crl.pem`，mosquitto 的 `crlfile` 读它；消息层再按 `device_id` 拒收，不用等 broker 重载。
@@ -250,7 +253,7 @@ HTTPS  POST /ingest/telemetry                                   ← 兜底通道
 python3 -m unittest discover -s tests -t . -v
 ```
 
-**58 个用例**：契约与示例（含 advice / status / cmd）、摄取边界（原始字段 / 批次与行级 k<5 / 幂等 / 限速 / 磁盘水位）、分析口径
+**59 个用例**：契约与示例（含 advice / status / cmd）、摄取边界（原始字段 / 批次与行级 k<5 / 幂等 / 限速 / 磁盘水位）、分析口径
 （热力图不重复、报表样本数等于日聚合之和）、CA 与配对与 CRL、
 MQTT 真实报文往返、mDNS 只收 CA 指纹对得上的云、退避序列、发件箱 7 天过期、保留期清理、每日快照、
 SQLCipher 加密与错误口令拒绝、异常需连续窗口、告警合并与确认/静音/审计。
@@ -265,7 +268,7 @@ SQLCipher 加密与错误口令拒绝、异常需连续窗口、告警合并与�
 | §5.4 分析 | 趋势 / 热力 / 词云 / 异常 | ✅ 四项都在页面上，数字全部重算；异常用 7 天同时段基线 z + 连续 2 窗口，未上 MAD |
 | §5.5 API | 10 个端点 | ✅ 全部实现，另有 metrics/certs/pair/renew 与告警四个端点 |
 | §5.6 前端 | Vue3 + Vite + ECharts，五页 | ✅ 五页齐全；总览首屏 6 块图（链路矩阵、每设备 24h 走势、7×24 异常、建议风险、24h 对比、指标覆盖）+ 右栏待处理与建议；接入/设置各 2 块图；分析页热力图按基线偏差着色 |
-| §5.7 设备接入 | CA、配对码、365 天证书、吊销、续期 | ✅ 前四项完成；吊销后重写 `certs/crl.pem`，消息层按 `device_id` 立即拒收；续期是**设备主动 renew + 30 天提醒**，边不代签 |
+| §5.7 设备接入 | CA、配对码、365 天证书、吊销、续期 | ✅ CA/配对/365 天证书/吊销完成；吊销后重写 `certs/crl.pem`，消息层立即拒收，宿主 systemd timer 5 s 内让 broker 重读 CRL；续期是**设备主动 renew + 30 天提醒**，边不代签 |
 | §5.8 边→云 | 每小时批量、幂等、退避 | ✅ 1/5/30 分钟、2 小时退避，7 天 |
 | §5.9 mDNS | 广播 + 发现，TXT 只放 ID/型号/版本/端口/CA 指纹 | ✅ 云地址优先用 mDNS 发现的，静态地址兜底；只靠 mDNS 也能触发定时上云；发现云时比对 `ca_fp`，对不上就当假云丢弃（§8.4） |
 | §8.4 写入口防护 | 限速 + 单条/单批上限 + 磁盘水位 | ✅ 单批上限在 schema 里；每 IP 120 次/分；磁盘余量低于 512 MB 时 HTTP 回 507、MQTT 直接拒收 |
@@ -275,13 +278,12 @@ SQLCipher 加密与错误口令拒绝、异常需连续窗口、告警合并与�
 
 | 方案里的东西 | 现状 |
 |---|---|
-| SQLCipher 默认开启 | 驱动已打进镜像（`sqlcipher3-binary`），设 `EDGE_DB_KEY` 即加密，测试验证了密文文件头与错误口令拒绝；不设时仍走明文，避免老库打不开 |
-| broker 重载 CRL | `crlfile` 已挂上，吊销时重写；mosquitto 要等重载/重启才断连，消息层已即时拒收 |
+| 老库迁移 | 新装默认加密；升级前就是明文的库不自动迁移（避免启动时重写），跑 `scripts/encrypt_db.py`，会先备份成 `.plain-*.bak` 并校验行数 |
 | 性能基线 | 本机 `/overview` p95 338 ms、`pg_dump` 0.3 s；目标机 CPU 与 72 h 未测 |
 | 证书自动续期 | 刻意不做边代签：续期由终端提交 CSR 调 `/devices/{id}/renew`，边只负责 30 天提醒 |
 | 多边组网 | 单边单云，不支持一个边管多个云 |
 | 宿主 Avahi / chrony | 文档要求宿主机跑 Avahi 与 chrony；compose 里 mDNS 是容器侧，NTP 由宿主负责 |
-| 稳健 z（MAD） | 文档 §5.4 写「稳健 z + 连续窗口」；当前用 7 天同时段基线的 z，连续 2 个窗口 ≥2.5 才算异常，没有 MAD |
+
 
 演示数据由 `edge/sim.py` 生成（3 台设备 × 7 天 × 5 分钟窗口，`n_subjects` 取 6–10），
 **不是真实测量**；接真机前请清掉 `data/`。
@@ -318,7 +320,7 @@ web/           Vue 3 + Vite 前端：M3 token、ECharts、数据流缩略图
 contracts/     wire 契约、示例、OpenAPI、vendor 副本
 tests/         契约 / 摄取 / 分析 / 安全 / MQTT / 调度 / 告警
 docker/        compose、mosquitto（TLS + ACL）
-scripts/       vendor 契约同步、broker 证书
+scripts/       vendor 契约同步、broker 证书、CRL 重载、明文库迁移
 docs/          截图
 data/          运行期数据（演示库、快照），不进仓库
 ```

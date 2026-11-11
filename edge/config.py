@@ -91,8 +91,12 @@ MDNS_ENABLED = _env("EDGE_MDNS", "1") != "0"
 PUSH_INTERVAL_MS = int(_env("EDGE_PUSH_INTERVAL_MS", str(60 * 60 * 1000)))
 JANITOR_INTERVAL_MS = int(_env("EDGE_JANITOR_INTERVAL_MS", str(6 * 60 * 60 * 1000)))
 
-# 设了就要求 SQLCipher；没有驱动就拒绝启动，不静默降级成明文
+# 设了就要求 SQLCipher；没有驱动就拒绝启动，不静默降级成明文。
+# 新装默认自动生成 data/edge.key（EDGE_AUTO_ENCRYPT=0 可关），老明文库保持原样。
 DB_KEY = _env("EDGE_DB_KEY")
+DB_KEY_SOURCE = "env" if DB_KEY else ""
+AUTO_ENCRYPT = _env("EDGE_AUTO_ENCRYPT", "1") != "0"
+DB_PLAINTEXT_EXISTING = False
 WINDOW_MS = int(_env("EDGE_WINDOW_MS", str(5 * 60 * 1000)))
 # L2 聚合保留 180 天，L3 文本保留 365 天（文档 §8.1）
 KEEP_DAYS = int(_env("EDGE_KEEP_DAYS", "180"))
