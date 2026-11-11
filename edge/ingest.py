@@ -52,8 +52,11 @@ def process(body: dict[str, Any]) -> dict[str, Any]:
         raise IngestError("SCHEMA_INVALID", "载荷不符合 orpi.telemetry.v1",
                           [str(x.get("loc")) for x in e.errors(include_context=False)[:5]])
 
-    if msg.privacy.k < config.K_MIN:
-        store.bump("suppressed_buckets")
+    # 批次级的 privacy.k 和每一行的 k 都要查：云端按行拒收（整份 422），
+    # 边不能先把 k<5 的桶存下来再让它卡在发件箱里。
+    low_rows = sum(1 for a in msg.aggregates if a.k < config.K_MIN)
+    if msg.privacy.k < config.K_MIN or low_rows:
+        store.bump("suppressed_buckets", max(low_rows, 1))
         return {"accepted": False, "batch_id": None,
                 "code": "suppressed", "error": "K_BELOW_MIN"}
 

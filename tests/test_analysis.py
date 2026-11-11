@@ -13,7 +13,7 @@ _TMP = tempfile.mkdtemp(prefix="edge-analysis-")
 os.environ.setdefault("EDGE_DB", os.path.join(_TMP, "edge.db"))
 os.environ.setdefault("EDGE_DATA_DIR", _TMP)
 
-from edge import analysis, config, store  # noqa: E402
+from edge import analysis, config, models, store  # noqa: E402
 
 
 class AnalysisTest(unittest.TestCase):
@@ -109,6 +109,8 @@ class AnalysisTest(unittest.TestCase):
             self.assertEqual(report["advice"], [])
             self.assertEqual(report["word_freq"], [])
             self.assertFalse(report["privacy"]["personalization"])
+            # 关掉个性化后报表仍必须过契约，否则发件箱会卡住
+            models.EdgeReport.model_validate(report)
         finally:
             store.set_settings({"personalization": True})
         self.assertTrue(analysis.build_report()["advice"])

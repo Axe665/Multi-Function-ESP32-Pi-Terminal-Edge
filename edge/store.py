@@ -814,14 +814,17 @@ def revoked() -> list[dict[str, Any]]:
 # ---------------------------------------------------------------- 发件箱退避
 
 BACKOFF_MS = [60_000, 5 * 60_000, 30 * 60_000, 2 * 3600_000]
+# 文档 §5.8：最多重试 7 天，过期就丢，不再无限占库
+OUTBOX_MAX_AGE_MS = 7 * 86_400_000
 
 
 def due_reports(limit: int = 20) -> list[dict[str, Any]]:
+    now = now_ms()
     with connect() as conn:
         rows = conn.execute(
-            """SELECT * FROM outbox WHERE sent_at IS NULL
+            """SELECT * FROM outbox WHERE sent_at IS NULL AND created_at >= ?
                AND (next_at IS NULL OR next_at <= ?) ORDER BY created_at LIMIT ?""",
-            (now_ms(), limit)).fetchall()
+            (now - OUTBOX_MAX_AGE_MS, now, limit)).fetchall()
     return [dict(r) for r in rows]
 
 

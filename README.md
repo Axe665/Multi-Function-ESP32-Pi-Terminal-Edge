@@ -34,7 +34,7 @@
 `scripts/sync_contracts.py --check` 两边都跑。改字段的顺序是先改边仓、再同步云仓，
 反过来会漂移。
 
-架构文档 v2.2 里 §5 写边、§6 写云，所以两个仓的「逐条对照」表条目不同，
+架构文档 v2.3 里 §5 写边、§6 写云，所以两个仓的「逐条对照」表条目不同，
 写法一样：一条对应一个编号，写清要求、现状和怎么验。两边都如实标出没做的部分，
 不把「驱动已内置但默认没开」写成「已支持」。
 
@@ -146,8 +146,8 @@ HTTPS  POST /ingest/telemetry                                   ← 兜底通道
 | 吊销与 CRL | 吊销后 `verify()` 失败，CRL 可下载 | 同上 |
 | mDNS | 广播 `_orpi-edge._tcp`、发现 `_orpi-device._tcp` 与 `_orpi-cloud._tcp`；静态地址（环境变量或 `cloud.json`）兜底 | `edge/mdns.py`；容器内实测发现到 `https://172.20.0.5:8443`，组播不可用时退化 |
 | 定时上云 | 每小时生成报表 + 到期队列投递 | `tests/test_scheduler.py` |
-| 退避与保留期 | 1/5/30 分钟、2 小时；L2 聚合保留 180 天、L3 文本 365 天 | 同上 |
-| 隐私闸门 | k<5 抑制、原始字段整份 422、min/max/subject 不出端 | `tests/test_contracts.py` |
+| 退避与保留期 | 1/5/30 分钟、2 小时，7 天发不出去就丢弃；L2 聚合保留 180 天、L3 文本 365 天 | 同上 |
+| 隐私闸门 | 批次与每一行的 k<5 都拦、原始字段整份 422、min/max/subject 不出端 | `tests/test_contracts.py` |
 | 证书校验 | 出站前用同一份契约再验一次 | `cloudpush.send` |
 | 指标目录 | 端报什么就登记什么，前端下拉框动态生成 | `edge/catalog.py` + `/api/v1/metrics` |
 | 磁盘加密 | 设 `EDGE_DB_KEY` 时强制走 SQLCipher，没驱动就拒绝启动 | `store._driver` |
@@ -159,6 +159,7 @@ HTTPS  POST /ingest/telemetry                                   ← 兜底通道
 
 ### 最近补的
 
+- **同意开关不再把报表卡死**：关掉个性化后 `privacy.personalization=false` 是契约里的可选字段，自己那层严格校验不会再把它拦下来；行级 `k<5` 也在边就拦掉，不会存下来再让云端整份 422；发件箱按文档 §5.8 只重试 7 天，过期记 `outbox_expired` 后丢弃。
 - **写入口默认要令牌**：首次启动生成 `data/ingest_token`（0600），HTTP `POST /ingest/*` 无令牌直接 401；`/health` 里 `ingest_token` 显示 `set`。
 - **吊销即时生效**：`/devices/{id}/revoke` 重写 `certs/crl.pem`，mosquitto 的 `crlfile` 读它；消息层再按 `device_id` 拒收，不用等 broker 重载。
 - **下发命令真的走 MQTT**：`POST /devices/{id}/cmd` 发布到 `orpi/v1/{id}/cmd` 并写 `device.cmd` 审计；演示环境同时本地补一个窗口。
@@ -245,12 +246,12 @@ HTTPS  POST /ingest/telemetry                                   ← 兜底通道
 python3 -m unittest discover -s tests -t . -v
 ```
 
-**47 个用例**：契约与示例、摄取边界（原始字段 / k<5 / 幂等）、分析口径
+**49 个用例**：契约与示例、摄取边界（原始字段 / 批次与行级 k<5 / 幂等）、分析口径
 （热力图不重复、报表样本数等于日聚合之和）、CA 与配对与 CRL、
-MQTT 真实报文往返、mDNS 只收 CA 指纹对得上的云、退避序列与保留期清理、每日快照、
+MQTT 真实报文往返、mDNS 只收 CA 指纹对得上的云、退避序列、发件箱 7 天过期、保留期清理、每日快照、
 SQLCipher 加密与错误口令拒绝、异常需连续窗口、告警合并与确认/静音/审计。
 
-## 与架构文档 v2.2 的逐条对照
+## 与架构文档 v2.3 的逐条对照
 
 | 文档条目 | 要求 | 现状 |
 |---|---|---|

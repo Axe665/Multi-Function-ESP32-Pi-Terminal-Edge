@@ -42,6 +42,18 @@ class BackoffTest(unittest.TestCase):
                          (store.now_ms() - 1000,))
         self.assertTrue(any(r["report_id"] == "r-due" for r in store.due_reports()))
 
+    def test_outbox_gives_up_after_7_days(self):
+        store.init_db()
+        store.enqueue_report("r-old", {"schema": "x"})
+        with store.connect() as conn:
+            conn.execute("UPDATE outbox SET created_at=? WHERE report_id='r-old'",
+                         (store.now_ms() - store.OUTBOX_MAX_AGE_MS - 1000,))
+        self.assertFalse(any(r["report_id"] == "r-old" for r in store.due_reports()))
+        self.assertEqual(scheduler.prune(180)["outbox_expired"], 1)
+        with store.connect() as conn:
+            left = conn.execute("SELECT COUNT(*) FROM outbox WHERE report_id='r-old'").fetchone()[0]
+        self.assertEqual(left, 0)
+
 
 class SnapshotTest(unittest.TestCase):
     def test_snapshot_written_once_per_day(self):

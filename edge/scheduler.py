@@ -22,7 +22,13 @@ def prune(retention_days: int) -> dict[str, int]:
         adv = conn.execute("DELETE FROM advice WHERE created_at < ?", (text_cutoff,)).rowcount
         out = conn.execute(
             "DELETE FROM outbox WHERE sent_at IS NOT NULL AND created_at < ?", (cutoff,)).rowcount
-    return {"aggregates": agg, "telemetry": tel, "advice": adv, "outbox": out}
+        expired = conn.execute(
+            "DELETE FROM outbox WHERE sent_at IS NULL AND created_at < ?",
+            (store.now_ms() - store.OUTBOX_MAX_AGE_MS,)).rowcount
+    if expired:
+        store.bump("outbox_expired", expired)
+    return {"aggregates": agg, "telemetry": tel, "advice": adv,
+            "outbox": out, "outbox_expired": expired}
 
 
 def snapshot() -> dict[str, Any]:
