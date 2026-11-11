@@ -46,6 +46,14 @@ class ContractTest(unittest.TestCase):
         self.assertEqual(msg.risk, "watch")
         self.assertEqual(msg.source, "local")
 
+    def test_status_and_cmd_examples_validate(self):
+        st = models.StatusMessage.model_validate(load("status.v1.json"))
+        self.assertEqual(st.queue_depth, 3)
+        cmd = models.Command.model_validate(load("cmd.v1.json"))
+        self.assertEqual(cmd.seconds, 300)
+        with self.assertRaises(Exception):
+            models.Command.model_validate({"cmd": "rm -rf"})
+
     def test_report_example_has_no_raw_fields(self):
         text = json.dumps(load("edge-report.v1.json"), ensure_ascii=False)
         for key in ("user_id", "subject", "values", "raw_samples"):

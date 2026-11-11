@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "orpi.status.v1",
+  "title": "orpi.status.v1",
+  "description": "orpi/v1/{deviceId}/status 的载荷。retained，端上线时发一次，之后变化再发。",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "schema": { "const": "orpi.status.v1" },
+    "fw": { "type": "string", "maxLength": 64 },
+    "version": { "type": "string", "maxLength": 64 },
+    "online": { "type": "boolean" },
+    "link": { "enum": ["wifi", "ethernet", "offline"] },
+    "queue_depth": { "type": "integer", "minimum": 0 },
+    "modules": {
+      "type": "array",
+      "items": {
+        "anyOf": [
+          { "type": "integer", "minimum": 0 },
+          { "type": "object" }
+        ]
+      }
+    }
+  }
+}

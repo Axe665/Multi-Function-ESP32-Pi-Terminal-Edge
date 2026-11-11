@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "orpi.cmd.v1",
+  "title": "orpi.cmd.v1",
+  "description": "orpi/v1/{deviceId}/cmd 的载荷。边 → 端，只允许这三种动作。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["cmd"],
+  "properties": {
+    "cmd": { "enum": ["report_now", "ping", "set_cadence"] },
+    "seconds": { "type": "integer", "minimum": 60 }
+  }
+}
