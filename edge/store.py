@@ -168,10 +168,11 @@ _key_checked = False
 
 
 def _ensure_key() -> None:
-    """新装默认加密：没有 EDGE_DB_KEY 时自动生成 data/edge.key。
+    """新装默认加密：没有 EDGE_DB_KEY 时用/生成 data/edge.key。
 
-    老明文库不自动迁移（避免启动时重写），只标记 DB_PLAINTEXT_EXISTING，
-    由运维跑 scripts/encrypt_db.py。没有 sqlcipher3 驱动时保持明文。
+    已有明文库不自动迁移（避免启动时重写），只标记 DB_PLAINTEXT_EXISTING，
+    由运维跑 scripts/encrypt_db.py；迁移后 key 文件与库同卷，重启直接复用。
+    没有 sqlcipher3 驱动时保持明文。
     """
     global _key_checked
     if _key_checked:
@@ -179,14 +180,14 @@ def _ensure_key() -> None:
     _key_checked = True
     if config.DB_KEY or not config.AUTO_ENCRYPT or _sqlcipher() is None:
         return
-    if config.DB_PATH.exists() and config.DB_PATH.stat().st_size > 0:
-        config.DB_PLAINTEXT_EXISTING = True
-        return
 
     key_file = config.DATA_DIR / "edge.key"
     try:
         config.DATA_DIR.mkdir(parents=True, exist_ok=True)
         if not key_file.exists():
+            if config.DB_PATH.exists() and config.DB_PATH.stat().st_size > 0:
+                config.DB_PLAINTEXT_EXISTING = True
+                return
             try:
                 fd = os.open(key_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
             except FileExistsError:
