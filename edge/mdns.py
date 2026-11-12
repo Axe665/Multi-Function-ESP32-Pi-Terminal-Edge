@@ -7,6 +7,7 @@ TXT 只放发现所需的 ID / 型号 / 版本 / 端口 / CA 指纹——
 from __future__ import annotations
 
 import hashlib
+import os
 import socket
 from pathlib import Path
 from typing import Any
@@ -211,7 +212,14 @@ class Mdns:
 
 
 def _lan_ip() -> str:
-    """取默认路由的出口地址；取不到就退回回环。"""
+    """取默认路由的出口地址；取不到就退回回环。
+
+    多网卡/代理环境（默认路由走 tun 时）用 EDGE_LAN_IP 覆盖，
+    否则广播出去的地址对局域网里的终端不可达。
+    """
+    override = os.environ.get("EDGE_LAN_IP", "").strip()
+    if override:
+        return override
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         s.connect(("192.0.2.1", 9))
