@@ -389,12 +389,14 @@ ApplicationWindow {
                                     }
                                     // 已配对 = 设备用配对码换过证书（paired_at 有值）；
                                     // 未配对只完成过上报，不能走 mTLS。
+                                    // 以证书指纹为准：paired_at 可能被 status 更新，
+                                    // 只有 cert_fp 才代表边真的签发过证书。
                                     Text {
                                         anchors.right: parent.right
-                                        text: modelData.paired_at
-                                              ? ("已配对 · " + String(modelData.cert_fp || "").slice(0, 8))
+                                        text: modelData.cert_fp
+                                              ? ("已配对 · " + String(modelData.cert_fp).slice(0, 8))
                                               : "未配对"
-                                        color: modelData.paired_at ? tokens.primary : tokens.onSurfaceVariant
+                                        color: modelData.cert_fp ? tokens.primary : tokens.onSurfaceVariant
                                         font.pixelSize: 11
                                     }
                                 }
