@@ -123,7 +123,8 @@ class _CloudListener(ServiceListener):
         addresses = [socket.inet_ntoa(a) for a in info.addresses]
         if not addresses:
             return
-        self.url = f"https://{addresses[0]}:{info.port or 8443}"
+        # 云可以用 TXT url 给域名形式（IP 字面量做 SNI 会被网关判 421）
+        self.url = props.get("url") or f"https://{addresses[0]}:{info.port or 8443}"
 
     def update_service(self, *args) -> None:
         pass
