@@ -82,8 +82,12 @@ def main() -> int:
     root = tk.Tk()
     root.title("边节点")
     root.configure(bg=BG)
-    root.resizable(False, False)
     width, height = 660, 500
+    # 固定尺寸：resizable + min/max 双保险，X11 下再设 dialog 类型，
+    # 避免窗口管理器给出最大化按钮或允许拖边缩放。
+    root.resizable(False, False)
+    root.minsize(width, height)
+    root.maxsize(width, height)
 
     card = tk.Frame(root, bg=CARD, highlightbackground=OUTLINE, highlightthickness=1)
     card.place(x=16, y=16, width=width - 32, height=height - 32)
