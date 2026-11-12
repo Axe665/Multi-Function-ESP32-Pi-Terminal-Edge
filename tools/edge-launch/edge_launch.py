@@ -20,14 +20,18 @@ WEB_PORT = 5173
 API_PORT = 8001
 SERVICES = ("edge-node", "edge-web", "edge-mqtt")
 
-BG = "#0B141C"
-CARD = "#16242F"
-INK = "#E1ECF2"
-DIM = "#A9BCC8"
-ACCENT = "#8CD8F5"
-ON_ACCENT = "#003544"
-DANGER = "#FFB4AB"
-OUTLINE = "#3A4F5E"
+# 与网页 web/src/styles/m3.css 的亮色 token 对齐（绿色种子）
+BG = "#f5f7f3"          # surface-container-high（窗口底）
+CARD = "#ffffff"        # card-bg
+INK = "#1a1c18"         # on-surface
+DIM = "#43483e"         # on-surface-variant
+ACCENT = "#386a20"      # primary
+ON_ACCENT = "#ffffff"   # on-primary
+ACCENT_HOVER = "#4a7a2e"
+DANGER = "#ba1a1a"      # error
+ON_DANGER = "#ffffff"
+DANGER_HOVER = "#9e1616"
+OUTLINE = "#c3c8bb"     # outline-variant
 
 
 def systemctl(*args: str) -> subprocess.CompletedProcess:
@@ -127,7 +131,7 @@ def main() -> int:
             tk.Label(row, text=url, bg=CARD, fg=ACCENT,
                      font=("Noto Sans CJK SC", 12)).pack(side="left", padx=(6, 12))
             tk.Button(row, text="打开", command=lambda u=url: open_url(u),
-                      bg=ACCENT, fg=ON_ACCENT, activebackground="#6FC3DE",
+                      bg=ACCENT, fg=ON_ACCENT, activebackground=ACCENT_HOVER,
                       relief="flat", bd=0, padx=16, pady=4,
                       font=("Noto Sans CJK SC", 11, "bold"), cursor="hand2").pack(side="right")
 
@@ -191,13 +195,13 @@ def main() -> int:
     actions.pack(side="bottom", fill="x", padx=24, pady=(16, 10))
 
     start_btn = tk.Button(actions, text="启动边服务", command=start_all,
-                          bg=ACCENT, fg=ON_ACCENT, activebackground="#6FC3DE",
+                          bg=ACCENT, fg=ON_ACCENT, activebackground=ACCENT_HOVER,
                           relief="flat", bd=0, padx=14, pady=6,
                           font=("Noto Sans CJK SC", 11, "bold"), cursor="hand2")
     start_btn.pack(side="left")
 
     stop_btn = tk.Button(actions, text="关闭所有边服务", command=stop_all,
-                         bg=DANGER, fg="#3A1414", activebackground="#E29A92",
+                         bg=DANGER, fg=ON_DANGER, activebackground=DANGER_HOVER,
                          relief="flat", bd=0, padx=14, pady=6,
                          font=("Noto Sans CJK SC", 11, "bold"), cursor="hand2")
     stop_btn.pack(side="left", padx=(10, 0))
