@@ -7,7 +7,9 @@ TXT 只放发现所需的 ID / 型号 / 版本 / 端口 / CA 指纹——
 from __future__ import annotations
 
 import hashlib
+import os
 import socket
+import time
 from pathlib import Path
 from typing import Any
 
@@ -121,13 +123,51 @@ class _CloudListener(ServiceListener):
         addresses = [socket.inet_ntoa(a) for a in info.addresses]
         if not addresses:
             return
-        self.url = f"https://{addresses[0]}:{info.port or 8443}"
+        # 云可以用 TXT url 给域名形式（IP 字面量做 SNI 会被网关判 421）
+        self.url = props.get("url") or f"https://{addresses[0]}:{info.port or 8443}"
 
     def update_service(self, *args) -> None:
         pass
 
     def remove_service(self, *args) -> None:
         pass
+
+
+def browse_cloud(seconds: float = 2.5) -> list[dict]:
+    """现场搜索局域网里的 `_orpi-cloud._tcp`（供“搜索云”按钮用）。
+
+    只返回地址与广播的 ca_fp；信任仍由 pinned_cloud_fp 决定（文档 §8.4：
+    mDNS 只解决地址，指纹不符不能用）。
+    """
+    zc = mdns.zc
+    if zc is None:
+        return []
+    found: dict[str, dict] = {}
+
+    class _Listener:
+        def add_service(self, _zc, type_, name) -> None:
+            info = _zc.get_service_info(type_, name, timeout=1500)
+            if not info:
+                return
+            props = {k.decode(): v.decode() for k, v in info.properties.items() if v is not None}
+            addresses = [socket.inet_ntoa(a) for a in info.addresses]
+            if not addresses:
+                return
+            # 云可用 TXT 的 url 给出域名形式（IP 字面量做 SNI 在部分网关会 421）
+            url = props.get("url") or f"https://{addresses[0]}:{info.port or 8443}"
+            found[url] = {"url": url, "ca_fp": props.get("ca_fp", ""),
+                          "name": name.removesuffix("." + CLOUD_TYPE)}
+
+        def update_service(self, *args) -> None:
+            pass
+
+        def remove_service(self, *args) -> None:
+            pass
+
+    browser = ServiceBrowser(zc, CLOUD_TYPE, _Listener())
+    time.sleep(seconds)
+    browser.cancel()
+    return list(found.values())
 
 
 class Mdns:
@@ -211,7 +251,14 @@ class Mdns:
 
 
 def _lan_ip() -> str:
-    """取默认路由的出口地址；取不到就退回回环。"""
+    """取默认路由的出口地址；取不到就退回回环。
+
+    多网卡/代理环境（默认路由走 tun 时）用 EDGE_LAN_IP 覆盖，
+    否则广播出去的地址对局域网里的终端不可达。
+    """
+    override = os.environ.get("EDGE_LAN_IP", "").strip()
+    if override:
+        return override
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         s.connect(("192.0.2.1", 9))

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- 端-边-云 三节点：边是中间那个 -->
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="#101B24"/>
+  <path d="M150 344 L256 156 L362 344 Z" fill="none" stroke="#3A4F5E" stroke-width="16"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M256 156 L256 256 M150 344 L256 256 M362 344 L256 256"
+        fill="none" stroke="#8CD8F5" stroke-width="14" stroke-linecap="round"/>
+  <circle cx="256" cy="156" r="34" fill="#8CD8F5"/>
+  <circle cx="150" cy="344" r="34" fill="#8CD8F5"/>
+  <circle cx="362" cy="344" r="34" fill="#8CD8F5"/>
+  <circle cx="256" cy="256" r="26" fill="#101B24" stroke="#8CD8F5" stroke-width="14"/>
+</svg>

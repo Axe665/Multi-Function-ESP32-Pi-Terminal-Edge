@@ -1,6 +1,8 @@
 """边节点 HTTP API。设备侧走 /ingest，管理侧给前端用。"""
 from __future__ import annotations
 
+import json
+
 import re
 from typing import Any
 
@@ -436,6 +438,36 @@ def report_preview() -> dict[str, Any]:
         "privacy": r["privacy"],
         "sample": r["telemetry_daily"][:8],
     }
+
+
+@router.get("/cloud/discovery", dependencies=admin)
+def cloud_discovery() -> dict[str, Any]:
+    """搜索局域网里的云节点（mDNS `_orpi-cloud._tcp`），供 UI 一键连接。"""
+    from . import mdns as mdns_mod
+
+    found = mdns_mod.browse_cloud(2.5)
+    pin = mdns_mod.pinned_cloud_fp()
+    for item in found:
+        item["trusted"] = bool(pin) and item.get("ca_fp") == pin
+    return {"configured": bool(config.CLOUD_URL), "current": config.CLOUD_URL or "",
+            "pinned_fp": pin, "found": found}
+
+
+@router.post("/cloud/config", dependencies=admin)
+def set_cloud_config(body: dict[str, Any]) -> dict[str, Any]:
+    """运行时配置云地址/令牌（落盘 data/cloud.json，重启仍生效）。"""
+    from . import config as cfg
+
+    url = str(body.get("url", "")).strip()
+    token = str(body.get("token", "")).strip()
+    if url and not url.startswith(("https://", "http://")):
+        raise HTTPException(400, "云地址必须以 http:// 或 https:// 开头")
+    data = {"url": url, "token": token}
+    cfg.CLOUD_OVERRIDE_PATH.write_text(
+        json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    cfg.CLOUD_URL = url
+    cfg.CLOUD_TOKEN = token
+    return {"configured": bool(url), "url": url}
 
 
 @router.post("/report/cloud", dependencies=admin)
