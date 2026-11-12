@@ -111,6 +111,48 @@ async function pushNow() {
   }
 }
 
+// 云连接：手动配置（/cloud/config）+ mDNS 搜索（/cloud/discovery）
+const cloudUrl = ref('')
+const cloudToken = ref('')
+const cloudFound = ref([])
+const cloudSearching = ref(false)
+
+async function saveCloud() {
+  busy.value = true
+  try {
+    const r = await api('/cloud/config', {
+      method: 'POST',
+      body: { url: cloudUrl.value.trim(), token: cloudToken.value.trim() },
+    })
+    toast(r.configured ? `云已配置：${r.url}` : '已清空云配置')
+    await pushNow()
+    await load()
+  } catch (e) {
+    toast(`保存失败：${e.message}`)
+  } finally {
+    busy.value = false
+  }
+}
+
+async function searchCloud() {
+  cloudSearching.value = true
+  cloudFound.value = []
+  try {
+    const r = await api('/cloud/discovery')
+    cloudFound.value = r.found || []
+    if (!cloudFound.value.length) toast('没有发现云节点；确认云仓在局域网内广播 _orpi-cloud._tcp')
+  } catch (e) {
+    toast(`搜索失败：${e.message}`)
+  } finally {
+    cloudSearching.value = false
+  }
+}
+
+async function connectCloud(url) {
+  cloudUrl.value = url
+  await saveCloud()
+}
+
 onMounted(load)
 const cloud = () => [
   { label: '云地址', value: overview.value?.cloud_url || '未配置', note: overview.value?.cloud_enabled ? '自动上报已开启' : '报表只留在本机' },
@@ -146,6 +188,38 @@ const cloud = () => [
   </div>
 
   <div class="duo">
+    <section class="md-card">
+      <div class="section-head">
+        <h2>云连接</h2>
+        <span class="md-muted">{{ overview?.cloud_enabled ? '自动上报已开启' : '报表只留在本机' }}</span>
+      </div>
+      <div class="form">
+        <label>
+          <span>云地址</span>
+          <input v-model="cloudUrl" class="md-field" placeholder="https://cloud.local:8443" />
+        </label>
+        <label>
+          <span>访问令牌（可选）</span>
+          <input v-model="cloudToken" class="md-field" />
+        </label>
+      </div>
+      <div class="actions">
+        <button class="md-btn" :disabled="busy" @click="saveCloud">保存并连接</button>
+        <button class="md-btn" :disabled="cloudSearching" @click="searchCloud">
+          {{ cloudSearching ? '搜索中…' : '搜索云' }}
+        </button>
+      </div>
+      <ul v-if="cloudFound.length" class="cloud-list">
+        <li v-for="item in cloudFound" :key="item.url">
+          <div>
+            <strong class="md-mono">{{ item.url }}</strong>
+            <span class="md-muted"> · {{ item.ca_fp || '无指纹' }} · {{ item.trusted ? '可信' : '未校验' }}</span>
+          </div>
+          <button class="md-btn" :disabled="busy" @click="connectCloud(item.url)">连接</button>
+        </li>
+      </ul>
+    </section>
+
     <section class="md-card">
       <h2>上报</h2>
       <div v-if="settings" class="form">
@@ -286,5 +360,27 @@ const cloud = () => [
 .outbox { margin-top: var(--space-4); }
 @media (max-width: 900px) {
   .duo { grid-template-columns: minmax(0, 1fr); }
+}
+.cloud-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.cloud-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: 10px;
+}
+.actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
 }
 </style>

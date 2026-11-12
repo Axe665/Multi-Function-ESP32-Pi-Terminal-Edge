@@ -12,3 +12,4 @@ docker/cloud-certs/
 web/node_modules/
 web/dist/
 node_modules/
+cloud-certs/
