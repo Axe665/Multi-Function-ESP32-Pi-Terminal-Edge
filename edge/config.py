@@ -86,6 +86,27 @@ CLOUD_CA = _env("EDGE_CLOUD_CA")
 CLOUD_CERT = _env("EDGE_CLOUD_CERT")
 CLOUD_KEY = _env("EDGE_CLOUD_KEY")
 
+# 运行时手工配置（UI 里填云地址/令牌后落盘到 data/cloud.json），优先于环境变量。
+CLOUD_OVERRIDE_PATH = DATA_DIR / "cloud.json"
+
+
+def apply_cloud_override() -> None:
+    import json
+
+    try:
+        data = json.loads(CLOUD_OVERRIDE_PATH.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001 —— 文件不存在/损坏都不该拖垮启动
+        return
+    mapping = (("url", "CLOUD_URL"), ("token", "CLOUD_TOKEN"))
+    global_vals = globals()
+    for key, attr in mapping:
+        value = str(data.get(key, "")).strip()
+        if value:
+            global_vals[attr] = value
+
+
+apply_cloud_override()
+
 # ---- mDNS 与定时任务 ----
 MDNS_ENABLED = _env("EDGE_MDNS", "1") != "0"
 PUSH_INTERVAL_MS = int(_env("EDGE_PUSH_INTERVAL_MS", str(60 * 60 * 1000)))

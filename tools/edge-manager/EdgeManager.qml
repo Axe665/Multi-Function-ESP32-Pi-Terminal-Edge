@@ -262,6 +262,13 @@ ApplicationWindow {
                     font.pixelSize: 13
                 }
             }
+            M3TextButton {
+                label: "配置云"
+                onActivated: {
+                    cloudUrlField.text = app.health.cloud_url || ""
+                    cloudDialog.open()
+                }
+            }
             Text {
                 text: "每 3 秒自动刷新"
                 color: tokens.onSurfaceVariant
@@ -548,6 +555,101 @@ ApplicationWindow {
                               : "在终端「设置 → 网络连接管理」输入这 6 位码；过期或被使用后点「刷新配对码」。"
                         color: app.hintBad ? tokens.danger : tokens.onSurfaceVariant
                         font.pixelSize: 12
+                    }
+                }
+            }
+        }
+    }
+
+    // 云连接配置：手填局域网云地址与令牌（落盘 data/cloud.json，重启仍生效）。
+    Dialog {
+        id: cloudDialog
+        objectName: "cloudDialog"
+        parent: Overlay.overlay
+        modal: true
+        x: (parent.width - width) / 2
+        y: (parent.height - height) / 2
+        width: Math.min(560, app.width - 48)
+        padding: 24
+        background: Rectangle {
+            color: tokens.surface
+            radius: 20
+            border.color: tokens.outline
+            border.width: 1
+        }
+        contentItem: Column {
+            spacing: 14
+            Text {
+                text: "连接云"
+                color: tokens.onSurface
+                font.pixelSize: 20
+                font.weight: Font.DemiBold
+            }
+            Text {
+                width: parent.width
+                wrapMode: Text.Wrap
+                text: "填写局域网内云节点的地址（HTTPS），保存后立即尝试上报一次。"
+                color: tokens.onSurfaceVariant
+                font.pixelSize: 13
+            }
+            TextField {
+                id: cloudUrlField
+                width: parent.width
+                placeholderText: "https://cloud.local:8443"
+                color: tokens.onSurface
+                placeholderTextColor: tokens.onSurfaceVariant
+                background: Rectangle {
+                    color: tokens.surfaceAlt
+                    radius: 10
+                    border.color: cloudUrlField.activeFocus ? tokens.primary : tokens.outline
+                    border.width: 1
+                }
+            }
+            TextField {
+                id: cloudTokenField
+                width: parent.width
+                placeholderText: "访问令牌（可选）"
+                color: tokens.onSurface
+                placeholderTextColor: tokens.onSurfaceVariant
+                background: Rectangle {
+                    color: tokens.surfaceAlt
+                    radius: 10
+                    border.color: cloudTokenField.activeFocus ? tokens.primary : tokens.outline
+                    border.width: 1
+                }
+            }
+            Text {
+                width: parent.width
+                wrapMode: Text.Wrap
+                visible: app.hint !== "" && cloudDialog.opened
+                text: app.hint
+                color: app.hintBad ? tokens.danger : tokens.onSurfaceVariant
+                font.pixelSize: 12
+            }
+            Row {
+                width: parent.width
+                spacing: 8
+                anchors.right: parent.right
+                M3TextButton {
+                    label: "取消"
+                    onActivated: cloudDialog.close()
+                }
+                M3FilledButton {
+                    label: "保存并连接"
+                    onActivated: {
+                        app.busy = true
+                        app.request("POST", "/api/v1/cloud/config",
+                                    { url: cloudUrlField.text.trim(), token: cloudTokenField.text.trim() },
+                                    function (status, data) {
+                            app.busy = false
+                            if (status === 200 && data) {
+                                app.showHint(data.configured ? "云已配置：" + data.url : "已清空云配置", false)
+                                cloudDialog.close()
+                                app.reportCloud()
+                            } else {
+                                app.showHint("保存失败（HTTP " + status + "）", true)
+                            }
+                        })
                     }
                 }
             }
