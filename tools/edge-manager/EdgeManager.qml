@@ -3,21 +3,23 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Window
 
-// 边节点图形化管理台（Qt 6.5.3 / QML）。
-// 用途：在本机（同时是边节点）查看健康状态、设备列表，并为设备生成/刷新配对码。
-// 直接调边 API：GET /api/v1/health、GET /api/v1/devices、POST /api/v1/devices/{id}/pair。
+// 边节点管理台（Qt 6.5.3 / QML）。
+// 视觉遵循 Material 3 深色角色：surface 分层、filled/text 两种按钮、
+// display-small 只给配对码用（页面唯一的大元素）。
+// 功能：GET /api/v1/health、GET /api/v1/devices、POST /api/v1/devices/{id}/pair。
 ApplicationWindow {
     id: app
-    width: 1024
-    height: 700
+    width: 1080
+    height: 720
     visible: true
-    title: "边节点管理台 · Edge Manager"
-    color: "#0c1520"
+    title: "边节点管理台"
+    color: tokens.background
 
-    // 可配置：EDGE_API 环境变量（默认本机 8001）
     readonly property string apiBase: {
-        const fromEnv = Qt.application.arguments.length > 1 ? Qt.application.arguments[1] : ""
-        return fromEnv !== "" ? fromEnv : "http://127.0.0.1:8001"
+        const args = Qt.application.arguments
+        const i = args.indexOf("--api")
+        if (i >= 0 && i + 1 < args.length) return args[i + 1]
+        return "http://127.0.0.1:8001"
     }
 
     property var health: ({})
@@ -25,19 +27,28 @@ ApplicationWindow {
     property int selectedIndex: -1
     property string pairCode: ""
     property int pairRemaining: 0
-    property string statusMessage: ""
+    property string hint: ""
+    property bool hintBad: false
     property bool busy: false
     property int refreshTick: 0
 
-    readonly property color bg: "#0c1520"
-    readonly property color card: "#132230"
-    readonly property color cardAlt: "#0f1b27"
-    readonly property color line: "#22384a"
-    readonly property color ink: "#e8f3fb"
-    readonly property color inkDim: "#8fa8bb"
-    readonly property color accent: "#85deff"
-    readonly property color good: "#6ee7a8"
-    readonly property color bad: "#ff8f8f"
+    readonly property var tokens: ({
+        background: "#0B141C",
+        surface: "#101B24",
+        surfaceAlt: "#16242F",
+        surfaceHigh: "#1D2E3B",
+        primary: "#8CD8F5",
+        onPrimary: "#003544",
+        primaryContainer: "#0E4A5E",
+        onSurface: "#E1ECF2",
+        onSurfaceVariant: "#A9BCC8",
+        outline: "#3A4F5E",
+        success: "#7DDDA4",
+        danger: "#FFB4AB",
+        radiusLarge: 28,
+        radiusCard: 18,
+        radiusButton: 22
+    })
 
     function request(method, path, body, callback) {
         const xhr = new XMLHttpRequest()
@@ -53,13 +64,18 @@ ApplicationWindow {
         xhr.send(body ? JSON.stringify(body) : null)
     }
 
+    function showHint(text, bad) {
+        app.hint = text
+        app.hintBad = bad === true
+    }
+
     function loadHealth() {
         request("GET", "/api/v1/health", null, function (status, data) {
             if (status === 200 && data) {
                 app.health = data
-                app.statusMessage = ""
+                if (app.hintBad) app.showHint("", false)
             } else {
-                app.statusMessage = "无法连接边 API（" + app.apiBase + "）"
+                app.showHint("连不上边 API：" + app.apiBase, true)
             }
             app.refreshTick++
         })
@@ -67,6 +83,7 @@ ApplicationWindow {
 
     function loadDevices() {
         request("GET", "/api/v1/devices", null, function (status, data) {
+            console.log("devices:", status, data ? data.length : -1)
             if (status === 200 && data) {
                 app.devices = data
                 if (app.selectedIndex >= app.devices.length) app.selectedIndex = -1
@@ -89,11 +106,11 @@ ApplicationWindow {
             if (status === 200 && data && data.code) {
                 app.pairCode = data.code
                 app.pairRemaining = data.ttl_s || 600
-                app.statusMessage = "配对码已生成：" + data.code
+                app.showHint("已为 " + device.device_id + " 生成配对码", false)
             } else {
                 app.pairCode = ""
                 app.pairRemaining = 0
-                app.statusMessage = "生成配对码失败（HTTP " + status + "）"
+                app.showHint("生成失败（HTTP " + status + "）", true)
             }
         })
     }
@@ -112,121 +129,191 @@ ApplicationWindow {
         repeat: true
         onTriggered: {
             if (app.pairRemaining > 0) app.pairRemaining--
-            if (app.pairRemaining === 0) {
+            if (app.pairRemaining === 0 && app.pairCode !== "") {
                 app.pairCode = ""
-                app.statusMessage = "配对码已过期，请刷新"
+                app.showHint("配对码已过期，可重新生成", false)
             }
         }
     }
 
+    // ---- 基础组件：M3 按钮（全部自定义，不用默认白底控件） ----
+    component M3FilledButton: Rectangle {
+        id: btn
+        property string label
+        property bool enabled: true
+        signal activated()
+        implicitWidth: btnLabel.implicitWidth + 44
+        implicitHeight: 44
+        radius: tokens.radiusButton
+        color: !btn.enabled ? tokens.surfaceHigh
+             : tap.pressed ? Qt.darker(tokens.primary, 1.15)
+             : tokens.primary
+        Text {
+            id: btnLabel
+            anchors.centerIn: parent
+            text: btn.label
+            color: btn.enabled ? tokens.onPrimary : tokens.onSurfaceVariant
+            font.pixelSize: 14
+            font.weight: Font.Medium
+        }
+        MouseArea {
+            id: tap
+            anchors.fill: parent
+            enabled: btn.enabled
+            onClicked: btn.activated()
+        }
+    }
+
+    component M3TextButton: Rectangle {
+        id: btn
+        property string label
+        property bool enabled: true
+        signal activated()
+        implicitWidth: btnLabel.implicitWidth + 32
+        implicitHeight: 44
+        radius: tokens.radiusButton
+        color: tap.pressed ? tokens.surfaceHigh : "transparent"
+        Text {
+            id: btnLabel
+            anchors.centerIn: parent
+            text: btn.label
+            color: btn.enabled ? tokens.primary : tokens.onSurfaceVariant
+            font.pixelSize: 14
+            font.weight: Font.Medium
+        }
+        MouseArea {
+            id: tap
+            anchors.fill: parent
+            enabled: btn.enabled
+            onClicked: btn.activated()
+        }
+    }
+
+    // ---- 页面 ----
     ColumnLayout {
+        id: rootLayout
         anchors.fill: parent
-        anchors.margins: 18
-        spacing: 14
+        anchors.margins: 26
+        spacing: 20
 
-        // ---------- 顶部：健康状态 ----------
-        Rectangle {
+        // 页头
+        RowLayout {
             Layout.fillWidth: true
-            Layout.preferredHeight: 108
-            radius: 16
-            color: app.card
-            border.color: app.line
-            border.width: 1
-
+            spacing: 16
             ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 18
-                spacing: 10
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 12
-                    Text {
-                        text: "边节点"
-                        color: app.ink
-                        font.pixelSize: 24
-                        font.bold: true
-                    }
-                    Text {
-                        text: (app.health.edge_id || "—")
-                        color: app.accent
-                        font.pixelSize: 18
-                    }
-                    Item { Layout.fillWidth: true }
-                    Rectangle {
-                        width: 10; height: 10; radius: 5
-                        color: app.health.mqtt && app.health.mqtt.connected ? app.good : app.bad
-                    }
-                    Text {
-                        text: app.health.mqtt && app.health.mqtt.connected ? "MQTT 已连接" : "MQTT 未连接"
-                        color: app.inkDim
-                        font.pixelSize: 14
-                    }
-                    Text {
-                        text: "刷新 " + app.refreshTick
-                        color: app.inkDim
-                        font.pixelSize: 12
-                    }
-                }
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 26
-                    Repeater {
-                        model: [
-                            { k: "批次", v: app.health.batches !== undefined ? app.health.batches : "—" },
-                            { k: "设备", v: app.devices.length },
-                            { k: "MQTT 收包", v: app.health.mqtt ? app.health.mqtt.received : "—" },
-                            { k: "拒收", v: app.health.mqtt ? app.health.mqtt.rejected : "—" },
-                            { k: "磁盘余量(MB)", v: app.health.disk_free_mb !== undefined ? app.health.disk_free_mb : "—" },
-                            { k: "库", v: app.health.db || "—" }
-                        ]
-                        delegate: Column {
-                            required property var modelData
-                            spacing: 2
-                            Text { text: modelData.k; color: app.inkDim; font.pixelSize: 12 }
-                            Text { text: String(modelData.v); color: app.ink; font.pixelSize: 18; font.bold: true }
-                        }
-                    }
-                    Item { Layout.fillWidth: true }
-                }
-
+                spacing: 2
                 Text {
-                    Layout.fillWidth: true
-                    text: app.statusMessage
-                    color: app.statusMessage.indexOf("失败") >= 0 || app.statusMessage.indexOf("无法") >= 0 ? app.bad : app.inkDim
-                    font.pixelSize: 13
-                    elide: Text.ElideRight
+                    text: "边节点管理台"
+                    color: tokens.onSurface
+                    font.pixelSize: 24
+                    font.weight: Font.DemiBold
                 }
+                Text {
+                    text: app.health.edge_id ? ("节点 " + app.health.edge_id) : "节点未连接"
+                    color: tokens.onSurfaceVariant
+                    font.pixelSize: 13
+                }
+            }
+            Item { Layout.fillWidth: true }
+            RowLayout {
+                spacing: 8
+                Rectangle {
+                    width: 8; height: 8; radius: 4
+                    color: (app.health.mqtt && app.health.mqtt.connected) ? tokens.success : tokens.danger
+                }
+                Text {
+                    text: (app.health.mqtt && app.health.mqtt.connected) ? "MQTT 已连接" : "MQTT 未连接"
+                    color: tokens.onSurfaceVariant
+                    font.pixelSize: 13
+                }
+            }
+            Text {
+                text: "每 3 秒自动刷新"
+                color: tokens.onSurfaceVariant
+                font.pixelSize: 12
             }
         }
 
-        // ---------- 主体：设备列表 + 配对面板 ----------
+        // 指标条：label 12 / value 18
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 84
+            radius: tokens.radiusCard
+            color: tokens.surface
+            border.color: tokens.outline
+            border.width: 1
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 24
+                anchors.rightMargin: 24
+                spacing: 40
+                Repeater {
+                    model: [
+                        { k: "5 分钟批次", v: app.health.batches },
+                        { k: "设备", v: app.devices.length },
+                        { k: "MQTT 收包", v: app.health.mqtt ? app.health.mqtt.received : "—" },
+                        { k: "拒收", v: app.health.mqtt ? app.health.mqtt.rejected : "—" },
+                        { k: "磁盘余量 MB", v: app.health.disk_free_mb },
+                        { k: "库", v: app.health.db }
+                    ]
+                    delegate: Column {
+                        required property var modelData
+                        spacing: 4
+                        Text {
+                            text: modelData.k
+                            color: tokens.onSurfaceVariant
+                            font.pixelSize: 12
+                        }
+                        Text {
+                            text: (modelData.v === undefined || modelData.v === null) ? "—" : String(modelData.v)
+                            color: tokens.onSurface
+                            font.pixelSize: 18
+                            font.weight: Font.Medium
+                        }
+                    }
+                }
+                Item { Layout.fillWidth: true }
+            }
+        }
+
+        // 主体
         RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            spacing: 14
+            spacing: 20
 
-            // 设备列表
+            // 设备卡
             Rectangle {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                Layout.preferredWidth: 520
-                radius: 16
-                color: app.card
-                border.color: app.line
+                radius: tokens.radiusCard
+                color: tokens.surface
+                border.color: tokens.outline
                 border.width: 1
 
                 ColumnLayout {
                     anchors.fill: parent
-                    anchors.margins: 16
-                    spacing: 10
+                    anchors.margins: 20
+                    spacing: 14
 
-                    Text {
-                        text: "设备（" + app.devices.length + "）"
-                        color: app.ink
-                        font.pixelSize: 17
-                        font.bold: true
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Text {
+                            text: "设备"
+                            color: tokens.onSurface
+                            font.pixelSize: 16
+                            font.weight: Font.DemiBold
+                        }
+                        Text {
+                            text: app.devices.length + " 台"
+                            color: tokens.onSurfaceVariant
+                            font.pixelSize: 12
+                        }
+                        Item { Layout.fillWidth: true }
+                        M3TextButton {
+                            label: "刷新"
+                            onActivated: { app.loadHealth(); app.loadDevices() }
+                        }
                     }
 
                     ListView {
@@ -234,7 +321,7 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         clip: true
-                        spacing: 6
+                        spacing: 4
                         model: app.devices
                         currentIndex: app.selectedIndex
                         onCurrentIndexChanged: app.selectedIndex = currentIndex
@@ -244,38 +331,46 @@ ApplicationWindow {
                             required property int index
                             width: deviceList.width
                             height: 62
-                            radius: 10
-                            color: app.selectedIndex === index ? "#1d3a4e" : app.cardAlt
-                            border.color: app.selectedIndex === index ? app.accent : app.line
-                            border.width: 1
-
+                            radius: 12
+                            color: app.selectedIndex === index ? tokens.surfaceHigh : "transparent"
+                            // 选中态用左侧竖条，而不是整块高亮
+                            Rectangle {
+                                visible: app.selectedIndex === index
+                                width: 3
+                                height: 26
+                                radius: 2
+                                color: tokens.primary
+                                anchors.left: parent.left
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
                             RowLayout {
                                 anchors.fill: parent
-                                anchors.margins: 10
-                                spacing: 10
+                                anchors.leftMargin: 16
+                                anchors.rightMargin: 12
+                                spacing: 12
                                 Rectangle {
-                                    width: 9; height: 9; radius: 4.5
-                                    color: modelData.online ? app.good : app.inkDim
+                                    width: 8; height: 8; radius: 4
+                                    color: modelData.online ? tokens.success : tokens.outline
                                 }
                                 Column {
                                     Layout.fillWidth: true
                                     spacing: 2
                                     Text {
                                         text: modelData.device_id
-                                        color: app.ink
+                                        color: tokens.onSurface
                                         font.pixelSize: 15
-                                        font.bold: true
+                                        font.weight: Font.Medium
                                     }
                                     Text {
-                                        text: (modelData.link || "?") + " · 模块 " +
-                                              (modelData.modules ? modelData.modules.join(",") : "—")
-                                        color: app.inkDim
+                                        text: (modelData.link || "未知链路") +
+                                              " · 模块 " + (modelData.modules ? modelData.modules.join(", ") : "—")
+                                        color: tokens.onSurfaceVariant
                                         font.pixelSize: 12
                                     }
                                 }
                                 Text {
                                     text: modelData.online ? "在线" : "离线"
-                                    color: modelData.online ? app.good : app.inkDim
+                                    color: modelData.online ? tokens.success : tokens.onSurfaceVariant
                                     font.pixelSize: 12
                                 }
                             }
@@ -293,91 +388,102 @@ ApplicationWindow {
                         Text {
                             anchors.centerIn: parent
                             visible: app.devices.length === 0
-                            text: "还没有设备上报"
-                            color: app.inkDim
-                            font.pixelSize: 14
+                            text: "还没有设备上报。终端连上边之后会出现在这里。"
+                            color: tokens.onSurfaceVariant
+                            font.pixelSize: 13
                         }
                     }
                 }
             }
 
-            // 配对码面板
+            // 配对码卡
             Rectangle {
                 Layout.fillHeight: true
                 Layout.preferredWidth: 400
-                radius: 16
-                color: app.card
-                border.color: app.line
+                radius: tokens.radiusCard
+                color: tokens.surface
+                border.color: tokens.outline
                 border.width: 1
 
                 ColumnLayout {
                     anchors.fill: parent
-                    anchors.margins: 18
-                    spacing: 14
+                    anchors.margins: 20
+                    spacing: 16
 
                     Text {
                         text: "配对码"
-                        color: app.ink
-                        font.pixelSize: 17
-                        font.bold: true
+                        color: tokens.onSurface
+                        font.pixelSize: 16
+                        font.weight: Font.DemiBold
                     }
-
                     Text {
                         Layout.fillWidth: true
                         wrapMode: Text.Wrap
                         text: app.selectedDevice()
-                              ? "为 " + app.selectedDevice().device_id + " 生成 6 位配对码"
-                              : "先在左侧选择一个设备"
-                        color: app.inkDim
+                              ? ("为 " + app.selectedDevice().device_id + " 生成一次性配对码，10 分钟内有效")
+                              : "先在左侧选择一台设备"
+                        color: tokens.onSurfaceVariant
                         font.pixelSize: 13
                     }
 
+                    // 配对码：全页唯一的大字号元素
                     Rectangle {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 116
-                        radius: 14
-                        color: app.cardAlt
-                        border.color: app.pairCode !== "" ? app.accent : app.line
+                        Layout.preferredHeight: 128
+                        radius: 16
+                        color: tokens.surfaceAlt
+                        border.color: app.pairCode !== "" ? tokens.primary : tokens.outline
                         border.width: 1
-
                         Column {
                             anchors.centerIn: parent
-                            spacing: 6
+                            spacing: 8
                             Text {
                                 anchors.horizontalCenter: parent.horizontalCenter
-                                text: app.pairCode !== "" ? app.pairCode : "—— —— ——"
-                                color: app.pairCode !== "" ? app.accent : app.inkDim
+                                text: app.pairCode !== "" ? app.pairCode : "······"
+                                color: app.pairCode !== "" ? tokens.primary : tokens.outline
                                 font.pixelSize: 44
-                                font.bold: true
-                                font.letterSpacing: 6
+                                font.weight: Font.DemiBold
+                                font.letterSpacing: 8
                             }
                             Text {
                                 anchors.horizontalCenter: parent.horizontalCenter
                                 text: app.pairCode !== ""
-                                      ? "剩余 " + Math.floor(app.pairRemaining / 60) + ":" +
-                                        String(app.pairRemaining % 60).padStart(2, "0")
-                                      : "10 分钟有效"
-                                color: app.inkDim
-                                font.pixelSize: 13
+                                      ? (Math.floor(app.pairRemaining / 60) + ":" +
+                                         String(app.pairRemaining % 60).padStart(2, "0") + " 后过期")
+                                      : "尚未生成"
+                                color: tokens.onSurfaceVariant
+                                font.pixelSize: 12
                             }
                         }
                     }
 
                     RowLayout {
                         Layout.fillWidth: true
-                        spacing: 12
-                        Button {
+                        spacing: 8
+                        M3FilledButton {
                             Layout.fillWidth: true
-                            text: app.pairCode !== "" ? "刷新配对码" : "生成配对码"
+                            label: app.pairCode !== "" ? "刷新配对码" : "生成配对码"
                             enabled: app.selectedDevice() !== null && !app.busy
-                            onClicked: app.generatePairCode()
+                            onActivated: app.generatePairCode()
                         }
-                        Button {
-                            Layout.preferredWidth: 110
-                            text: "清空"
+                        M3TextButton {
+                            label: "清空"
                             enabled: app.pairCode !== ""
-                            onClicked: { app.pairCode = ""; app.pairRemaining = 0; app.statusMessage = "" }
+                            onActivated: {
+                                app.pairCode = ""
+                                app.pairRemaining = 0
+                                app.showHint("", false)
+                            }
                         }
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        wrapMode: Text.Wrap
+                        visible: app.hint !== ""
+                        text: app.hint
+                        color: app.hintBad ? tokens.danger : tokens.onSurfaceVariant
+                        font.pixelSize: 12
                     }
 
                     Item { Layout.fillHeight: true }
@@ -385,9 +491,8 @@ ApplicationWindow {
                     Text {
                         Layout.fillWidth: true
                         wrapMode: Text.Wrap
-                        text: "提示：配对码在终端「设置 → 网络连接管理」里输入；" +
-                              "过期或已使用后点「刷新配对码」重新生成。"
-                        color: app.inkDim
+                        text: "在终端「设置 → 网络连接管理」里输入这 6 位码。码过期或被使用后，点「刷新配对码」重新生成。"
+                        color: tokens.onSurfaceVariant
                         font.pixelSize: 12
                     }
                 }
@@ -396,17 +501,16 @@ ApplicationWindow {
     }
 
     // 截图钩子：qml EdgeManager.qml -- --grab /tmp/edge-manager.png
-    // 用于无人值守/无桌面环境下验证界面（渲染完成后保存并退出）。
     readonly property string grabPath: {
         const args = Qt.application.arguments
         const i = args.indexOf("--grab")
         return (i >= 0 && i + 1 < args.length) ? args[i + 1] : ""
     }
     Timer {
-        interval: 1800
+        interval: 3500
         running: app.grabPath !== ""
         onTriggered: {
-            app.contentItem.grabToImage(function (result) {
+            rootLayout.grabToImage(function (result) {
                 result.saveToFile(app.grabPath)
                 Qt.quit()
             })
