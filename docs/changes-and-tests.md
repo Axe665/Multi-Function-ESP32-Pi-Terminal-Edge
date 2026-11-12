@@ -96,17 +96,21 @@ edge-node = active/enabled   edge-web = active/enabled   edge-mqtt = active/enab
 - `~/.local/share/applications/edge.desktop`：Name=边，Exec/Icon 正确
 - `~/桌面/edge.desktop` 桌面快捷方式可执行
 
-## 三、部署方式
+## 三、部署方式（两种并存，均可使用）
 
-容器（文档 §5.1，官方）：
+| 方式 | 组成 | 适用 |
+|---|---|---|
+| **容器**（文档 §5.1，官方） | `docker/compose.yml` 四服务：mosquitto / ingest / api / web | 生产/完整部署；靠 `restart: unless-stopped` + docker.service 自启 |
+| **非容器**（开发机补充） | systemd user：edge-node（8001）/ edge-web（5173）/ edge-mqtt（18883） | 开发机裸跑，改代码即时生效、省资源 |
+
+两种方式**并存**：容器部署的代码与 compose 文件本分支未改动，可照常使用；
+非容器只是给开发机多提供一种启动方式，不替代容器部署。
 
 ```sh
+# 容器（原方式，不变）
 cd docker && docker compose up -d --build
-```
 
-非容器（开发机裸跑）：
-
-```sh
+# 非容器（可选）
 cp deploy/edge.env.example deploy/edge.env   # 按需改
 ./scripts/install_systemd.sh                 # 装服务 + 图标 + 桌面入口
 systemctl --user status edge-node edge-web edge-mqtt

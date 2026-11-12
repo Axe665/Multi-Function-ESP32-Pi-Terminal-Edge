@@ -109,6 +109,7 @@ cp deploy/edge.env.example deploy/edge.env   # 按需改端口/证书/云配置
 systemctl --user status edge-node edge-web edge-mqtt
 ```
 
+容器部署与非容器部署**并存**：容器是官方方式、compose 文件未改动；非容器给开发机多一个选择，不替代容器。
 容器部署靠 compose 的 `restart: unless-stopped` + docker.service 自启；
 裸跑部署靠上面这三个 user unit（edge-node / edge-web / edge-mqtt）自启，两者等价。
 ./scripts/verify_acl.sh                               # 实测设备只能读写自己的前缀
