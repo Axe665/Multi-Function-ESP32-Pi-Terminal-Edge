@@ -105,7 +105,7 @@ cd docker && docker compose up -d --build
 
 ```sh
 cp deploy/edge.env.example deploy/edge.env   # 按需改端口/证书/云配置
-./deploy/install-systemd.sh                  # 装成 systemd user 服务并开机自启
+./scripts/install_systemd.sh                  # 装成 systemd user 服务并开机自启
 systemctl --user status edge-node edge-web edge-mqtt
 ```
 
