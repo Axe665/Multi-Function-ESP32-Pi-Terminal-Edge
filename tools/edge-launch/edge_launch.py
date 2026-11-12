@@ -88,13 +88,30 @@ def main() -> int:
     root.resizable(False, False)
     root.minsize(width, height)
     root.maxsize(width, height)
+    # 彻底去掉系统标题栏（COSMIC 会把 dialog/toolwindow 类型直接拉全屏），
+    # 于是也不存在最大化/全屏按钮；改为按住标题区拖动窗口。
+    root.overrideredirect(True)
 
     card = tk.Frame(root, bg=CARD, highlightbackground=OUTLINE, highlightthickness=1)
     card.place(x=16, y=16, width=width - 32, height=height - 32)
 
     title = tk.Label(card, text="边节点已启动", bg=CARD, fg=INK,
-                     font=("Noto Sans CJK SC", 20, "bold"))
+                     font=("Noto Sans CJK SC", 20, "bold"), cursor="fleur")
     title.place(x=24, y=20)
+
+    drag = {"x": 0, "y": 0}
+
+    def on_press(event) -> None:
+        drag["x"], drag["y"] = event.x_root, event.y_root
+
+    def on_drag(event) -> None:
+        dx = event.x_root - drag["x"]
+        dy = event.y_root - drag["y"]
+        root.geometry(f"+{root.winfo_x() + dx}+{root.winfo_y() + dy}")
+        drag["x"], drag["y"] = event.x_root, event.y_root
+
+    title.bind("<ButtonPress-1>", on_press)
+    title.bind("<B1-Motion>", on_drag)
 
     status = tk.Label(card, text="", bg=CARD, fg=DIM, anchor="w",
                       font=("Noto Sans CJK SC", 11), width=52)
