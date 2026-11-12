@@ -11,7 +11,7 @@
 3. **mDNS 修复**：① `EDGE_LAN_IP` 覆盖广播地址 ② 云发现优先用 TXT 的 `url`
    （IP 字面量做 TLS SNI 会被网关判 421）。
 4. **Web 设置页**：新增「云连接」卡片（地址/令牌/保存并连接/搜索云）。
-5. **非容器部署**：`deploy/systemd/*.service.in` + `scripts/install_systemd.sh`，
+5. **可选非容器部署**：`deploy/systemd/*.service.in` + `scripts/install_systemd.sh`，
    装成 systemd user 服务（edge-node/edge-web/edge-mqtt）并生成「边」的图标、
    应用菜单与桌面快捷方式。
 6. **启动弹窗**：`tools/edge-launch/edge_launch.py`，显示本机/局域网网页地址，
