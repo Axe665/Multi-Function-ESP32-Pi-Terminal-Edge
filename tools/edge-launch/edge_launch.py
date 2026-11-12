@@ -145,29 +145,34 @@ def main() -> int:
         start_btn.config(state="disabled")
         stop_btn.config(state="disabled")
 
-    def _after_action() -> None:
-        # --no-block 立即返回，服务真正起来要几秒：轮询到有 active 再解除
-        if any(service_active(s) for s in SERVICES):
-            busy["value"] = False
-            start_btn.config(state="normal")
-            stop_btn.config(state="normal")
-            refresh()
+    def _finish() -> None:
+        busy["value"] = False
+        start_btn.config(state="normal")
+        stop_btn.config(state="normal")
+        refresh()
+
+    def _wait_state(expect_active: bool, deadline_ms: int) -> None:
+        # --no-block 立即返回，服务真正起/停要几秒：轮询到期望状态或超时再解除。
+        # 关闭场景下服务会一直是 inactive，必须按“期望值”判断，否则永远等不到。
+        active = any(service_active(s) for s in SERVICES)
+        if active == expect_active or deadline_ms <= 0:
+            _finish()
         else:
-            root.after(1200, _after_action)
+            root.after(1200, lambda: _wait_state(expect_active, deadline_ms - 1200))
 
     def stop_all() -> None:
         if busy["value"]:
             return
         _set_busy("正在关闭边服务…")
         systemctl("--no-block", "stop", *[f"{s}.service" for s in SERVICES])
-        root.after(1200, _after_action)
+        root.after(1000, lambda: _wait_state(False, 12000))
 
     def start_all() -> None:
         if busy["value"]:
             return
         _set_busy("正在启动边服务…（edge-node 加载模型约 5-10 秒）")
         systemctl("--no-block", "start", *[f"{s}.service" for s in SERVICES])
-        root.after(1200, _after_action)
+        root.after(1000, lambda: _wait_state(True, 20000))
 
     def toggle_autostart() -> None:
         args = [f"{s}.service" for s in SERVICES]
