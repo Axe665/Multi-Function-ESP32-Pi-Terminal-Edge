@@ -4,6 +4,7 @@
 - 点击网址行「打开」直接跳浏览器
 - 「开机自启」切换三个 systemd user 服务的 enable 状态
 - 「关闭所有边服务」停掉 edge-node / edge-web / edge-mqtt
+- 窗口可缩放/最大化，布局用 pack 自适应，全屏时内容居中铺开
 只依赖标准库 tkinter，不引入 Qt。
 """
 from __future__ import annotations
@@ -82,43 +83,28 @@ def main() -> int:
     root = tk.Tk()
     root.title("边节点")
     root.configure(bg=BG)
-    width, height = 660, 500
-    # 固定尺寸：resizable + min/max 双保险，X11 下再设 dialog 类型，
-    # 避免窗口管理器给出最大化按钮或允许拖边缩放。
-    root.resizable(False, False)
-    root.minsize(width, height)
-    root.maxsize(width, height)
-    # 彻底去掉系统标题栏（COSMIC 会把 dialog/toolwindow 类型直接拉全屏），
-    # 于是也不存在最大化/全屏按钮；改为按住标题区拖动窗口。
-    root.overrideredirect(True)
+    root.minsize(560, 420)
+    root.geometry("720x520")
+    center(root, 720, 520)
 
     card = tk.Frame(root, bg=CARD, highlightbackground=OUTLINE, highlightthickness=1)
-    card.place(x=16, y=16, width=width - 32, height=height - 32)
+    card.pack(fill="both", expand=True, padx=16, pady=16)
 
-    title = tk.Label(card, text="边节点已启动", bg=CARD, fg=INK,
-                     font=("Noto Sans CJK SC", 20, "bold"), cursor="fleur")
-    title.place(x=24, y=20)
-
-    drag = {"x": 0, "y": 0}
-
-    def on_press(event) -> None:
-        drag["x"], drag["y"] = event.x_root, event.y_root
-
-    def on_drag(event) -> None:
-        dx = event.x_root - drag["x"]
-        dy = event.y_root - drag["y"]
-        root.geometry(f"+{root.winfo_x() + dx}+{root.winfo_y() + dy}")
-        drag["x"], drag["y"] = event.x_root, event.y_root
-
-    title.bind("<ButtonPress-1>", on_press)
-    title.bind("<B1-Motion>", on_drag)
-
-    status = tk.Label(card, text="", bg=CARD, fg=DIM, anchor="w",
-                      font=("Noto Sans CJK SC", 11), width=52)
-    status.place(x=24, y=64)
+    header = tk.Frame(card, bg=CARD)
+    header.pack(fill="x", padx=24, pady=(20, 0))
+    tk.Label(header, text="边节点已启动", bg=CARD, fg=INK,
+             font=("Noto Sans CJK SC", 20, "bold")).pack(side="left")
+    status = tk.Label(header, text="", bg=CARD, fg=DIM, anchor="e",
+                      font=("Noto Sans CJK SC", 11))
+    status.pack(side="right")
 
     entries_frame = tk.Frame(card, bg=CARD)
-    entries_frame.place(x=24, y=104, width=width - 80, height=190)
+    entries_frame.pack(fill="both", expand=True, padx=24, pady=(20, 0))
+
+    busy = {"value": False}
+    start_btn = tk.Button()
+    stop_btn = tk.Button()
+    auto_btn = tk.Button()
 
     def rebuild_entries() -> None:
         for child in entries_frame.winfo_children():
@@ -129,10 +115,13 @@ def main() -> int:
             entries.append(("本机", f"http://localhost:{WEB_PORT}"))
             for ip in lan_ips():
                 entries.append(("局域网", f"http://{ip}:{WEB_PORT}"))
-        y = 0
+        if not entries:
+            tk.Label(entries_frame, text="网页服务未运行（edge-web.service）",
+                     bg=CARD, fg=DANGER, font=("Noto Sans CJK SC", 12)).pack(anchor="w", pady=8)
+            return
         for label, url in entries[:3]:
             row = tk.Frame(entries_frame, bg=CARD)
-            row.place(x=0, y=y, width=width - 80)
+            row.pack(fill="x", pady=4)
             tk.Label(row, text=label, bg=CARD, fg=DIM, width=7, anchor="w",
                      font=("Noto Sans CJK SC", 11)).pack(side="left")
             tk.Label(row, text=url, bg=CARD, fg=ACCENT,
@@ -141,30 +130,16 @@ def main() -> int:
                       bg=ACCENT, fg=ON_ACCENT, activebackground="#6FC3DE",
                       relief="flat", bd=0, padx=16, pady=4,
                       font=("Noto Sans CJK SC", 11, "bold"), cursor="hand2").pack(side="right")
-            y += 56
-        if not entries:
-            tk.Label(entries_frame, text="网页服务未运行（edge-web.service）",
-                     bg=CARD, fg=DANGER, font=("Noto Sans CJK SC", 12)).place(x=0, y=8)
 
     def refresh() -> None:
         active = [s for s in SERVICES if service_active(s)]
         if active:
-            status.config(text=f"服务：" + " / ".join(active), fg=DIM)
+            status.config(text="服务：" + " / ".join(active), fg=DIM)
         else:
             status.config(text="服务未运行（点「启动边服务」）", fg=DANGER)
         auto_btn.config(text=f"开机自启：{'开' if autostart_enabled() else '关'}",
                         fg=(ACCENT if autostart_enabled() else DIM))
-        web_up = port_open(WEB_PORT)
         rebuild_entries()
-        return web_up
-
-    busy = {"value": False}
-
-    def _set_busy(text: str) -> None:
-        busy["value"] = True
-        status.config(text=text, fg=ACCENT)
-        start_btn.config(state="disabled")
-        stop_btn.config(state="disabled")
 
     def _finish() -> None:
         busy["value"] = False
@@ -174,12 +149,17 @@ def main() -> int:
 
     def _wait_state(expect_active: bool, deadline_ms: int) -> None:
         # --no-block 立即返回，服务真正起/停要几秒：轮询到期望状态或超时再解除。
-        # 关闭场景下服务会一直是 inactive，必须按“期望值”判断，否则永远等不到。
         active = any(service_active(s) for s in SERVICES)
         if active == expect_active or deadline_ms <= 0:
             _finish()
         else:
             root.after(1200, lambda: _wait_state(expect_active, deadline_ms - 1200))
+
+    def _set_busy(text: str) -> None:
+        busy["value"] = True
+        status.config(text=text, fg=ACCENT)
+        start_btn.config(state="disabled")
+        stop_btn.config(state="disabled")
 
     def stop_all() -> None:
         if busy["value"]:
@@ -203,8 +183,12 @@ def main() -> int:
             systemctl("enable", *args)
         refresh()
 
+    footer = tk.Label(card, text=f"边 API：127.0.0.1:{API_PORT} · 服务自启由 systemd user 管理",
+                      bg=CARD, fg=DIM, font=("Noto Sans CJK SC", 10))
+    footer.pack(side="bottom", anchor="w", padx=24, pady=(0, 16))
+
     actions = tk.Frame(card, bg=CARD)
-    actions.place(x=24, y=height - 150, width=width - 80)
+    actions.pack(side="bottom", fill="x", padx=24, pady=(16, 10))
 
     start_btn = tk.Button(actions, text="启动边服务", command=start_all,
                           bg=ACCENT, fg=ON_ACCENT, activebackground="#6FC3DE",
@@ -224,17 +208,12 @@ def main() -> int:
                          font=("Noto Sans CJK SC", 11, "bold"), cursor="hand2")
     auto_btn.pack(side="left", padx=(10, 0))
 
-    close_btn = tk.Button(actions, text="关闭", command=root.destroy,
-                          bg=CARD, fg=DIM, activebackground=CARD,
-                          relief="flat", bd=0, padx=12, pady=6,
-                          font=("Noto Sans CJK SC", 11), cursor="hand2")
-    close_btn.pack(side="right")
-
-    tk.Label(card, text=f"边 API：127.0.0.1:{API_PORT} · 服务自启由 systemd user 管理",
-             bg=CARD, fg=DIM, font=("Noto Sans CJK SC", 10)).place(x=24, y=height - 74)
+    tk.Button(actions, text="关闭", command=root.destroy,
+              bg=CARD, fg=DIM, activebackground=CARD,
+              relief="flat", bd=0, padx=12, pady=6,
+              font=("Noto Sans CJK SC", 11), cursor="hand2").pack(side="right")
 
     refresh()
-    center(root, width, height)
     root.mainloop()
     return 0
 
