@@ -104,6 +104,19 @@ ApplicationWindow {
         return app.devices[app.selectedIndex]
     }
 
+    function reportCloud() {
+        app.busy = true
+        request("POST", "/api/v1/report/cloud", null, function (status, data) {
+            app.busy = false
+            if (status === 200 && data) {
+                const state = String(data.cloud || "ok")
+                app.showHint("云上报：" + state, state !== "sent")
+            } else {
+                app.showHint("云上报失败（HTTP " + status + "）", true)
+            }
+        })
+    }
+
     function generatePairCode() {
         const device = app.selectedDevice()
         if (!device) return
@@ -233,6 +246,18 @@ ApplicationWindow {
                 }
                 Text {
                     text: (app.health.mqtt && app.health.mqtt.connected) ? "MQTT 已连接" : "MQTT 未连接"
+                    color: tokens.onSurfaceVariant
+                    font.pixelSize: 13
+                }
+            }
+            RowLayout {
+                spacing: 8
+                Rectangle {
+                    width: 8; height: 8; radius: 4
+                    color: (app.health.cloud && app.health.cloud.configured) ? tokens.success : tokens.outline
+                }
+                Text {
+                    text: (app.health.cloud && app.health.cloud.configured) ? "云已配置" : "云未配置"
                     color: tokens.onSurfaceVariant
                     font.pixelSize: 13
                 }
@@ -505,6 +530,13 @@ ApplicationWindow {
                     }
 
                     Item { Layout.fillHeight: true }
+
+                    M3TextButton {
+                        Layout.fillWidth: true
+                        label: "立即上报云"
+                        enabled: !app.busy
+                        onActivated: app.reportCloud()
+                    }
 
                     Text {
                         Layout.fillWidth: true
