@@ -152,7 +152,8 @@ def browse_cloud(seconds: float = 2.5) -> list[dict]:
             addresses = [socket.inet_ntoa(a) for a in info.addresses]
             if not addresses:
                 return
-            url = f"https://{addresses[0]}:{info.port or 8443}"
+            # 云可用 TXT 的 url 给出域名形式（IP 字面量做 SNI 在部分网关会 421）
+            url = props.get("url") or f"https://{addresses[0]}:{info.port or 8443}"
             found[url] = {"url": url, "ca_fp": props.get("ca_fp", ""),
                           "name": name.removesuffix("." + CLOUD_TYPE)}
 
