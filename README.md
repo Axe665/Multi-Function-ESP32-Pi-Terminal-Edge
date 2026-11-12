@@ -100,6 +100,17 @@ Docker（含 mTLS broker）：
 ```bash
 python3 scripts/make_broker_cert.py mqtt.edge.local   # 用边 CA 签 broker 证书
 cd docker && docker compose up -d --build
+
+非容器部署（裸跑 uvicorn + 网页 dev server，适合开发机）：
+
+```sh
+cp deploy/edge.env.example deploy/edge.env   # 按需改端口/证书/云配置
+./deploy/install-systemd.sh                  # 装成 systemd user 服务并开机自启
+systemctl --user status edge-node edge-web edge-mqtt
+```
+
+容器部署靠 compose 的 `restart: unless-stopped` + docker.service 自启；
+裸跑部署靠上面这三个 user unit（edge-node / edge-web / edge-mqtt）自启，两者等价。
 ./scripts/verify_acl.sh                               # 实测设备只能读写自己的前缀
 ```
 

@@ -14,3 +14,4 @@ web/dist/
 node_modules/
 cloud-certs/
 .venv/
+deploy/edge.env

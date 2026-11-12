@@ -1,0 +1,10 @@
+[Unit]
+Description=Edge MQTT broker（本机 mTLS，18883）
+
+[Service]
+ExecStart=/usr/sbin/mosquitto -c @ROOT@/docker/mosquitto/edge-local.conf
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target
