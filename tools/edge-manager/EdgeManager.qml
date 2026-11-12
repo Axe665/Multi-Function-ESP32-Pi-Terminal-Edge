@@ -87,6 +87,14 @@ ApplicationWindow {
             if (status === 200 && data) {
                 app.devices = data
                 if (app.selectedIndex >= app.devices.length) app.selectedIndex = -1
+                // 抓图模式：直接摆出“已生成配对码 + 状态文字”的最坏情况，
+                // 用来确认底部提示不会被撑出卡片（不依赖点击与网络往返）。
+                if (app.grabPath !== "" && app.devices.length > 0) {
+                    app.selectedIndex = 0
+                    app.pairCode = "123456"
+                    app.pairRemaining = 600
+                    app.showHint("已为 " + app.devices[0].device_id + " 生成配对码", false)
+                }
             }
         })
     }
@@ -100,8 +108,10 @@ ApplicationWindow {
         const device = app.selectedDevice()
         if (!device) return
         app.busy = true
+        console.log("generate pair for", device.device_id)
         request("POST", "/api/v1/devices/" + encodeURIComponent(device.device_id) + "/pair", null,
                 function (status, data) {
+            console.log("pair response", status, data ? data.code : "-")
             app.busy = false
             if (status === 200 && data && data.code) {
                 app.pairCode = data.code
@@ -408,7 +418,7 @@ ApplicationWindow {
                 ColumnLayout {
                     anchors.fill: parent
                     anchors.margins: 20
-                    spacing: 16
+                    spacing: 12
 
                     Text {
                         text: "配对码"
@@ -429,7 +439,7 @@ ApplicationWindow {
                     // 配对码：全页唯一的大字号元素
                     Rectangle {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 128
+                        Layout.preferredHeight: 116
                         radius: 16
                         color: tokens.surfaceAlt
                         border.color: app.pairCode !== "" ? tokens.primary : tokens.outline
@@ -477,22 +487,17 @@ ApplicationWindow {
                         }
                     }
 
-                    Text {
-                        Layout.fillWidth: true
-                        wrapMode: Text.Wrap
-                        visible: app.hint !== ""
-                        text: app.hint
-                        color: app.hintBad ? tokens.danger : tokens.onSurfaceVariant
-                        font.pixelSize: 12
-                    }
-
                     Item { Layout.fillHeight: true }
 
                     Text {
                         Layout.fillWidth: true
                         wrapMode: Text.Wrap
-                        text: "在终端「设置 → 网络连接管理」里输入这 6 位码。码过期或被使用后，点「刷新配对码」重新生成。"
-                        color: tokens.onSurfaceVariant
+                        maximumLineCount: 3
+                        elide: Text.ElideRight
+                        text: app.hint !== ""
+                              ? app.hint
+                              : "在终端「设置 → 网络连接管理」输入这 6 位码；过期或被使用后点「刷新配对码」。"
+                        color: app.hintBad ? tokens.danger : tokens.onSurfaceVariant
                         font.pixelSize: 12
                     }
                 }
