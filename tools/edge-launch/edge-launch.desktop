@@ -2,6 +2,6 @@
 Type=Application
 Name=边节点启动提示
 Comment=显示边网页入口（本机 + 局域网）
-Exec=python3 %k/../../../tools/edge-launch/edge_launch.py
+Exec=python3 /home/yuanzingo/文档/deepseek-harness/default-workspace/Multi-Function-ESP32-Pi-Terminal-Edge/tools/edge-launch/edge_launch.py
 Terminal=false
 X-GNOME-Autostart-enabled=true
