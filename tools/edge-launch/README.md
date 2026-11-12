@@ -11,3 +11,12 @@
 ```sh
 cp tools/edge-launch/edge-launch.desktop ~/.config/autostart/
 ```
+
+
+## 依赖
+
+只用标准库 tkinter（桌面环境一般已带）；最小化系统需要：
+
+```sh
+sudo apt install python3-tk
+```
