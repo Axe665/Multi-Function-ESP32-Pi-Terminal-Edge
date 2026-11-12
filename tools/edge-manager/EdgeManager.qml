@@ -104,6 +104,39 @@ ApplicationWindow {
         return app.devices[app.selectedIndex]
     }
 
+    property var cloudFound: []
+    property bool cloudSearching: false
+
+    function searchCloud() {
+        app.cloudSearching = true
+        app.cloudFound = []
+        cloudSearchDialog.open()
+        request("GET", "/api/v1/cloud/discovery", null, function (status, data) {
+            app.cloudSearching = false
+            if (status === 200 && data) {
+                app.cloudFound = data.found || []
+                if (app.cloudFound.length === 0)
+                    app.showHint("没有发现云节点；确认云仓在局域网内广播 _orpi-cloud._tcp", false)
+            } else {
+                app.showHint("搜索失败（HTTP " + status + "）", true)
+            }
+        })
+    }
+
+    function connectToCloud(url) {
+        app.busy = true
+        request("POST", "/api/v1/cloud/config", { url: url }, function (status, data) {
+            app.busy = false
+            if (status === 200 && data && data.configured) {
+                app.showHint("已连接云：" + data.url, false)
+                cloudSearchDialog.close()
+                app.reportCloud()
+            } else {
+                app.showHint("连接失败（HTTP " + status + "）", true)
+            }
+        })
+    }
+
     function reportCloud() {
         app.busy = true
         request("POST", "/api/v1/report/cloud", null, function (status, data) {
@@ -261,6 +294,10 @@ ApplicationWindow {
                     color: tokens.onSurfaceVariant
                     font.pixelSize: 13
                 }
+            }
+            M3TextButton {
+                label: "搜索云"
+                onActivated: app.searchCloud()
             }
             M3TextButton {
                 label: "配置云"
@@ -651,6 +688,97 @@ ApplicationWindow {
                             }
                         })
                     }
+                }
+            }
+        }
+    }
+
+    // 搜索云：mDNS `_orpi-cloud._tcp` 的现场结果，点连接即写入并上报。
+    Dialog {
+        id: cloudSearchDialog
+        objectName: "cloudSearchDialog"
+        parent: Overlay.overlay
+        modal: true
+        x: (parent.width - width) / 2
+        y: (parent.height - height) / 2
+        width: Math.min(620, app.width - 48)
+        padding: 24
+        background: Rectangle {
+            color: tokens.surface
+            radius: 20
+            border.color: tokens.outline
+            border.width: 1
+        }
+        contentItem: Column {
+            spacing: 12
+            Text {
+                text: "搜索云"
+                color: tokens.onSurface
+                font.pixelSize: 20
+                font.weight: Font.DemiBold
+            }
+            Text {
+                width: parent.width
+                wrapMode: Text.Wrap
+                text: app.cloudSearching
+                      ? "正在搜索局域网内的 _orpi-cloud._tcp …"
+                      : (app.cloudFound.length > 0
+                         ? "发现 " + app.cloudFound.length + " 个云节点，点击连接即写入云地址并立即上报。"
+                         : "没有发现云节点。可以先在云仓启动服务，或改用「配置云」手动填地址。")
+                color: tokens.onSurfaceVariant
+                font.pixelSize: 13
+            }
+            ListView {
+                width: parent.width
+                height: Math.min(200, app.cloudFound.length * 56)
+                model: app.cloudFound
+                spacing: 6
+                clip: true
+                delegate: Rectangle {
+                    required property var modelData
+                    width: ListView.view.width
+                    height: 50
+                    radius: 10
+                    color: tokens.surfaceAlt
+                    Column {
+                        anchors.left: parent.left
+                        anchors.leftMargin: 12
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 2
+                        Text {
+                            text: modelData.url
+                            color: tokens.onSurface
+                            font.pixelSize: 14
+                            font.weight: Font.Medium
+                        }
+                        Text {
+                            text: (modelData.ca_fp ? "CA 指纹 " + modelData.ca_fp : "无 CA 指纹") +
+                                  (modelData.trusted ? " · 可信" : " · 未校验")
+                            color: modelData.trusted ? tokens.success : tokens.onSurfaceVariant
+                            font.pixelSize: 11
+                        }
+                    }
+                    M3TextButton {
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        label: "连接"
+                        enabled: !app.busy
+                        onActivated: app.connectToCloud(modelData.url)
+                    }
+                }
+            }
+            Row {
+                width: parent.width
+                spacing: 8
+                M3TextButton {
+                    label: app.cloudSearching ? "搜索中…" : "重新搜索"
+                    enabled: !app.cloudSearching
+                    onActivated: app.searchCloud()
+                }
+                Item { width: parent.width - 220; height: 1 }
+                M3TextButton {
+                    label: "关闭"
+                    onActivated: cloudSearchDialog.close()
                 }
             }
         }

@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import os
 import socket
+import time
 from pathlib import Path
 from typing import Any
 
@@ -129,6 +130,42 @@ class _CloudListener(ServiceListener):
 
     def remove_service(self, *args) -> None:
         pass
+
+
+def browse_cloud(seconds: float = 2.5) -> list[dict]:
+    """现场搜索局域网里的 `_orpi-cloud._tcp`（供“搜索云”按钮用）。
+
+    只返回地址与广播的 ca_fp；信任仍由 pinned_cloud_fp 决定（文档 §8.4：
+    mDNS 只解决地址，指纹不符不能用）。
+    """
+    zc = mdns.zc
+    if zc is None:
+        return []
+    found: dict[str, dict] = {}
+
+    class _Listener:
+        def add_service(self, _zc, type_, name) -> None:
+            info = _zc.get_service_info(type_, name, timeout=1500)
+            if not info:
+                return
+            props = {k.decode(): v.decode() for k, v in info.properties.items() if v is not None}
+            addresses = [socket.inet_ntoa(a) for a in info.addresses]
+            if not addresses:
+                return
+            url = f"https://{addresses[0]}:{info.port or 8443}"
+            found[url] = {"url": url, "ca_fp": props.get("ca_fp", ""),
+                          "name": name.removesuffix("." + CLOUD_TYPE)}
+
+        def update_service(self, *args) -> None:
+            pass
+
+        def remove_service(self, *args) -> None:
+            pass
+
+    browser = ServiceBrowser(zc, CLOUD_TYPE, _Listener())
+    time.sleep(seconds)
+    browser.cancel()
+    return list(found.values())
 
 
 class Mdns:
