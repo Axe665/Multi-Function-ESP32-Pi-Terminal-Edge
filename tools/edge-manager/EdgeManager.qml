@@ -378,10 +378,25 @@ ApplicationWindow {
                                         font.pixelSize: 12
                                     }
                                 }
-                                Text {
-                                    text: modelData.online ? "在线" : "离线"
-                                    color: modelData.online ? tokens.success : tokens.onSurfaceVariant
-                                    font.pixelSize: 12
+                                Column {
+                                    Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+                                    spacing: 2
+                                    Text {
+                                        anchors.right: parent.right
+                                        text: modelData.online ? "在线" : "离线"
+                                        color: modelData.online ? tokens.success : tokens.onSurfaceVariant
+                                        font.pixelSize: 12
+                                    }
+                                    // 已配对 = 设备用配对码换过证书（paired_at 有值）；
+                                    // 未配对只完成过上报，不能走 mTLS。
+                                    Text {
+                                        anchors.right: parent.right
+                                        text: modelData.paired_at
+                                              ? ("已配对 · " + String(modelData.cert_fp || "").slice(0, 8))
+                                              : "未配对"
+                                        color: modelData.paired_at ? tokens.primary : tokens.onSurfaceVariant
+                                        font.pixelSize: 11
+                                    }
                                 }
                             }
                             MouseArea {
