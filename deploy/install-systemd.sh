@@ -21,4 +21,21 @@ done
 systemctl --user daemon-reload
 systemctl --user enable --now edge-node.service edge-web.service edge-mqtt.service
 systemctl --user --no-pager status edge-node.service edge-web.service edge-mqtt.service | grep -E "^●|Active:"
+
+# 应用菜单图标：名字就叫「边」
+APP_DIR=${XDG_DATA_HOME:-$HOME/.local/share}/applications
+ICON_DIR=${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/scalable/apps
+mkdir -p "$APP_DIR" "$ICON_DIR"
+cp "$ROOT/deploy/icons/edge.svg" "$ICON_DIR/edge.svg"
+sed "s|@ROOT@|$ROOT|g" "$ROOT/deploy/edge.desktop.in" > "$APP_DIR/edge.desktop"
+chmod 644 "$APP_DIR/edge.desktop"
+# 桌面快捷方式（存在桌面目录时也放一份，方便直接双击）
+for desk in "$HOME/Desktop" "$HOME/桌面"; do
+  if [ -d "$desk" ]; then
+    cp "$APP_DIR/edge.desktop" "$desk/edge.desktop"
+    chmod +x "$desk/edge.desktop"
+    echo "桌面快捷方式：$desk/edge.desktop"
+  fi
+done
+echo "应用菜单图标：$APP_DIR/edge.desktop（名称为「边」）"
 echo "已安装：$UNIT_DIR/{edge-node,edge-web,edge-mqtt}.service"
