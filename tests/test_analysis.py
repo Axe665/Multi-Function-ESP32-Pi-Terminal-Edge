@@ -19,12 +19,8 @@ from edge import analysis, config, models, store  # noqa: E402
 class AnalysisTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        store.init_db()
-        # 全新建库，避免复用到别的测试留下的数据
-        for suffix in ("", "-wal", "-shm"):
-            p = Path(str(config.DB_PATH) + suffix)
-            if p.exists():
-                p.unlink()
+        # 独立库：别的测试模块的临时库是同一个文件，删文件会和它们的线程互踩
+        config.DB_PATH = Path(tempfile.mkdtemp(prefix="edge-analysis-db-")) / "edge.db"
         store.init_db()
         from edge import sim
         cls.stats = sim.generate(1, seed=20261109)
