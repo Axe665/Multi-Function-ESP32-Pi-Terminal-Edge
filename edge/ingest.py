@@ -14,11 +14,14 @@ from . import catalog, config, models, privacy, store
 
 
 class IngestError(Exception):
-    def __init__(self, code: str, message: str, fields: list[str] | None = None):
+    def __init__(self, code: str, message: str, fields: list[str] | None = None,
+                 batch_id: str | None = None):
         super().__init__(message)
         self.code = code
         self.message = message
         self.fields = fields or []
+        # 拒收也要让端能把回执对回本地批次，不然分不清「永久拒绝」和「可重试」
+        self.batch_id = batch_id
 
 
 def batch_id(device_id: str, ts_from: int, ts_to: int) -> str:
@@ -81,15 +84,20 @@ def process(body: dict[str, Any], transport_device: str | None = None) -> dict[s
         raise IngestError("SCHEMA_INVALID", "载荷不符合 orpi.telemetry.v1",
                           [str(x.get("loc")) for x in e.errors(include_context=False)[:5]])
 
-    # 批次级的 privacy.k 和每一行的 k 都要查：云端按行拒收（整份 422），
-    # 边不能先把 k<5 的桶存下来再让它卡在发件箱里。
-    low_rows = sum(1 for a in msg.aggregates if a.k < config.K_MIN)
-    if msg.privacy.k < config.K_MIN or low_rows:
-        store.bump("suppressed_buckets", max(low_rows, 1))
-        return {"accepted": False, "batch_id": None,
-                "code": "suppressed", "error": "K_BELOW_MIN"}
+    # 文档 §8.2：桶内 subject < 5 时丢这个桶，不是丢整批。
+    # 以前一个 k=4 的桶会让同批合规桶一起丢掉，端还会以为整批被拒。
+    bid = batch_id(msg.device_id, msg.window.from_, msg.window.to)
+    k_min = int(store.get_settings().get("k_min", config.K_MIN))
+    if msg.privacy.k < k_min:
+        store.bump("suppressed_buckets", 1)
+        raise IngestError("K_BELOW_MIN", f"批次的 k 小于 {k_min}", batch_id=bid)
+    low_rows = [a for a in msg.aggregates if a.k < k_min]
+    kept = [a for a in msg.aggregates if a.k >= k_min]
+    # 计数器把「端自己抑制的」和「边丢掉的」都算上；回执只报边丢了几行
+    if len(low_rows) or msg.privacy.suppressed:
+        store.bump("suppressed_buckets", len(low_rows) + (msg.privacy.suppressed or 0))
 
-    agg = [a.model_dump() for a in msg.aggregates]
+    agg = [a.model_dump() for a in kept]
     # 建议文案按不可信数据处理：入库前过一遍正则 + 词典
     adv = []
     scrubbed = 0
@@ -103,20 +111,18 @@ def process(body: dict[str, Any], transport_device: str | None = None) -> dict[s
     if adv:
         safe_body["advice"] = [{**a, "text": b["text"]} for a, b in zip(body.get("advice", []), adv)]
     # 端上报了什么就登记什么：换模块不需要改边
-    for a in msg.aggregates:
+    for a in kept:
         catalog.upsert(msg.device_id, a.metric, a.module_id, a.package_id,
                        a.label, a.unit, a.table, a.decimals)
-    bid = batch_id(msg.device_id, msg.window.from_, msg.window.to)
     store.ensure_device(msg.device_id)
     accepted = store.insert_batch(msg.device_id, bid, msg.window.from_,
                                   msg.window.to, safe_body, agg, adv)
     store.touch_device(msg.device_id, msg.window.to)
     if accepted:
         store.bump("batches")
-    if msg.privacy.suppressed:
-        store.bump("suppressed_buckets", msg.privacy.suppressed)
     return {"accepted": accepted, "batch_id": bid,
-            "code": "accepted" if accepted else "duplicate"}
+            "code": "accepted" if accepted else "duplicate",
+            "suppressed": len(low_rows)}
 
 
 def ack_payload(result: dict[str, Any]) -> dict[str, Any]:

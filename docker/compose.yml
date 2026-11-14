@@ -39,8 +39,11 @@ x-edge: &edge
     EDGE_AUTO_ENCRYPT: ${EDGE_AUTO_ENCRYPT:-1}
     EDGE_INGEST_RATE: ${EDGE_INGEST_RATE:-120}
     EDGE_MIN_FREE_MB: ${EDGE_MIN_FREE_MB:-512}
-    EDGE_SIM: ${EDGE_SIM:-1}
-    EDGE_AUTOSEED: "1"
+    # 演示数据默认关：接真机前忘了关，mock 与真实数据就会混在一张表里
+    EDGE_SIM: ${EDGE_SIM:-0}
+    EDGE_AUTOSEED: ${EDGE_AUTOSEED:-0}
+    # mDNS 交给宿主 Avahi（scripts/install_avahi.sh）；容器里看到的不是局域网
+    EDGE_MDNS: "0"
     EDGE_DEMO: ${EDGE_DEMO:-1}
     EDGE_BUILD: ${EDGE_BUILD:-compose-dev}
     TZ: Asia/Shanghai

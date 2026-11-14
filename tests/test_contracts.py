@@ -108,24 +108,35 @@ class IngestTest(unittest.TestCase):
         self.assertIn("min", r.json()["detail"]["fields"])
         self.assertIn("max", r.json()["detail"]["fields"])
 
-    def test_k_below_min_is_suppressed(self):
+    def test_k_below_min_is_refused(self):
+        """整批声明的 k 不够，整批退回（端要重新攒窗口）。"""
         low = json.loads(json.dumps(self.payload))
         low["window"] = {"from": 1, "to": 2, "step_ms": 1000}
         low["privacy"]["k"] = 4
         r = self.client.post("/api/v1/ingest/telemetry", json=low)
-        self.assertEqual(r.status_code, 200)
-        self.assertFalse(r.json()["accepted"])
-        self.assertEqual(r.json()["code"], "suppressed")
+        self.assertEqual(r.status_code, 422)
+        self.assertEqual(r.json()["detail"]["code"], "K_BELOW_MIN")
 
-    def test_low_k_row_is_suppressed(self):
-        """批次 k 正常、某一行 k<5：云端按行拒收，边也不能先存下来。"""
+    def test_low_k_row_is_dropped_not_whole_batch(self):
+        """文档 §8.2：丢的是这个桶，不是整批。合规的桶必须照常入库。"""
         low = json.loads(json.dumps(self.payload))
         low["window"] = {"from": 3, "to": 4, "step_ms": 1000}
-        low["aggregates"][0]["k"] = 4
+        bad = low["aggregates"][0]
+        bad["k"] = 4
+        good = json.loads(json.dumps(bad))
+        good["k"] = 8   # 不能超过 n_subjects（示例里是 8）
+        good["metric"] = "temp_good"
+        low["aggregates"] = [bad, good]
+
         r = self.client.post("/api/v1/ingest/telemetry", json=low)
-        self.assertEqual(r.status_code, 200)
-        self.assertFalse(r.json()["accepted"])
-        self.assertEqual(r.json()["code"], "suppressed")
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertTrue(r.json()["accepted"])
+        self.assertEqual(r.json()["suppressed"], 1)
+
+        kept = store.series(low["device_id"], "temp_good", 3, 4, 1000)
+        dropped = store.series(low["device_id"], bad["metric"], 3, 4, 1000)
+        self.assertTrue(kept, "k≥5 的桶必须入库")
+        self.assertEqual(dropped, [], "k<5 的桶不能入库")
 
     def test_ingest_rate_limit(self):
         from edge import roles

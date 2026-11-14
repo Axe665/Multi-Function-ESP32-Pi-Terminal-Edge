@@ -15,6 +15,9 @@ from . import (analysis, catalog, cloudpush, config, ingest, mdns, models,
 
 router = APIRouter(prefix="/api/v1")
 
+# 由 roles.create_app 写入：ingest / api / all。health 用它解释自己管不管 MQTT
+ROLE = "all"
+
 
 def _group_on() -> bool:
     """文档 §8.5：群体分析关闭时只留在线/健康计数。"""
@@ -118,7 +121,7 @@ def pair(device_id: str) -> dict[str, Any]:
     return {"device_id": device_id, "code": code, "ttl_s": 600}
 
 
-@router.post("/pair/redeem", dependencies=device)
+@router.post("/pair/redeem")
 def pair_redeem(body: dict[str, Any]) -> dict[str, Any]:
     """终端拿配对码 + CSR 换证书。失败次数与锁定在这里生效。"""
     code = str(body.get("code", ""))
@@ -508,8 +511,13 @@ def health() -> dict[str, Any]:
         "batches": c.get("batches", 0),
         "raw_rejected": c.get("raw_rejected", 0),
         "suppressed_buckets": c.get("suppressed_buckets", 0),
-        "mqtt": mqtt.mqtt_ingest.status(),
-        "mdns": mdns.mdns.status(),
+        # 只有 ingest 角色跑 MQTT 与 mDNS。api 角色上直接写「这角色不管」，
+        # 否则运营看到 connected=false 会以为链路断了
+        "role": ROLE,
+        "mqtt": mqtt.mqtt_ingest.status() if ROLE in ("ingest", "all")
+                else {"enabled": False, "note": "这个角色不订阅 MQTT，看 ingest 的 /health"},
+        "mdns": mdns.mdns.status() if ROLE in ("ingest", "all")
+                else {"enabled": False, "note": "这个角色不广播 mDNS"},
         "scheduler": {"ticks": scheduler.scheduler.ticks,
                       "last": scheduler.scheduler.last},
         "db_cipher": "sqlcipher" if config.DB_KEY else "plain",

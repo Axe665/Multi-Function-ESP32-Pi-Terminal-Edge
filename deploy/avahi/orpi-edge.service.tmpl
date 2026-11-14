@@ -1,0 +1,14 @@
+<?xml version="1.0" standalone='no'?>
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<!-- 由 scripts/install_avahi.sh 生成，别手改 /etc/avahi/services 里的副本。
+     容器里的 mDNS 看不到局域网组播，广播交给宿主 Avahi（文档 §5.1）。 -->
+<service-group>
+  <name replace-wildcards="yes">边节点 %h</name>
+  <service>
+    <type>_orpi-edge._tcp</type>
+    <port>@PORT@</port>
+    <txt-record>v=1</txt-record>
+    <txt-record>id=@EDGE_ID@</txt-record>
+    <txt-record>ca_fp=@CA_FP@</txt-record>
+  </service>
+</service-group>

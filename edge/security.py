@@ -234,14 +234,37 @@ def new_pair_code(device_id: str) -> str:
     return code
 
 
+def _pair_gate(now: int) -> None:
+    """全局限流：码不存在也要计数，否则 6 位码可以按全速枚举。"""
+    until = int(store.get_settings().get("pair_locked_until", 0) or 0)
+    if until > now:
+        raise ValueError("配对尝试过多，请 10 分钟后再试")
+
+
+def _pair_miss(now: int) -> None:
+    settings = store.get_settings()
+    count = int(settings.get("pair_fail_count", 0) or 0) + 1
+    if count >= PAIR_MAX_ATTEMPTS:
+        store.set_settings({"pair_fail_count": 0, "pair_locked_until": now + PAIR_LOCK_MS})
+        store.audit_action("system", "pair.locked", "pair", {"attempts": count})
+    else:
+        store.set_settings({"pair_fail_count": count})
+
+
 def redeem(code: str, csr_pem: str) -> dict[str, Any]:
+    now = store.now_ms()
+    _pair_gate(now)
     row = store.pair_code(code)
     if not row:
+        # 关键：码不存在以前直接抛错、不计数，等于可以无限猜
+        _pair_miss(now)
         raise ValueError("配对码不存在")
     now = store.now_ms()
     if row["used_at"]:
+        _pair_miss(now)
         raise ValueError("配对码已使用过")
     if row["expires_at"] < now:
+        _pair_miss(now)
         raise ValueError("配对码已过期")
     if row["locked_until"] and row["locked_until"] > now:
         raise ValueError("失败次数过多，请 10 分钟后再试")
@@ -254,7 +277,11 @@ def redeem(code: str, csr_pem: str) -> dict[str, Any]:
 
     if not store.mark_pair_used(code):
         store.pair_failure(code, PAIR_MAX_ATTEMPTS, PAIR_LOCK_MS)
+        _pair_miss(now)
         raise ValueError("配对码已被占用")
+    store.set_settings({"pair_fail_count": 0})
+    # 重新配对即视为换发了新证书：清掉这台设备的历史吊销，否则它配对成功也收发不了
+    store.clear_revoked(row["device_id"])
     return issue(row["device_id"], csr_pem)
 
 
