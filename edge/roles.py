@@ -34,8 +34,8 @@ INGEST_PATHS = ("/api/v1/ingest", "/api/v1/health")
 _hits: dict[tuple[str, str], list[float]] = {}
 
 
-def _rate_limited(path: str, ip: str) -> bool:
-    limit = config.INGEST_RATE_PER_MIN
+def _rate_limited(path: str, ip: str, limit: int | None = None) -> bool:
+    limit = config.INGEST_RATE_PER_MIN if limit is None else limit
     if limit <= 0:
         return False
     now = time.time()
@@ -87,12 +87,20 @@ def create_app(role: str = "all") -> FastAPI:
     store.init_db()
     if os.environ.get("EDGE_AUTOSEED") == "1" and not store.devices():
         sim.generate(7)
+    api.ROLE = role   # health 自报角色，免得 api 角色上 mqtt.connected=false 被误读
     app = FastAPI(title=f"Modular Terminal Edge ({role})", version="1.0.0",
                   description=DESCRIPTION, docs_url="/api/docs", redoc_url=None,
                   lifespan=_lifespan_ingest() if role in ("ingest", "all") else None)
 
     @app.middleware("http")
     async def ingest_guard(request: Request, call_next):
+        # 配对是猜码入口，单独限速：每分钟 10 次，比写入口更紧
+        if request.url.path == "/api/v1/pair/redeem" and request.method == "POST":
+            ip = request.client.host if request.client else "-"
+            if _rate_limited(request.url.path, ip, limit=10):
+                return JSONResponse({"detail": {"code": "RATE_LIMITED",
+                                                "message": "配对尝试过于频繁，稍后再试"}},
+                                    status_code=429, headers={"Retry-After": "60"})
         if request.url.path.startswith("/api/v1/ingest") and request.method != "OPTIONS":
             if not ingest.storage_ok():
                 return JSONResponse({"detail": {

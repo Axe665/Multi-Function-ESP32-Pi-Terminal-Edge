@@ -119,7 +119,8 @@ class MqttIngest:
         except ingest.IngestError as e:
             self.rejected += 1
             client.publish(ACK.format(dev=device_id),
-                           json.dumps({"batch_id": None, "accepted": False, "code": e.code}),
+                           json.dumps({"batch_id": e.batch_id, "accepted": False,
+                                       "code": e.code}, ensure_ascii=False),
                            qos=1)
             return
 

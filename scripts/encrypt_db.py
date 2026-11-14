@@ -102,6 +102,11 @@ def main() -> int:
     for suffix in ("-wal", "-shm"):
         Path(str(db) + suffix).unlink(missing_ok=True)
     os.replace(tmp, db)
+    # 明文备份留在数据目录等于没加密：搬到旁边并提示离线保存
+    for bak in Path(db).parent.glob(f"{Path(db).name}.plain-*.bak"):
+        moved = Path(db).parent.parent / bak.name
+        bak.replace(moved)
+        print(f"明文备份已移出数据目录：{moved}（验证后离线保存或删除）")
     print(f"迁移完成：{db}（密钥 {key_file}，请和数据库分开备份）")
     return 0
 

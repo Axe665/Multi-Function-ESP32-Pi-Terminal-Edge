@@ -365,8 +365,30 @@ def snapshot(keep: int = 7) -> str | None:
     else:
         with connect() as src, sqlite3.connect(name) as dst:
             src.backup(dst)
+    # 快照里有 L2 聚合与 L3 文本，同机其他用户不该读得到
+    try:
+        name.chmod(0o600)
+    except OSError:
+        pass
     for old in sorted(out.glob("edge-*.db"))[:-keep]:
         old.unlink(missing_ok=True)
+    if config.DB_KEY:
+        # 库加密之前留下的快照是明文副本，等于绕过磁盘加密，清掉
+        removed = 0
+        for stale in out.glob("edge-*.db"):
+            if stale == name:
+                continue
+            try:
+                with stale.open("rb") as fh:
+                    plaintext = fh.read(16).startswith(b"SQLite format 3")
+            except OSError:
+                continue
+            if plaintext:
+                stale.unlink(missing_ok=True)
+                removed += 1
+        if removed:
+            audit_action("system", "db.plaintext_snapshot_removed", "edge",
+                         {"count": removed})
     return name.name
 
 
@@ -882,6 +904,12 @@ def revoke_serial(serial: str, device_id: str, reason: str) -> None:
         conn.execute(
             """INSERT OR REPLACE INTO revoked(serial, device_id, reason, revoked_at)
                VALUES(?,?,?,?)""", (serial, device_id, reason, now_ms()))
+
+
+def clear_revoked(device_id: str) -> int:
+    """重新配对后清掉这台设备的历史吊销记录（旧证书已不在手上）。"""
+    with connect() as conn:
+        return conn.execute("DELETE FROM revoked WHERE device_id=?", (device_id,)).rowcount
 
 
 def is_revoked(serial: str) -> bool:
