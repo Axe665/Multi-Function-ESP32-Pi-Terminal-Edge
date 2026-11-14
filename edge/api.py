@@ -536,13 +536,23 @@ def put_settings(patch: dict[str, Any]) -> dict[str, Any]:
     clean = {k: v for k, v in patch.items() if k in allowed}
     if not clean:
         raise HTTPException(400, "没有可更新的字段")
+    # 保留期直接喂给 prune 的 cutoff：0 或负数会把全表删光，必须有边界
+    bounds = {"retention_days": (1, 3650), "k_min": (1, 100), "report_cadence_min": (1, 1440)}
+    for key, (low, high) in bounds.items():
+        if key in clean:
+            try:
+                clean[key] = int(clean[key])
+            except (TypeError, ValueError):
+                raise HTTPException(422, f"{key} 要是整数") from None
+            if not low <= clean[key] <= high:
+                raise HTTPException(422, f"{key} 要在 {low} 到 {high} 之间")
     before = store.get_settings()
     after = store.set_settings(clean)
     # 文档 §8.3：授权变更要留审计（时间、操作者、改动前后）
-    for k in ("personalization", "group_analysis"):
+    for k in ("personalization", "group_analysis", "retention_days"):
         if k in clean and clean[k] != before.get(k):
-            store.audit_action("admin", "consent.change", k,
-                               {"from": before.get(k), "to": clean[k]})
+            action = "consent.change" if k != "retention_days" else "retention.change"
+            store.audit_action("admin", action, k, {"from": before.get(k), "to": clean[k]})
     return after
 
 
