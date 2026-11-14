@@ -14,6 +14,9 @@ if [ ! -f "$ROOT/deploy/edge.env" ]; then
   sed "s|@ROOT@|$ROOT|g" "$ROOT/deploy/edge.env.example" > "$ROOT/deploy/edge.env"
   echo "已生成 $ROOT/deploy/edge.env（按需修改）"
 fi
+# broker 配置里的证书/ACL 是绝对路径，只能生成一份到 deploy/（仓库里的 .in 不带路径）
+sed "s|@ROOT@|$ROOT|g" "$ROOT/docker/mosquitto/edge-local.conf.in" > "$ROOT/deploy/edge-mqtt.conf"
+echo "已生成 $ROOT/deploy/edge-mqtt.conf"
 for unit in edge-node edge-web edge-mqtt; do
   sed "s|@ROOT@|$ROOT|g; s|@NPM@|$NPM|g; s|@NPMDIR@|$(dirname "${NPM:-/usr/bin/npm}")|g" \
     "$ROOT/deploy/systemd/$unit.service.in" > "$UNIT_DIR/$unit.service"

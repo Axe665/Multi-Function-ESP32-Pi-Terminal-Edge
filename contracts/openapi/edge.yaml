@@ -1,153 +1,1363 @@
 openapi: 3.1.0
 info:
   title: Modular Terminal Edge API
+  description: 边节点查询与管理 API（文档 §5.5）。由实现导出，勿手改。
   version: 1.0.0
-  description: |
-    边节点管理 API。设备侧走 /ingest/telemetry，管理侧走其余路径。
-    设了 EDGE_ADMIN_TOKEN / EDGE_INGEST_TOKEN 时要求 `Authorization: Bearer <token>`。
-servers:
-  - url: http://127.0.0.1:8001
 paths:
   /api/v1/ingest/telemetry:
     post:
-      summary: 设备上报一个 5 分钟窗口（幂等）
-      description: |
-        按 (device_id, batch_id) 去重。载荷出现 user_id/subject/values 等原始字段时
-        返回 422 并累加 raw_rejected。privacy.k < 门槛时整批拒收并累加 suppressed_buckets。
+      summary: Ingest Telemetry
+      operationId: ingest_telemetry_api_v1_ingest_telemetry_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: x-forwarded-for
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Forwarded-For
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: './wire/telemetry.v1.json'
+              type: object
+              additionalProperties: true
+              title: Body
       responses:
         '200':
-          description: 已接受或已存在
+          description: Successful Response
           content:
             application/json:
               schema:
                 type: object
-                properties:
-                  accepted: { type: boolean }
-                  batch_id: { type: string }
-                  code: { type: string, enum: [ok, duplicate, k_below_min] }
+                additionalProperties: true
+                title: Response Ingest Telemetry Api V1 Ingest Telemetry Post
         '422':
-          description: 原始字段或 schema 不合规
-  /api/v1/overview:
-    get:
-      summary: 总览（KPI、三条链路、24h 结论）
-      responses:
-        '200': { description: 总览对象 }
-  /api/v1/devices:
-    get:
-      summary: 设备列表与最新聚合
-      responses:
-        '200': { description: 设备数组 }
-  /api/v1/devices/{device_id}:
-    get:
-      summary: 设备详情（指标、最近批次、建议、一句话结论）
-      parameters:
-        - { name: device_id, in: path, required: true, schema: { type: string } }
-      responses:
-        '200': { description: 设备详情 }
-        '404': { description: 设备不存在 }
-  /api/v1/devices/{device_id}/series:
-    get:
-      summary: 趋势序列（24 h 内按 15 min 聚合，更长按 1 h）
-      parameters:
-        - { name: device_id, in: path, required: true, schema: { type: string } }
-        - { name: metric, in: query, required: true, schema: { type: string } }
-        - { name: hours, in: query, schema: { type: integer, default: 24, minimum: 1, maximum: 168 } }
-      responses:
-        '200': { description: 含 points / baseline / anomalies / k }
-  /api/v1/devices/{device_id}/cmd:
-    post:
-      summary: 下发指令（report_now / ping / set_cadence）
-      parameters:
-        - { name: device_id, in: path, required: true, schema: { type: string } }
-      responses:
-        '200': { description: 指令已受理 }
-  /api/v1/heatmap:
-    get:
-      summary: 7 天 × 24 小时时段矩阵
-      parameters:
-        - { name: device, in: query, required: true, schema: { type: string } }
-        - { name: metric, in: query, required: true, schema: { type: string } }
-        - { name: days, in: query, schema: { type: integer, default: 7 } }
-      responses:
-        '200': { description: cells[{dow,hour,mean,z,n}] }
-  /api/v1/wordcloud:
-    get:
-      summary: 建议文本词频
-      parameters:
-        - { name: days, in: query, schema: { type: integer, default: 7 } }
-      responses:
-        '200': { description: words[{word,count}] }
-  /api/v1/advice:
-    get:
-      summary: 建议列表
-      parameters:
-        - { name: device, in: query, schema: { type: string } }
-        - { name: risk, in: query, schema: { enum: [info, watch, alert] } }
-        - { name: limit, in: query, schema: { type: integer, default: 30 } }
-      responses:
-        '200': { description: 建议数组 }
-  /api/v1/batches:
-    get:
-      summary: 最近的批次（只含聚合元信息）
-      responses:
-        '200': { description: 批次数组 }
-  /api/v1/anomalies:
-    get:
-      summary: |z| ≥ 2.5 的窗口
-      responses:
-        '200': { description: 异常数组 }
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/discovery:
     get:
-      summary: mDNS 发现记录与设备清单
+      summary: Discovery
+      description: mDNS 广播 + 已登记设备合并。找不到组播时只返回已登记的。
+      operationId: discovery_api_v1_discovery_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
       responses:
-        '200': { description: 发现结果 }
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Discovery Api V1 Discovery Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/devices/{device_id}/pair:
     post:
-      summary: 生成一次性配对码（6 位，10 分钟）
+      summary: Pair
+      operationId: pair_api_v1_devices__device_id__pair_post
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Device Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
       responses:
-        '200': { description: '{code, ttl_s}' }
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Pair Api V1 Devices  Device Id  Pair Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/pair/redeem:
+    post:
+      summary: Pair Redeem
+      description: 终端拿配对码 + CSR 换证书。失败次数与锁定在这里生效。
+      operationId: pair_redeem_api_v1_pair_redeem_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: x-forwarded-for
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Forwarded-For
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              title: Body
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Pair Redeem Api V1 Pair Redeem Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/ca.crt:
+    get:
+      summary: Ca Crt
+      operationId: ca_crt_api_v1_ca_crt_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Ca Crt Api V1 Ca Crt Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/crl.pem:
+    get:
+      summary: Crl
+      operationId: crl_api_v1_crl_pem_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Crl Api V1 Crl Pem Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/certs:
+    get:
+      summary: Certs
+      operationId: certs_api_v1_certs_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+                title: Response Certs Api V1 Certs Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/devices/{device_id}/renew:
+    post:
+      summary: Renew Cert
+      description: 设备到期前拿新证书；旧证书保留到自然过期，避免交接期断链。
+      operationId: renew_cert_api_v1_devices__device_id__renew_post
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Device Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: x-forwarded-for
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Forwarded-For
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              title: Body
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Renew Cert Api V1 Devices  Device Id  Renew Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/devices/{device_id}/wifi-config:
+    post:
+      summary: Wifi Config
+      description: '给无头终端生成 wpa_supplicant.conf（文档 §5.7.5）。
+
+
+        PSK 只在这次请求里出现：不落库、不进日志、审计只记设备与 SSID 长度。'
+      operationId: wifi_config_api_v1_devices__device_id__wifi_config_post
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Device Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              title: Body
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Wifi Config Api V1 Devices  Device Id  Wifi Config Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/devices/{device_id}/revoke:
+    post:
+      summary: Revoke
+      operationId: revoke_api_v1_devices__device_id__revoke_post
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Device Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Revoke Api V1 Devices  Device Id  Revoke Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/certs/verify:
+    post:
+      summary: Verify Cert
+      operationId: verify_cert_api_v1_certs_verify_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              title: Body
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Verify Cert Api V1 Certs Verify Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/pair-codes:
     get:
-      summary: 最近的配对码
+      summary: Pair Codes
+      operationId: pair_codes_api_v1_pair_codes_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
       responses:
-        '200': { description: 配对码数组 }
-  /api/v1/report/preview:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+                title: Response Pair Codes Api V1 Pair Codes Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/overview:
     get:
-      summary: 预览下一份 edge-report（不落发件箱）
+      summary: Overview
+      operationId: overview_api_v1_overview_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
       responses:
-        '200': { description: 计数、隐私块与前 8 行日聚合 }
-  /api/v1/report/cloud:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Overview Api V1 Overview Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/metrics:
+    get:
+      summary: Metric Catalog
+      description: 端上报过的所有指标 —— 前端下拉框的数据源，没有写死的列表。
+      operationId: metric_catalog_api_v1_metrics_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+                title: Response Metric Catalog Api V1 Metrics Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/devices:
+    get:
+      summary: Devices
+      operationId: devices_api_v1_devices_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+                title: Response Devices Api V1 Devices Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/devices/{device_id}:
+    get:
+      summary: Device Detail
+      operationId: device_detail_api_v1_devices__device_id__get
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Device Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Device Detail Api V1 Devices  Device Id  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/devices/{device_id}/series:
+    get:
+      summary: Device Series
+      description: 文档 §5.5 写的是 from/to；本机页面用 hours 更方便，两种都收。
+      operationId: device_series_api_v1_devices__device_id__series_get
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Device Id
+      - name: metric
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Metric
+      - name: hours
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 168
+          minimum: 1
+          default: 24
+          title: Hours
+      - name: from
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: From
+      - name: to
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: To
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Device Series Api V1 Devices  Device Id  Series Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/heatmap:
+    get:
+      summary: Heatmap
+      operationId: heatmap_api_v1_heatmap_get
+      parameters:
+      - name: device
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Device
+      - name: metric
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Metric
+      - name: days
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 30
+          minimum: 1
+          default: 7
+          title: Days
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Heatmap Api V1 Heatmap Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/wordcloud:
+    get:
+      summary: Wordcloud
+      operationId: wordcloud_api_v1_wordcloud_get
+      parameters:
+      - name: days
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 30
+          minimum: 1
+          default: 7
+          title: Days
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Wordcloud Api V1 Wordcloud Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/advice:
+    get:
+      summary: Advice
+      operationId: advice_api_v1_advice_get
+      parameters:
+      - name: device
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Device
+      - name: risk
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Risk
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 30
+          title: Limit
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+                title: Response Advice Api V1 Advice Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/batches:
+    get:
+      summary: Batches
+      operationId: batches_api_v1_batches_get
+      parameters:
+      - name: device
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Device
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Limit
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+                title: Response Batches Api V1 Batches Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/alerts:
+    get:
+      summary: Alerts
+      operationId: alerts_api_v1_alerts_get
+      parameters:
+      - name: days
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 30
+          minimum: 1
+          default: 7
+          title: Days
+      - name: state
+        in: query
+        required: false
+        schema:
+          type: string
+          default: open
+          title: State
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+                title: Response Alerts Api V1 Alerts Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/alerts/ack:
     post:
-      summary: 立即打包并上报；失败进发件箱
+      summary: Ack
+      operationId: ack_api_v1_alerts_ack_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              title: Body
       responses:
-        '200': { description: '{queued, report_id, cloud}' }
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Ack Api V1 Alerts Ack Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/alerts/mute:
+    post:
+      summary: Mute
+      operationId: mute_api_v1_alerts_mute_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              title: Body
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Mute Api V1 Alerts Mute Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/alerts/unmute:
+    post:
+      summary: Unmute
+      operationId: unmute_api_v1_alerts_unmute_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              title: Body
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Unmute Api V1 Alerts Unmute Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/anomalies:
+    get:
+      summary: Anomalies
+      operationId: anomalies_api_v1_anomalies_get
+      parameters:
+      - name: days
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 30
+          minimum: 1
+          default: 7
+          title: Days
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+                title: Response Anomalies Api V1 Anomalies Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/devices/{device_id}/cmd:
+    post:
+      summary: Command
+      operationId: command_api_v1_devices__device_id__cmd_post
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Device Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              title: Body
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Command Api V1 Devices  Device Id  Cmd Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/outbox:
     get:
-      summary: 发件箱
+      summary: Outbox
+      operationId: outbox_api_v1_outbox_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
       responses:
-        '200': { description: 报表数组 }
-  /api/v1/settings:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+                title: Response Outbox Api V1 Outbox Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/report/preview:
     get:
-      summary: 读取设置
+      summary: Report Preview
+      description: 不落发件箱，只给前端看这份报表长什么样。
+      operationId: report_preview_api_v1_report_preview_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
       responses:
-        '200': { description: 设置对象 }
-    put:
-      summary: 更新设置（白名单字段）
-      responses:
-        '200': { description: 更新后的设置 }
-  /api/v1/privacy:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Report Preview Api V1 Report Preview Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/cloud/discovery:
     get:
-      summary: 隐私计数、k 分布、字段白名单
+      summary: Cloud Discovery
+      description: 搜索局域网里的云节点（mDNS `_orpi-cloud._tcp`），供 UI 一键连接。
+      operationId: cloud_discovery_api_v1_cloud_discovery_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
       responses:
-        '200': { description: 审计对象 }
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Cloud Discovery Api V1 Cloud Discovery Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/cloud/config:
+    post:
+      summary: Set Cloud Config
+      description: 运行时配置云地址/令牌（落盘 data/cloud.json，重启仍生效）。
+      operationId: set_cloud_config_api_v1_cloud_config_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              title: Body
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Set Cloud Config Api V1 Cloud Config Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/report/cloud:
+    post:
+      summary: Report Cloud
+      description: 手动上报：和定时任务走同一条路径（cloudpush.push_now），别维护两份。
+      operationId: report_cloud_api_v1_report_cloud_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Report Cloud Api V1 Report Cloud Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/health:
     get:
-      summary: 自检
+      summary: Health
+      operationId: health_api_v1_health_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
       responses:
-        '200': { description: 数据库、鉴权状态、云地址 }
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Health Api V1 Health Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/settings:
+    get:
+      summary: Get Settings
+      operationId: get_settings_api_v1_settings_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Settings Api V1 Settings Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    put:
+      summary: Put Settings
+      operationId: put_settings_api_v1_settings_put
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              title: Patch
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Put Settings Api V1 Settings Put
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/privacy:
+    get:
+      summary: Privacy
+      operationId: privacy_api_v1_privacy_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Privacy Api V1 Privacy Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+components:
+  schemas:
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError

@@ -13,6 +13,8 @@ jobs:
       - run: python scripts/sync_contracts.py --check
       # 边/云两仓的 tools/service-launch/ 必须字节相同，漏同步就红
       - run: python3 tools/service-launch/checksums.py --check
+      # 实现了但没写进 contracts/openapi/：sync_contracts 只管 vendor，管不到自家路由
+      - run: python scripts/check_openapi.py
 
   web:
     runs-on: ubuntu-latest

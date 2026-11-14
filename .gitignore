@@ -1,6 +1,7 @@
 __pycache__/
 *.py[cod]
 data/
+data.bak-*/
 .env
 .taste-skill/
 
@@ -18,3 +19,4 @@ deploy/edge.env
 
 # 服务控制台：进程号、日志、控制台自己的输出
 .run/
+deploy/edge-mqtt.conf
