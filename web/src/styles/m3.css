@@ -822,28 +822,7 @@ h3 {
 
 /* ---------------------------------------------------------------- 主题切换 */
 
-/* 主题切换：M3 outlined icon button，图标本身就是「切到哪边」 */
-.md-icon-outline {
-  display: inline-grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  border: 1px solid var(--md-outline);
-  border-radius: var(--md-shape-full);
-  background: transparent;
-  color: var(--md-on-surface-variant);
-  cursor: pointer;
-  transition: background-color var(--md-dur-short) var(--md-ease),
-    color var(--md-dur-short) var(--md-ease);
-}
-.md-icon-outline:hover {
-  background: color-mix(in srgb, var(--md-on-surface) 8%, transparent);
-  color: var(--md-on-surface);
-}
-.md-icon-outline:active {
-  background: color-mix(in srgb, var(--md-on-surface) 10%, transparent);
-}
+/* 主题切换用 M3 标准图标按钮（.md-btn--icon）：40dp 容器 + 24dp 图标，无描边 */
 /* 换面时淡入 160 ms：图标瞬间切换容易被当成没点上 */
 @keyframes md-icon-in {
   from { opacity: 0; }
