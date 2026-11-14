@@ -55,8 +55,17 @@ def storage_ok() -> bool:
     return free < 0 or free >= config.MIN_FREE_MB
 
 
-def process(body: dict[str, Any]) -> dict[str, Any]:
-    """返回 {accepted, batch_id, code}；不合规抛 IngestError。"""
+def process(body: dict[str, Any], transport_device: str | None = None) -> dict[str, Any]:
+    """返回 {accepted, batch_id, code}；不合规抛 IngestError。
+
+    transport_device 是传输层认定的身份（MQTT 是主题里的 deviceId）。载荷里的
+    device_id 由发送方随便填，不比对就能往别人的分区里写。
+    """
+    if transport_device and str(body.get("device_id", "")) != transport_device:
+        store.bump("device_mismatch")
+        raise IngestError("DEVICE_MISMATCH", "载荷 device_id 与主题不一致")
+    if transport_device and store.device_revoked(transport_device):
+        raise IngestError("DEVICE_REVOKED", "设备已吊销，先重新配对")
     if not storage_ok():
         store.bump("disk_low")
         raise IngestError("DISK_LOW", "边节点磁盘余量不足，暂时拒收",

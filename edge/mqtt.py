@@ -115,7 +115,7 @@ class MqttIngest:
             return
 
         try:
-            result = ingest.process(body)
+            result = ingest.process(body, transport_device=device_id)
         except ingest.IngestError as e:
             self.rejected += 1
             client.publish(ACK.format(dev=device_id),
