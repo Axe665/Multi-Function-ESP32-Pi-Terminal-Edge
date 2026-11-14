@@ -48,7 +48,9 @@ class AnalysisTest(unittest.TestCase):
 
     def test_report_matches_daily_totals(self):
         rep = analysis.build_report()
-        daily = analysis.daily_aggregates(store.now_ms() - 86_400_000)
+        # 用报表自己的起点重算：build_report 里取 now 后还要跑分词，隔几秒再取
+        # now 会在 5 分钟窗口边界上把最老的一批切掉，CI 上偶尔对不上
+        daily = analysis.daily_aggregates(rep["period"]["from"])
         self.assertEqual(len(rep["telemetry_daily"]), len(daily))
         # 报表里的样本数必须等于日聚合之和
         self.assertEqual(
