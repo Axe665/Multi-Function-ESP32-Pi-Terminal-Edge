@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="console-token" content="__TOKEN__" />
+    <title>服务控制台</title>
+    <link rel="icon" href="data:," />
+    <script>
+      // 首帧前定主题，否则暗色用户会先闪一下亮色
+      const saved = localStorage.getItem('mt-theme')
+      document.documentElement.dataset.theme =
+        saved || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+    </script>
+    <link rel="stylesheet" href="/m3.css" />
+    <link rel="stylesheet" href="/console.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="appbar">
+        <div class="titles">
+          <h1 id="title">服务控制台</h1>
+          <span class="md-muted" id="mode-note"></span>
+        </div>
+        <div class="appbar-actions">
+          <div class="seg" role="group" aria-label="部署模式">
+            <button type="button" data-mode="docker">Docker</button>
+            <button type="button" data-mode="native">原生进程</button>
+          </div>
+          <button type="button" class="md-btn md-btn--icon" id="refresh" aria-label="刷新状态">
+            <span class="ms-icon">&#xe5d5;</span>
+          </button>
+          <button type="button" class="md-btn md-btn--icon theme-toggle" id="theme" aria-label="切换明暗">
+            <span class="ms-icon" id="theme-icon">&#xe51c;</span>
+          </button>
+        </div>
+      </header>
+
+      <main class="body">
+        <section class="pane pane--list md-card">
+          <div class="md-card-head">
+            <h2>服务</h2>
+            <span class="meta" id="summary"></span>
+          </div>
+          <ul class="md-list" id="services" role="listbox" aria-label="服务列表"></ul>
+          <div id="banner"></div>
+        </section>
+
+        <section class="pane pane--detail md-card">
+          <div id="detail" class="detail-empty md-muted">选一个服务看详情</div>
+          <div class="md-card-head log-head">
+            <h3>日志</h3>
+            <span class="meta" id="log-meta">最近 200 行</span>
+          </div>
+          <pre class="log" id="log"></pre>
+        </section>
+      </main>
+
+      <footer class="footer">
+        <button type="button" class="md-btn" data-act="start_all">全部启动</button>
+        <button type="button" class="md-btn md-btn--tonal" data-act="restart_all">全部重启</button>
+        <button type="button" class="md-btn md-btn--outline danger" data-act="stop_all">全部停止</button>
+        <span class="md-grow"></span>
+        <a class="md-btn md-btn--outline" id="open-web" target="_blank" rel="noreferrer">
+          <span class="ms-icon">&#xe89e;</span>打开网页
+        </a>
+      </footer>
+    </div>
+
+    <div class="md-snackbar" id="snack" hidden></div>
+
+    <dialog id="confirm">
+      <h2 id="confirm-title">确认</h2>
+      <p id="confirm-body" class="md-muted"></p>
+      <div class="dialog-actions">
+        <button type="button" class="md-btn md-btn--text" data-answer="0">取消</button>
+        <button type="button" class="md-btn" data-answer="1">确定</button>
+      </div>
+    </dialog>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

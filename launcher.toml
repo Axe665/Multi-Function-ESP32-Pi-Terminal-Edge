@@ -1,0 +1,32 @@
+# 服务控制台的配置。服务清单来自 docker compose，这里只补界面要显示的中文名和端口说明。
+# 改了 compose 不用动这个文件；改了端口说明记得对一下。
+
+[console]
+title = "边节点控制台"
+port = 8101
+web_url = "http://127.0.0.1:8001/"
+health_url = "http://127.0.0.1:8001/api/v1/health"
+compose_file = "docker/compose.yml"
+
+# 不用 docker 时的原生跑法：控制台自己拉起这个脚本，PID 和日志写在 .run/ 下
+[native]
+service = "edge-run"
+label = "原生进程 run.sh"
+script = "run.sh"
+ports = [8001]
+
+[services.mosquitto]
+label = "MQTT 接入"
+note = "8883 设备上行，8884 本机调试"
+
+[services.ingest]
+label = "摄取入口"
+note = "8885 调试口，正式流量走 web"
+
+[services.api]
+label = "管理 API"
+note = "查询、配对、证书、上云"
+
+[services.web]
+label = "网页与入口"
+note = "8001 管理台，顺带反代 API 和摄取"
