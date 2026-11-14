@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api, fmtNum, fmtTime } from '../api'
 import { chartTokens, useTheme } from '../lib/theme'
+import PageLead from '../components/PageLead.vue'
 import StatusBar from '../components/StatusBar.vue'
 import AlertList from '../components/AlertList.vue'
 import ChartBox from '../components/ChartBox.vue'
@@ -172,7 +173,7 @@ const riskOption = computed(() => {
              axisLine: { show: false }, axisTick: { show: false } },
     series: [{
       type: 'bar', data, barWidth: '58%',
-      itemStyle: { color: (p) => ['#c0392b', '#c98a2a', t.line][p.dataIndex], borderRadius: [0, 3, 3, 0] },
+      itemStyle: { color: (p) => [t.critical, t.notice, t.line][p.dataIndex], borderRadius: [0, 4, 4, 0] },
       label: { show: true, position: 'right', fontSize: 12, color: t.axis },
     }],
   }
@@ -195,9 +196,9 @@ const deltaOption = computed(() => {
     yAxis: { type: 'value', splitNumber: 3, splitLine: { lineStyle: { color: t.split } }, axisLabel: { fontSize: 12, color: t.axis } },
     series: [
       { name: '近 24 小时', type: 'bar', data: rows.map((r) => r.cur), barWidth: '58%',
-        itemStyle: { color: t.line, borderRadius: [3, 3, 0, 0] } },
+        itemStyle: { color: t.line, borderRadius: [4, 4, 0, 0] } },
       { name: '前 24 小时', type: 'bar', data: rows.map((r) => r.prev), barWidth: '58%',
-        itemStyle: { color: t.split, borderRadius: [3, 3, 0, 0] } },
+        itemStyle: { color: t.split, borderRadius: [4, 4, 0, 0] } },
     ],
   }
 })
@@ -224,7 +225,7 @@ const coverOption = computed(() => {
              axisLine: { show: false }, axisTick: { show: false } },
     series: [{
       type: 'bar', data: counts.map((c) => c.devices.length), barWidth: '58%',
-      itemStyle: { color: t.line, borderRadius: [0, 3, 3, 0] },
+      itemStyle: { color: t.line, borderRadius: [0, 4, 4, 0] },
       label: {
         show: true, position: 'right', fontSize: 12, color: t.axis,
         formatter: (p) => `${p.value}/${devs.length}`,
@@ -248,50 +249,76 @@ const adviceRows = computed(() => {
 <template>
   <p v-if="error" class="error">读不到总览：{{ error }}</p>
 
-  <StatusBar :status="status" :title="headline" :sub="sub">
-    <template #actions>
-      <button class="md-btn md-btn--tonal" @click="load">刷新</button>
-      <RouterLink class="md-btn" to="/settings">上云设置</RouterLink>
-    </template>
-  </StatusBar>
+  <PageLead sub="5 分钟聚合窗口，k≥5 才入库；点设备进详情">
+    <button class="md-btn md-btn--tonal" @click="load">刷新</button>
+    <RouterLink class="md-btn" to="/settings">上云设置</RouterLink>
+  </PageLead>
 
-  <section v-if="o?.insufficient" class="md-panel">
-    <div class="section-head">
-      <h2>样本不足</h2>
-      <span class="md-muted">{{ o.reason }}</span>
-    </div>
-    <p class="md-muted">
-      当前 {{ o.devices_online }}/{{ o.devices_total }} 台在线，告警 {{ o.status?.critical }} 条严重、
-      {{ o.status?.notice }} 条待确认。开启群体分析后才会显示分设备的走势与聚合。
-    </p>
-    <RouterLink class="md-btn md-btn--tonal" to="/settings">去设置里开启群体分析</RouterLink>
-  </section>
+  <div class="md-grid dense">
+    <StatusBar :status="status" :title="headline" :sub="sub" />
 
-  <div v-else class="board">
-    <section class="md-panel wide">
-      <div class="section-head">
-        <h2>链路 · 最近 24 个窗口</h2>
-        <span class="md-muted">实心格为已收到；点设备进详情</span>
+    <section v-if="o?.insufficient" class="md-card span-12">
+      <div class="md-card-head">
+        <h2>样本不足</h2>
+        <span class="meta">{{ o.reason }}</span>
       </div>
-      <div class="chart"><ChartBox :option="lanesOption" height="100%" @click="router.push('/devices')" /></div>
+      <p class="md-muted">
+        当前 {{ o.devices_online }}/{{ o.devices_total }} 台在线，告警 {{ o.status?.critical }} 条严重、
+        {{ o.status?.notice }} 条待确认。开启群体分析后才会显示分设备的走势与聚合。
+      </p>
+      <RouterLink class="md-btn md-btn--tonal" to="/settings">去设置里开启群体分析</RouterLink>
     </section>
 
-    <aside class="side">
-      <section class="md-panel">
-        <div class="section-head">
-          <h2>待处理</h2>
-          <span class="md-muted">{{ o ? alerts.length : '—' }} 条</span>
+    <template v-else>
+      <section class="md-card span-8 card-b">
+        <div class="md-card-head">
+          <h2>链路 · 最近 24 个窗口</h2>
+          <span class="meta">实心格为已收到</span>
         </div>
-        <AlertList :alerts="alerts" :limit="4" @changed="load" />
+        <div class="chart-fill">
+          <ChartBox :option="lanesOption" height="100%" label="各设备最近 24 个窗口的收取情况"
+                    @click="router.push('/devices')" />
+        </div>
       </section>
 
-      <section class="md-section">
-        <div class="section-head">
+      <aside class="md-card span-4 card-b">
+        <div class="md-card-head">
+          <h2>待处理</h2>
+          <span class="meta">{{ o ? alerts.length : '—' }} 条</span>
+        </div>
+        <AlertList :alerts="alerts" :limit="3" @changed="load" />
+      </aside>
+
+      <section class="md-card span-8 card-c">
+        <div class="md-card-head">
+          <h2>每设备 24h 走势</h2>
+          <span class="meta">各自主指标，独立刻度</span>
+        </div>
+        <div class="spark-list">
+          <div v-for="s in spark" :key="s.name" class="spark-row">
+            <span class="spark-name">{{ s.name }}</span>
+            <svg class="spark" viewBox="0 0 100 32" preserveAspectRatio="none" aria-hidden="true">
+              <line x1="0" y1="16" x2="100" y2="16" :stroke="tk.split" stroke-width="1" vector-effect="non-scaling-stroke" />
+              <polyline :points="s.d" fill="none" :stroke="s.color" stroke-width="1.4"
+                        vector-effect="non-scaling-stroke"
+                        stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <span class="spark-val">
+              <b class="md-num">{{ s.last }}</b>
+              <span class="md-muted">{{ s.range }}</span>
+            </span>
+          </div>
+          <p v-if="!spark.length" class="md-muted">没有可画的序列。</p>
+        </div>
+      </section>
+
+      <section class="md-card span-4 card-c">
+        <div class="md-card-head">
           <h2>最近建议</h2>
-          <span class="md-muted">{{ o?.advice_24h ?? 0 }} 条 / 24 h</span>
+          <span class="meta">{{ o?.advice_24h ?? 0 }} 条 / 24 h</span>
         </div>
         <div class="md-list">
-          <div v-for="a in adviceRows" :key="a.id" class="md-list-row">
+          <div v-for="a in adviceRows.slice(0, 3)" :key="a.id" class="advice-row">
             <span class="sev-tag" :class="a.risk === 'alert' ? 'sev-tag--notice' : 'sev-tag--idle'">
               {{ a.risk === 'alert' ? '告警' : '关注' }}
             </span>
@@ -303,108 +330,80 @@ const adviceRows = computed(() => {
           <p v-if="!adviceRows.length" class="md-muted">今天没有建议。</p>
         </div>
       </section>
-    </aside>
 
-    <section class="md-panel">
-      <div class="section-head">
-        <h2>每设备 24h 走势</h2>
-        <span class="md-muted">各自主指标，独立刻度</span>
-      </div>
-      <div class="spark-list">
-        <div v-for="s in spark" :key="s.name" class="spark-row">
-          <span class="spark-name">{{ s.name }}</span>
-          <svg class="spark" viewBox="0 0 100 32" preserveAspectRatio="none" aria-hidden="true">
-            <line x1="0" y1="16" x2="100" y2="16" :stroke="tk.split" stroke-width="1" vector-effect="non-scaling-stroke" />
-            <polyline :points="s.d" fill="none" :stroke="s.color" stroke-width="1.4"
-                      vector-effect="non-scaling-stroke"
-                      stroke-linecap="round" stroke-linejoin="round" />
-          </svg>
-          <span class="spark-val">
-            <b class="md-num">{{ s.last }}</b>
-            <span class="md-muted">{{ s.range }}</span>
-          </span>
+      <section class="md-card span-4 card-d">
+        <div class="md-card-head">
+          <h2>7×24 异常</h2>
+          <span class="meta">{{ heat?.label || '—' }} 相对基线 z</span>
         </div>
-        <p v-if="!spark.length" class="md-muted">没有可画的序列。</p>
-      </div>
-    </section>
+        <div class="chart-fill"><ChartBox :option="heatOption" height="100%" label="按星期与小时统计的异常热力" /></div>
+      </section>
 
-    <section class="md-panel">
-      <div class="section-head">
-        <h2>7×24 异常</h2>
-        <span class="md-muted">{{ heat?.label || '—' }} 相对基线 z</span>
-      </div>
-      <div class="chart"><ChartBox :option="heatOption" height="100%" /></div>
-    </section>
+      <section class="md-card span-4 card-d">
+        <div class="md-card-head">
+          <h2>建议风险分布</h2>
+          <span class="meta">最近 100 条</span>
+        </div>
+        <div class="chart-fill"><ChartBox :option="riskOption" height="100%" label="建议按风险等级的条数" /></div>
+      </section>
 
-    <section class="md-panel">
-      <div class="section-head">
-        <h2>建议风险分布</h2>
-        <span class="md-muted">最近 100 条</span>
-      </div>
-      <div class="chart"><ChartBox :option="riskOption" height="100%" /></div>
-    </section>
+      <section class="md-card span-4 card-d">
+        <div class="md-card-head">
+          <h2>24h 对比</h2>
+          <span class="meta">相对前 24 小时</span>
+        </div>
+        <div class="chart-fill"><ChartBox :option="deltaOption" height="100%" label="近 24 小时与前 24 小时对比" /></div>
+      </section>
 
-    <section class="md-panel">
-      <div class="section-head">
-        <h2>24h 对比</h2>
-        <span class="md-muted">相对前 24 小时</span>
-      </div>
-      <div class="chart"><ChartBox :option="deltaOption" height="100%" /></div>
-    </section>
-
-    <section class="md-panel wide">
-      <div class="section-head">
-        <h2>指标覆盖</h2>
-        <span class="md-muted">每个指标有几台设备在报</span>
-      </div>
-      <div class="chart"><ChartBox :option="coverOption" height="100%" /></div>
-    </section>
+      <section class="md-card span-12 card-e">
+        <div class="md-card-head">
+          <h2>指标覆盖</h2>
+          <span class="meta">每个指标有几台设备在报</span>
+        </div>
+        <div class="chart-fill"><ChartBox :option="coverOption" height="100%" label="每个指标上报的设备数" /></div>
+      </section>
+    </template>
   </div>
 </template>
 
 <style scoped>
-.error { color: var(--md-error); margin-bottom: var(--space-3); }
-
-.board {
-  flex: 1;
-  min-height: 620px;
-  display: grid;
-  grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr) clamp(340px, 21vw, 430px);
-  grid-template-rows: minmax(0, 0.95fr) minmax(0, 1.15fr) minmax(0, 1.1fr) minmax(0, 0.85fr);
-  gap: clamp(10px, 0.9vw, 16px);
-  margin-top: clamp(10px, 1vw, 16px);
-  align-items: stretch;
+.error {
+  color: var(--md-error);
+  max-width: var(--content-max);
+  margin: 0 auto var(--space-3);
 }
-.wide { grid-column: span 2; }
-.board > section { display: flex; flex-direction: column; min-height: 0; }
-.board .chart { flex: 1; min-height: 0; }
-.side {
-  grid-column: 3;
-  grid-row: 1 / span 4;
+.dense {
+  gap: var(--space-3);
+}
+/* 整屏不滚动：每行给固定高度，图表撑满剩下的空间 */
+.card-b, .card-c, .card-d, .card-e {
   display: flex;
   flex-direction: column;
-  gap: clamp(10px, 0.9vw, 16px);
   min-width: 0;
+}
+.card-b { height: 184px; }
+.card-c { height: 194px; }
+.card-d { height: 180px; }
+.card-e { height: 144px; }
+.chart-fill {
+  flex: 1;
   min-height: 0;
 }
-.side > section { display: flex; flex-direction: column; min-height: 0; }
-.side > section:last-child { flex: 1; }
-
-.section-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: var(--space-2);
-  margin-bottom: var(--space-2);
-  flex-wrap: wrap;
+.chart-fill :deep(div) {
+  height: 100%;
 }
-.section-head h2 { font: var(--md-title-small); }
 
-.spark-list { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: space-around; gap: var(--space-1); }
+.spark-list {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  gap: var(--space-1);
+  flex: 1;
+  min-height: 0;
+}
 .spark-row {
   display: grid;
   grid-template-columns: minmax(110px, auto) minmax(0, 1fr) minmax(96px, auto);
-  min-height: 0;
   align-items: center;
   gap: var(--space-3);
 }
@@ -415,25 +414,23 @@ const adviceRows = computed(() => {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.spark { width: 100%; height: 100%; min-height: 26px; display: block; overflow: visible; }
+.spark { width: 100%; height: 26px; display: block; overflow: visible; }
 .spark-val { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.2; }
 .spark-val b { font: var(--md-label-large); color: var(--md-on-surface); }
 .spark-val span { font: var(--md-label-small); }
+
+.advice-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+}
 .advice-text {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  font: var(--md-body-small);
 }
 .small { font: var(--md-body-small); }
-
-@media (max-width: 1180px) {
-  .board { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-  .side { grid-column: 1 / -1; grid-row: auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-@media (max-width: 760px) {
-  .board { grid-template-columns: minmax(0, 1fr); }
-  .wide { grid-column: auto; }
-  .side { grid-template-columns: minmax(0, 1fr); }
-}
 </style>

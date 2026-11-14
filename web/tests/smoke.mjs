@@ -1,20 +1,20 @@
-// 前端冒烟：逐页打开，断言页面标题、关键区块、以及控制台没有报错。
+// 前端冒烟：逐页打开，断言顶栏标题、关键区块、控制台无报错、总览整屏不滚动。
 // 用系统 Chrome（channel: 'chrome'），不额外下载浏览器。
 //   node tests/smoke.mjs http://127.0.0.1:8001
 import { chromium } from 'playwright'
 
 const base = process.argv[2] || 'http://127.0.0.1:8001'
 const pages = [
-  ['#/', '', '待处理'],
+  ['#/', '总览', '待处理'],
   ['#/devices', '设备', '最近批次'],
   ['#/analysis', '分析', '时段热力图'],
-  ['#/access', '接入', '发现的设备'],
-  ['#/settings', '设置', '发件箱'],
+  ['#/access', '接入', '证书'],
+  ['#/settings', '设置', '隐私计数'],
 ]
 
 let failed = 0
 const browser = await chromium.launch({ channel: 'chrome', args: ['--no-sandbox'] })
-const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, ignoreHTTPSErrors: true })
+const ctx = await browser.newContext({ viewport: { width: 1900, height: 1040 }, ignoreHTTPSErrors: true })
 
 for (const [hash, title, block] of pages) {
   const page = await ctx.newPage()
@@ -22,14 +22,24 @@ for (const [hash, title, block] of pages) {
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
   page.on('pageerror', (e) => errors.push(String(e)))
   try {
-    await page.goto(`${base}/${hash}`, { waitUntil: 'networkidle', timeout: 30000 })
-    const h1 = await page.locator('h1').first().textContent()
+    // 页面每 20 s 轮询一次，networkidle 永远等不到，用 load + 等标题
+    await page.goto(`${base}/${hash}`, { waitUntil: 'load', timeout: 30000 })
+    await page.locator('.appbar-title').waitFor({ timeout: 15000 })
+    await page.waitForTimeout(1500)
+    const shown = (await page.locator('.appbar-title').textContent())?.trim()
     const hasBlock = await page.getByText(block, { exact: false }).first().isVisible().catch(() => false)
     const bad = []
-    // 总览的 h1 是当前状态结论，不写死标题；其余页仍断言标题
-    if (title && !h1?.includes(title)) bad.push(`标题是「${h1?.trim()}」，期望「${title}」`)
+    if (shown !== title) bad.push(`顶栏是「${shown}」，期望「${title}」`)
     if (!hasBlock) bad.push(`没有找到区块「${block}」`)
     if (errors.length) bad.push(`控制台报错：${errors[0].slice(0, 120)}`)
+    if (hash === '#/') {
+      // 1900×1040 下总览应当整屏放下，表变长才滚动
+      const over = await page.evaluate(() => {
+        const c = document.querySelector('.content')
+        return c ? c.scrollHeight - c.clientHeight : 0
+      })
+      if (over > 1) bad.push(`总览纵向溢出 ${over}px`)
+    }
     if (bad.length) {
       failed++
       console.log(`  [FAIL] ${hash}  ${bad.join('；')}`)

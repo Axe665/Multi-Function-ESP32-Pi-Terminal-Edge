@@ -1,7 +1,8 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { api, fmtTime } from '../api'
-import PageHeader from '../components/PageHeader.vue'
+import PageLead from '../components/PageLead.vue'
+import KpiRow from '../components/KpiRow.vue'
 import ChartBox from '../components/ChartBox.vue'
 import { chartTokens, useTheme } from '../lib/theme'
 import { useSnack } from '../components/useSnack'
@@ -22,6 +23,12 @@ const linkLabel = { wifi: 'Wi-Fi', ethernet: '有线', offline: '离线', unknow
 const devices = computed(() => disc.value?.devices || [])
 const paired = computed(() => devices.value.filter((d) => d.paired).length)
 const expiring = computed(() => certs.value.filter((c) => c.expiring).length)
+const kpis = computed(() => [
+  { label: '已接入', value: paired.value, note: `${devices.value.length - paired.value} 台待配对` },
+  { label: '证书', value: certs.value.length, note: '365 天有效期' },
+  { label: '30 天内到期', value: expiring.value, note: '到期前 30 天续期' },
+  { label: '吊销', value: certs.value.filter((c) => c.revoked).length, note: 'CRL 可下载' },
+])
 
 // 证书到期分布：30 天内、31–90、91–180、更远
 const certOption = computed(() => {
@@ -36,11 +43,11 @@ const certOption = computed(() => {
     tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
     xAxis: { type: 'category', data: ['≤30 天', '31–90', '91–180', '>180'], axisLabel: { fontSize: 11, color: t.axis },
              axisLine: { lineStyle: { color: t.split } }, axisTick: { show: false } },
-    yAxis: { type: 'value', minInterval: 1, splitLine: { lineStyle: { color: t.split } },
+    yAxis: { type: 'value', minInterval: 1, splitNumber: 3, splitLine: { lineStyle: { color: t.split } },
              axisLabel: { fontSize: 10, color: t.axis } },
     series: [{
       type: 'bar', data: n, barMaxWidth: 30,
-      itemStyle: { color: (p) => (p.dataIndex === 0 && p.value ? '#c0392b' : t.line), borderRadius: [3, 3, 0, 0] },
+      itemStyle: { color: (p) => (p.dataIndex === 0 && p.value ? t.critical : t.line), borderRadius: [4, 4, 0, 0] },
       label: { show: true, position: 'top', fontSize: 10, color: t.axis },
     }],
   }
@@ -58,7 +65,7 @@ const linkOption = computed(() => {
     tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
     xAxis: { type: 'category', data: labels, axisLabel: { fontSize: 11, color: t.axis },
              axisLine: { lineStyle: { color: t.split } }, axisTick: { show: false } },
-    yAxis: { type: 'value', minInterval: 1, splitLine: { lineStyle: { color: t.split } },
+    yAxis: { type: 'value', minInterval: 1, splitNumber: 3, splitLine: { lineStyle: { color: t.split } },
              axisLabel: { fontSize: 10, color: t.axis } },
     series: [{
       type: 'bar', data: n, barMaxWidth: 30,
@@ -105,41 +112,35 @@ onMounted(load)
 </script>
 
 <template>
-  <PageHeader title="接入" sub="mDNS 发现、一次性配对码、证书与吊销；组播不可用时退化为登记清单。">
-    <span class="md-chip">CA {{ disc?.edge?.ca_fp || '—' }}</span>
-  </PageHeader>
-
   <p v-if="error" class="error">{{ error }}</p>
 
-  <section class="kpis">
-    <div class="kpi"><div class="label">已接入</div><div class="value">{{ paired }}</div><div class="note">{{ devices.length - paired }} 台待配对</div></div>
-    <div class="kpi"><div class="label">证书</div><div class="value">{{ certs.length }}</div><div class="note">365 天有效期</div></div>
-    <div class="kpi"><div class="label">30 天内到期</div><div class="value">{{ expiring }}</div><div class="note">到期前 30 天续期</div></div>
-    <div class="kpi"><div class="label">吊销</div><div class="value">{{ certs.filter((c) => c.revoked).length }}</div><div class="note">CRL 可下载</div></div>
-  </section>
+  <PageLead sub="mDNS 发现、一次性配对码、证书与吊销；组播不可用时退化为登记清单。">
+    <span class="md-chip">CA {{ disc?.edge?.ca_fp || '—' }}</span>
+  </PageLead>
 
-  <div class="charts">
-    <section class="md-card">
-      <div class="section-head">
+  <div class="md-grid">
+    <KpiRow :items="kpis" />
+
+    <section class="md-card span-6">
+      <div class="md-card-head">
         <h2>证书到期分布</h2>
-        <span class="md-muted">按剩余天数分桶</span>
+        <span class="meta">按剩余天数分桶</span>
       </div>
-      <ChartBox :option="certOption" height="132px" />
+      <ChartBox :option="certOption" height="140px" label="证书按剩余天数分桶" />
     </section>
-    <section class="md-card">
-      <div class="section-head">
-        <h2>链路类型</h2>
-        <span class="md-muted">已登记设备</span>
-      </div>
-      <ChartBox :option="linkOption" height="132px" />
-    </section>
-  </div>
 
-  <div class="duo">
-    <section class="md-card">
-      <div class="section-head">
+    <section class="md-card span-6">
+      <div class="md-card-head">
+        <h2>链路类型</h2>
+        <span class="meta">已登记设备</span>
+      </div>
+      <ChartBox :option="linkOption" height="140px" label="设备按链路类型统计" />
+    </section>
+
+    <section class="md-card span-7">
+      <div class="md-card-head">
         <h2>发现的设备</h2>
-        <span class="md-muted">{{ devices.length }} 台</span>
+        <span class="meta">{{ devices.length }} 台</span>
       </div>
       <table class="md-table">
         <thead><tr><th>设备</th><th>型号</th><th>版本</th><th>链路</th><th>状态</th></tr></thead>
@@ -163,12 +164,15 @@ onMounted(load)
       </table>
 
       <div class="pair">
-        <select v-model="picked" class="md-field" aria-label="选择要配对的设备">
-          <option v-for="d in devices" :key="d.device_id" :value="d.device_id">
-            {{ d.device_id }}{{ d.paired ? '（已配对，将签发新码）' : '' }}
-          </option>
-        </select>
-        <button class="md-btn" @click="pair" :disabled="!picked">生成配对码</button>
+        <label class="md-field">
+          <span>要配对的设备</span>
+          <select v-model="picked">
+            <option v-for="d in devices" :key="d.device_id" :value="d.device_id">
+              {{ d.device_id }}{{ d.paired ? '（已配对，将签发新码）' : '' }}
+            </option>
+          </select>
+        </label>
+        <button class="md-btn" :disabled="!picked" @click="pair">生成配对码</button>
       </div>
       <p class="md-muted small hint">
         配对码 6 位、10 分钟有效，绑定设备公钥指纹，一次性使用；同一设备 5 次失败锁 10 分钟。
@@ -182,10 +186,10 @@ onMounted(load)
       </ol>
     </section>
 
-    <section class="md-card">
-      <div class="section-head">
+    <section class="md-card span-5">
+      <div class="md-card-head">
         <h2>证书</h2>
-        <span class="md-muted">{{ certs.length }} 张</span>
+        <span class="meta">{{ certs.length }} 张</span>
       </div>
       <table class="md-table">
         <thead><tr><th>设备</th><th class="num">剩余</th><th class="num">序列号</th></tr></thead>
@@ -204,91 +208,98 @@ onMounted(load)
           <tr v-if="!certs.length"><td colspan="3" class="md-muted">还没有签发过证书。</td></tr>
         </tbody>
       </table>
-      <div v-if="wifiOpen" class="wifi">
-        <div class="section-head"><h3>给无头终端生成 WiFi 配置</h3></div>
-        <div class="wifi-grid">
-          <input v-model="wifi.ssid" class="md-field" placeholder="SSID" aria-label="SSID" />
-          <input v-model="wifi.psk" class="md-field" type="password" placeholder="WPA2 口令（8–63）" aria-label="WiFi 口令" />
-          <input v-model="wifi.country" class="md-field" maxlength="2" aria-label="国家码" />
-          <button class="md-btn" :disabled="!wifi.ssid || !wifi.psk" @click="makeWifi">生成</button>
-        </div>
-        <p class="md-muted small">口令只在本次请求中使用，不落库，不写审计。</p>
-        <pre v-if="wifiOut" class="conf">{{ wifiOut.content }}</pre>
-      </div>
 
       <div class="links">
         <a class="md-btn md-btn--outline" href="/api/v1/ca.crt" target="_blank" rel="noopener">下载 CA</a>
         <a class="md-btn md-btn--outline" href="/api/v1/crl.pem" target="_blank" rel="noopener">下载 CRL</a>
         <button class="md-btn md-btn--outline" @click="wifiOpen = !wifiOpen">WiFi 配置</button>
       </div>
+
+      <div v-if="wifiOpen" class="wifi">
+        <h3 class="wifi-title">给无头终端生成 WiFi 配置</h3>
+        <div class="wifi-grid">
+          <label class="md-field">
+            <span>SSID</span>
+            <input v-model="wifi.ssid" />
+          </label>
+          <label class="md-field">
+            <span>WPA2 口令（8–63）</span>
+            <input v-model="wifi.psk" type="password" />
+          </label>
+          <label class="md-field country">
+            <span>国家码</span>
+            <input v-model="wifi.country" maxlength="2" />
+          </label>
+        </div>
+        <button class="md-btn" :disabled="!wifi.ssid || !wifi.psk" @click="makeWifi">生成</button>
+        <p class="md-muted small">口令只在本次请求中使用，不落库，不写审计。</p>
+        <pre v-if="wifiOut" class="conf">{{ wifiOut.content }}</pre>
+      </div>
+    </section>
+
+    <section class="md-card span-12">
+      <div class="md-card-head">
+        <h2>最近的配对码</h2>
+        <span class="meta">{{ codes.length }} 个</span>
+      </div>
+      <div class="md-list">
+        <div v-for="c in codes.slice(0, 5)" :key="c.code" class="md-list-item">
+          <div class="md-grow">
+            <div class="md-mono code">{{ c.code }}</div>
+            <div class="md-muted small">{{ c.device_id || '—' }}，{{ c.attempts }} 次尝试</div>
+          </div>
+          <span class="md-chip" :class="c.used_at ? 'md-chip--ok' : c.locked_until ? 'md-chip--alert' : 'md-chip--warn'">
+            {{ c.used_at ? '已使用' : c.locked_until ? '已锁定' : '待使用' }}
+          </span>
+        </div>
+        <p v-if="!codes.length" class="md-muted">还没有生成过配对码。</p>
+      </div>
     </section>
   </div>
-
-  <section class="md-card codes">
-    <div class="section-head">
-      <h2>最近的配对码</h2>
-      <span class="md-muted">{{ codes.length }} 个</span>
-    </div>
-    <div class="md-list">
-      <div v-for="c in codes.slice(0, 5)" :key="c.code" class="md-list-row">
-        <div class="md-grow">
-          <div class="md-mono code">{{ c.code }}</div>
-          <div class="md-muted small">{{ c.device_id || '—' }}，{{ c.attempts }} 次尝试</div>
-        </div>
-        <span class="md-chip" :class="c.used_at ? 'md-chip--ok' : c.locked_until ? 'md-chip--alert' : 'md-chip--warn'">
-          {{ c.used_at ? '已使用' : c.locked_until ? '已锁定' : '待使用' }}
-        </span>
-      </div>
-      <p v-if="!codes.length" class="md-muted">还没有生成过配对码。</p>
-    </div>
-  </section>
 </template>
 
 <style scoped>
-.error { color: var(--md-error); margin-bottom: var(--space-3); }
-.kpis {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1px;
-  background: var(--md-surface-container-highest); border: 1px solid var(--md-surface-container-highest);
-  border-radius: var(--md-shape-md); overflow: hidden; margin-bottom: var(--space-4);
-}
-.kpi { background: var(--md-surface-container-low); padding: var(--space-3) var(--space-4); }
-.label { font: var(--md-label-medium); color: var(--md-on-surface-variant); }
-.value { font: var(--md-headline-small); }
-.note { font: var(--md-body-small); color: var(--md-on-surface-variant); }
+.error { color: var(--md-error); max-width: var(--content-max); margin: 0 auto var(--space-3); }
 .steps {
-  margin: var(--space-3) 0 0; padding-left: 18px;
-  display: grid; gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: var(--space-2);
 }
 .steps b { color: var(--md-on-surface); font-weight: 500; }
-.charts {
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-4); margin-top: var(--space-4);
+.pair {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  flex-wrap: wrap;
 }
-@media (max-width: 1000px) { .charts { grid-template-columns: minmax(0, 1fr); } }
-.duo {
-  display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
-  gap: var(--space-4); align-items: start;
-}
-.section-head {
-  display: flex; justify-content: space-between; align-items: baseline;
-  margin-bottom: var(--space-3); gap: var(--space-3);
-}
-.pair { display: flex; gap: var(--space-2); margin-top: var(--space-4); flex-wrap: wrap; }
-.pair .md-field { flex: 1; min-width: 160px; }
+.pair .md-field { flex: 1; min-width: 200px; }
 .links { display: flex; gap: var(--space-2); margin-top: var(--space-4); flex-wrap: wrap; }
-.hint { margin-top: var(--space-3); font: var(--md-body-small); }
-.codes { margin-top: var(--space-4); }
+.hint { margin-top: var(--space-3); }
 .code { font-size: 15px; letter-spacing: 0.08em; }
-.wifi { margin-top: var(--space-4); border-top: 1px solid var(--md-surface-container-highest); padding-top: var(--space-3); }
-.wifi-grid { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-top: var(--space-2); }
-.wifi-grid .md-field { flex: 1; min-width: 120px; }
+.wifi {
+  margin-top: var(--space-4);
+  border-top: 1px solid var(--md-outline-variant);
+  padding-top: var(--space-3);
+}
+.wifi-title { margin-bottom: var(--space-2); }
+.wifi-grid {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-2);
+}
+.wifi-grid .md-field { flex: 1; min-width: 140px; }
+.wifi-grid .country { flex: 0 0 96px; }
 .conf {
-  margin-top: var(--space-3); padding: var(--space-3);
-  background: var(--md-surface-container-high); border-radius: var(--md-shape-xs);
-  font: var(--md-body-small); white-space: pre-wrap; overflow-wrap: anywhere;
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  background: var(--md-surface-container-high);
+  border-radius: var(--md-shape-xs);
+  font: var(--md-body-small);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .small { font: var(--md-body-small); }
-@media (max-width: 900px) {
-  .duo { grid-template-columns: minmax(0, 1fr); }
-}
 </style>

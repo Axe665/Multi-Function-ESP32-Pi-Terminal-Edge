@@ -148,14 +148,15 @@ async function unmute(a) {
               @click="hours = d.h"
             >{{ d.label }}</button>
           </div>
-          <input
-            v-model="reason"
-            class="md-field"
-            type="text"
-            placeholder="理由（必填，写进审计）"
-            aria-label="静音理由"
-            @keyup.enter="mute(a)"
-          />
+          <label class="md-field mute-reason">
+            <span>理由</span>
+            <input
+              v-model="reason"
+              type="text"
+              placeholder="写进审计"
+              @keyup.enter="mute(a)"
+            />
+          </label>
           <button class="md-btn" :disabled="busy === key(a)" @click="mute(a)">静音</button>
           <button class="md-btn md-btn--text" @click="open = ''">取消</button>
         </div>
@@ -201,7 +202,7 @@ async function unmute(a) {
   align-items: flex-start;
   gap: var(--space-3);
   padding: var(--space-3) 0;
-  border-top: 1px solid var(--md-card-border);
+  border-top: 1px solid var(--md-outline-variant);
 }
 .row:first-of-type {
   border-top: 0;
@@ -267,5 +268,12 @@ async function unmute(a) {
 .mute-form .md-field {
   min-width: 220px;
   flex: 1;
+}
+.mute-reason > span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
 }
 </style>

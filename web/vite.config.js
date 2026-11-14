@@ -13,6 +13,16 @@ export default defineConfig({
       },
     },
   },
+  // 冒烟测试用 preview 起静态站，/api 仍按开发时的代理走
+  preview: {
+    port: 4173,
+    proxy: {
+      '/api': {
+        target: process.env.EDGE_API || 'http://127.0.0.1:8001',
+        changeOrigin: true,
+      },
+    },
+  },
   build: {
     outDir: 'dist',
     sourcemap: false,

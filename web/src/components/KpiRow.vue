@@ -30,17 +30,18 @@ const arrow = (v) => (v > 0 ? '▲' : v < 0 ? '▼' : '—')
 <style scoped>
 .kpis {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 1px;
-  background: var(--md-surface-container-highest);
-  border: 1px solid var(--md-surface-container-highest);
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  background: var(--md-surface-container-low);
   border-radius: var(--md-shape-md);
   overflow: hidden;
-  margin-bottom: var(--space-4);
+  grid-column: span 12;
 }
 .kpi {
-  background: var(--md-surface-container-low);
   padding: var(--space-3) var(--space-4);
+  min-width: 0;
+}
+.kpi + .kpi {
+  border-left: 1px solid var(--md-outline-variant);
 }
 .label {
   font: var(--md-label-medium);
@@ -53,8 +54,9 @@ const arrow = (v) => (v > 0 ? '▲' : v < 0 ? '▼' : '—')
   margin-top: 2px;
 }
 .value {
-  font: var(--md-headline-small);
+  font: var(--md-headline-medium);
   color: var(--md-on-surface);
+  letter-spacing: -0.01em;
 }
 .unit {
   margin-left: 3px;

@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { api, fmtTime } from '../api'
-import PageHeader from '../components/PageHeader.vue'
+import PageLead from '../components/PageLead.vue'
 import ChartBox from '../components/ChartBox.vue'
 import { chartTokens, useTheme } from '../lib/theme'
 import 'echarts-wordcloud'
@@ -73,6 +73,10 @@ const counts = computed(() => {
 
 const anomalyOption = computed(() => {
   const names = deviceNames.value
+  // 只有一个跨度的数据时，只显示日期会让轴上全是同一天
+  const ts = anomalies.value.map((a) => a.ts_from)
+  const span = ts.length ? Math.max(...ts) - Math.min(...ts) : 0
+  const short = span < 2 * 86_400_000
   return {
     grid: { left: 8, right: 12, top: 12, bottom: 28, containLabel: true },
     tooltip: {
@@ -90,7 +94,8 @@ const anomalyOption = computed(() => {
         color: tk.value.axis,
         formatter: (v) => {
           const d = new Date(v)
-          return `${d.getMonth() + 1}/${d.getDate()}`
+          const day = `${d.getMonth() + 1}/${d.getDate()}`
+          return short ? `${day} ${String(d.getHours()).padStart(2, '0')}:00` : day
         },
       },
     },
@@ -198,140 +203,103 @@ const wordOption = computed(() => {
 </script>
 
 <template>
-  <PageHeader title="分析" sub="24 h × 7 天时段矩阵按基线偏差着色；异常窗口按设备分行，同一横轴可比。">
-    <select v-model="device" class="md-field" aria-label="设备">
-      <option v-for="d in devices" :key="d.device_id" :value="d.device_id">{{ d.name }}</option>
-    </select>
-    <select v-model="metric" class="md-field" aria-label="指标">
-      <option v-for="m in metrics" :key="m.metric" :value="m.metric">{{ m.label }}</option>
-    </select>
-  </PageHeader>
-
   <p v-if="error" class="error">读不到分析数据：{{ error }}</p>
 
-  <section v-if="wordsOff" class="md-panel sample-off">
-    <b>样本不足</b>
-    <span class="md-muted">群体分析已关闭，只保留在线与健康计数（当前 {{ devices.length }} 台设备）；热力图、异常与词云都不显示。</span>
-  </section>
+  <PageLead sub="24 h × 7 天时段矩阵按基线偏差着色；异常窗口按设备分行，同一横轴可比。">
+    <label class="md-field pick">
+      <span>设备</span>
+      <select v-model="device">
+        <option v-for="d in devices" :key="d.device_id" :value="d.device_id">{{ d.name }}</option>
+      </select>
+    </label>
+    <label class="md-field pick">
+      <span>指标</span>
+      <select v-model="metric">
+        <option v-for="m in metrics" :key="m.metric" :value="m.metric">{{ m.label }}</option>
+      </select>
+    </label>
+  </PageLead>
 
-  <section class="md-panel" v-if="!wordsOff">
-    <div class="section-head">
-      <h2>时段热力图</h2>
-      <span class="md-muted">
-        {{ heat?.label }}，色深是相对基线的 z（±2.5 截断）；悬停看均值与窗口数
-      </span>
-    </div>
-    <ChartBox :option="heatOption" height="304px" />
-  </section>
+  <div class="md-grid">
+    <section v-if="wordsOff" class="md-card span-12">
+      <b>样本不足</b>
+      <p class="md-muted">
+        群体分析已关闭，只保留在线与健康计数（当前 {{ devices.length }} 台设备）；热力图、异常与词云都不显示。
+      </p>
+    </section>
 
-  <div class="duo" v-if="!wordsOff">
-    <section class="md-panel">
-      <div class="section-head">
-        <h2>异常窗口</h2>
-        <span class="md-muted">连续 2 个窗口 |z| ≥ 2.5，最近 7 天 {{ anomalies.length }} 个</span>
-      </div>
-      <ChartBox :option="anomalyOption" height="224px" />
-      <ul class="counts">
-        <li v-for="d in counts" :key="d.device_id">
-          <span class="sev" :class="d.count ? 'sev--notice' : 'sev--ok'">
-            <span class="sev-dot"></span>{{ d.name }}
+    <template v-if="!wordsOff">
+      <section class="md-card span-12">
+        <div class="md-card-head">
+          <h2>时段热力图</h2>
+          <span class="meta">
+            {{ heat?.label }}，色深是相对基线的 z（±2.5 截断）；悬停看均值与窗口数
           </span>
-          <b class="md-num">{{ d.count }}</b>
-        </li>
-      </ul>
-    </section>
-
-    <section class="md-panel">
-      <div class="section-head">
-        <h2>建议用词</h2>
-        <span class="md-muted">最近 7 天，词典分词</span>
-      </div>
-      <div v-if="wordsOff" class="sample-off">
-        <b>样本不足</b>
-        <span class="md-muted">群体分析已关闭，词云不显示；开启后才会聚合全体建议文本。</span>
-      </div>
-      <ChartBox v-else :option="wordOption" height="224px" :on-click="drillWord" />
-      <p class="md-muted small">只统计用词频次，不表示严重程度；点词看原文。</p>
-    </section>
-  </div>
-
-  <section v-if="picked && !wordsOff" class="md-panel drill">
-    <div class="section-head">
-      <h3>「{{ picked }}」相关的建议</h3>
-      <button class="md-btn md-btn--text" @click="picked = ''">收起</button>
-    </div>
-    <div class="md-list">
-      <div v-for="a in pickedAdvice" :key="a.id" class="md-list-row">
-        <span class="sev-tag" :class="a.risk === 'alert' ? 'sev-tag--notice' : 'sev-tag--idle'">
-          {{ a.risk === 'alert' ? '告警' : '关注' }}
-        </span>
-        <div class="md-grow">
-          <div>{{ a.text }}</div>
-          <div class="md-muted small">{{ a.device_id }}，{{ fmtTime(a.created_at) }}</div>
         </div>
-      </div>
-      <p v-if="!pickedAdvice.length" class="md-muted">没有包含这个词的建议。</p>
-    </div>
-  </section>
+        <ChartBox :option="heatOption" height="320px" label="24 小时乘 7 天的时段热力图" />
+      </section>
+
+      <section class="md-card span-7">
+        <div class="md-card-head">
+          <h2>异常窗口</h2>
+          <span class="meta">连续 2 个窗口 |z| ≥ 2.5，最近 7 天 {{ anomalies.length }} 个</span>
+        </div>
+        <ChartBox :option="anomalyOption" height="224px" label="各设备的异常窗口" />
+        <ul class="counts">
+          <li v-for="d in counts" :key="d.device_id">
+            <span class="sev" :class="d.count ? 'sev--notice' : 'sev--ok'">
+              <span class="sev-dot"></span>{{ d.name }}
+            </span>
+            <b class="md-num">{{ d.count }}</b>
+          </li>
+        </ul>
+      </section>
+
+      <section class="md-card span-5">
+        <div class="md-card-head">
+          <h2>建议用词</h2>
+          <span class="meta">最近 7 天，词典分词</span>
+        </div>
+        <ChartBox :option="wordOption" height="224px" :on-click="drillWord" label="建议文本的词云" />
+        <p class="md-muted small hint">只统计用词频次，不表示严重程度；点词看原文。</p>
+      </section>
+
+      <section v-if="picked" class="md-card span-12">
+        <div class="md-card-head">
+          <h3>「{{ picked }}」相关的建议</h3>
+          <button class="md-btn md-btn--text" @click="picked = ''">收起</button>
+        </div>
+        <div class="md-list">
+          <div v-for="a in pickedAdvice" :key="a.id" class="md-list-item">
+            <span class="sev-tag" :class="a.risk === 'alert' ? 'sev-tag--notice' : 'sev-tag--idle'">
+              {{ a.risk === 'alert' ? '告警' : '关注' }}
+            </span>
+            <div class="md-grow">
+              <div>{{ a.text }}</div>
+              <div class="md-muted small">{{ a.device_id }}，{{ fmtTime(a.created_at) }}</div>
+            </div>
+          </div>
+          <p v-if="!pickedAdvice.length" class="md-muted">没有包含这个词的建议。</p>
+        </div>
+      </section>
+    </template>
+  </div>
 </template>
 
 <style scoped>
-.error {
-  color: var(--md-error);
-  margin-bottom: var(--space-3);
-}
-.section-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: var(--space-3);
-  margin-bottom: var(--space-2);
-  flex-wrap: wrap;
-}
-.section-head h2,
-.section-head h3 {
-  font: var(--md-title-small);
-  color: var(--md-on-surface);
-}
-
-.duo {
-  display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
-  gap: var(--space-4);
-  margin-top: var(--space-4);
-  align-items: start;
-}
+.error { color: var(--md-error); max-width: var(--content-max); margin: 0 auto var(--space-3); }
+.pick { width: 220px; }
 .counts {
   display: flex;
   gap: var(--space-4);
   flex-wrap: wrap;
-  margin-top: var(--space-2);
-  padding-top: var(--space-2);
-  border-top: 1px solid var(--md-card-border);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--md-outline-variant);
   list-style: none;
 }
-.counts li {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-2);
-}
-.counts b {
-  font: var(--md-title-small);
-  color: var(--md-on-surface);
-}
-
-.drill {
-  margin-top: var(--space-4);
-}
-.small {
-  font: var(--md-body-small);
-}
-
-@media (max-width: 1080px) {
-  .duo {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-.sample-off { min-height: 224px; display: flex; flex-direction: column; gap: 6px;
-  align-items: center; justify-content: center; text-align: center; }
+.counts li { display: flex; align-items: baseline; gap: var(--space-2); }
+.counts b { font: var(--md-title-small); color: var(--md-on-surface); }
+.small { font: var(--md-body-small); }
+.hint { margin-top: var(--space-2); }
 </style>
