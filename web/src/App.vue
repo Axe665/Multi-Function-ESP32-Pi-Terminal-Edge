@@ -54,17 +54,13 @@ onMounted(async () => {
         <div class="appbar-actions">
           <slot name="appbar"></slot>
           <button
-            class="theme-switch theme-toggle"
-            role="switch"
-            :aria-checked="theme === 'dark'"
-            aria-label="深色模式"
-            :title="theme === 'dark' ? '切换为亮色' : '切换为深色'"
+            class="md-icon-outline theme-toggle"
+            :aria-label="theme === 'dark' ? '切到亮色' : '切到暗色'"
+            :aria-pressed="theme === 'dark'"
+            :title="theme === 'dark' ? '切到亮色' : '切到暗色'"
             @click="toggleTheme"
           >
-            <span class="theme-switch__label">深色</span>
-            <span class="theme-switch__track" aria-hidden="true">
-              <span class="theme-switch__thumb"></span>
-            </span>
+            <Icon :name="theme === 'dark' ? 'light_mode' : 'dark_mode'" :size="20" />
           </button>
         </div>
       </header>

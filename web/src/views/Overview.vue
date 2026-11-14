@@ -424,7 +424,7 @@ const adviceRows = computed(() => {
   display: flex;
   align-items: flex-start;
   gap: var(--space-2);
-  padding: 4px 0;
+  padding: 3px 0;
 }
 .advice-text {
   display: -webkit-box;

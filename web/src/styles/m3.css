@@ -25,18 +25,18 @@
   --md-error-container: #ffdad6;
   --md-on-error-container: #410002;
 
-  /* 面：页面用 surface，卡片用容器级（靠色阶分层，不靠阴影） */
-  --md-surface: #fbfcf6;
+  /* 面：页面纯白，卡片同白靠细描边分层；外壳（rail/顶栏）用淡色容器区分 */
+  --md-surface: #ffffff;
   --md-on-surface: #1a1c18;
   --md-surface-tint: var(--md-primary);
   --md-surface-dim: #dcdfd4;
   --md-surface-bright: #ffffff;
   --md-surface-container-lowest: #ffffff;
   --md-surface-container-low: #ffffff;
-  --md-surface-container: #f0f3ea;
-  --md-surface-container-high: #e9ece3;
-  --md-surface-container-highest: #e3e7dd;
-  --md-surface-variant: #e3e7dd;
+  --md-surface-container: #f5f7f0;
+  --md-surface-container-high: #eff2e9;
+  --md-surface-container-highest: #e9ece2;
+  --md-surface-variant: #e9ece2;
   --md-on-surface-variant: #43483e;
   --md-outline: #74796d;
   --md-outline-variant: #c3c8bb;
@@ -45,9 +45,9 @@
   --md-scrim: #000000;
   --md-shadow: #000000;
 
-  /* 组件别名：历史命名，映射到真实角色，新代码直接用上面的 */
-  --md-card-bg: var(--md-surface-container-low);
-  --md-card-border: var(--md-outline-variant);
+  /* 组件别名：卡片纯白，靠 1px 描边和白色页面分开 */
+  --md-card-bg: #ffffff;
+  --md-card-border: #e6e9e0;
 
   /* ---- 严重度（只有异常才饱和） ---- */
   --md-ok: #386a20;
@@ -134,8 +134,9 @@
   --rail-w: 88px;
   --appbar-h: 64px;
   --content-max: 1760px;
-  --appbar-bg: var(--md-surface-container);
-  --rail-bg: var(--md-surface-container);
+  /* 外壳与页面同白，靠 1px 分隔线划区；暗色下外壳比纯黑略亮一层 */
+  --appbar-bg: var(--md-surface);
+  --rail-bg: var(--md-surface);
 }
 
 [data-theme='dark'] {
@@ -193,6 +194,11 @@
   --md-chart-6: #b8c78a;
   --md-chart-cool: var(--md-tertiary);
   --md-chart-warm: var(--md-notice);
+
+  --md-card-bg: #141414;
+  --md-card-border: transparent;
+  --appbar-bg: var(--md-surface-container);
+  --rail-bg: var(--md-surface-container);
 
   --md-elev-1: 0 1px 2px rgba(0, 0, 0, 0.6), 0 1px 3px 1px rgba(0, 0, 0, 0.4);
 }
@@ -424,6 +430,7 @@ h3 {
 
 .md-card {
   background: var(--md-card-bg);
+  border: 1px solid var(--md-card-border);
   border-radius: var(--md-shape-md);
   padding: var(--space-4);
 }
@@ -814,54 +821,27 @@ h3 {
 
 /* ---------------------------------------------------------------- 深色开关 */
 
-.theme-switch {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
+/* 主题切换：M3 outlined icon button，图标本身就是「切到哪边」 */
+.md-icon-outline {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
   height: 40px;
-  padding: 0 var(--space-3);
-  border: 0;
+  padding: 0;
+  border: 1px solid var(--md-outline);
   border-radius: var(--md-shape-full);
   background: transparent;
   color: var(--md-on-surface-variant);
-  font: var(--md-label-large);
   cursor: pointer;
-  transition: background-color var(--md-dur-short) var(--md-ease);
-}
-.theme-switch:hover {
-  background: color-mix(in srgb, var(--md-on-surface) 8%, transparent);
-}
-.theme-switch__track {
-  position: relative;
-  width: 36px;
-  height: 20px;
-  border-radius: var(--md-shape-full);
-  border: 2px solid var(--md-outline);
-  background: var(--md-surface-container-highest);
   transition: background-color var(--md-dur-short) var(--md-ease),
-    border-color var(--md-dur-short) var(--md-ease);
+    color var(--md-dur-short) var(--md-ease);
 }
-.theme-switch__thumb {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--md-outline);
-  transition: transform var(--md-dur-short) var(--md-ease),
-    background-color var(--md-dur-short) var(--md-ease);
-}
-.theme-switch[aria-checked='true'] .theme-switch__track {
-  background: var(--md-primary);
-  border-color: var(--md-primary);
-}
-.theme-switch[aria-checked='true'] .theme-switch__thumb {
-  transform: translateX(16px);
-  background: var(--md-on-primary);
-}
-.theme-switch[aria-checked='true'] {
+.md-icon-outline:hover {
+  background: color-mix(in srgb, var(--md-on-surface) 8%, transparent);
   color: var(--md-on-surface);
+}
+.md-icon-outline:active {
+  background: color-mix(in srgb, var(--md-on-surface) 10%, transparent);
 }
 
 /* ---------------------------------------------------------------- 工具 */
