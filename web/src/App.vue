@@ -54,13 +54,13 @@ onMounted(async () => {
         <div class="appbar-actions">
           <slot name="appbar"></slot>
           <button
-            class="md-icon-outline theme-toggle"
+            class="md-btn md-btn--icon theme-toggle"
             :aria-label="theme === 'dark' ? '切到亮色' : '切到暗色'"
             :aria-pressed="theme === 'dark'"
             :title="theme === 'dark' ? '切到亮色' : '切到暗色'"
             @click="toggleTheme"
           >
-            <Icon :key="theme" :name="theme === 'dark' ? 'light_mode' : 'dark_mode'" :size="20" />
+            <Icon :key="theme" :name="theme === 'dark' ? 'light_mode' : 'dark_mode'" :size="24" />
           </button>
         </div>
       </header>
