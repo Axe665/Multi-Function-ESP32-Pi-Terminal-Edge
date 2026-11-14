@@ -179,3 +179,25 @@ class MqttGuardTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class RetainedStatusTest(unittest.TestCase):
+    """retained 的 status 重放不能把掉线设备刷成在线。"""
+
+    def setUp(self):
+        store.init_db()
+        with store.connect() as conn:
+            conn.execute("DELETE FROM devices")
+
+    def test_status_does_not_refresh_last_seen(self):
+        store.ensure_device("mt-dead-01")
+        stale = store.now_ms() - 6 * 3600_000
+        with store.connect() as conn:
+            conn.execute("UPDATE devices SET last_seen=? WHERE device_id='mt-dead-01'", (stale,))
+
+        ing = mqtt.MqttIngest()
+        ing._status("mt-dead-01", {"fw": "orpi 1.4.2", "queue_depth": 0})
+
+        dev = store.device("mt-dead-01")
+        self.assertEqual(dev["last_seen"], stale, "status 不该动 last_seen")
+        self.assertEqual(dev["fw"], "orpi 1.4.2", "但 fw 这类状态信息要更新")
+

@@ -191,7 +191,9 @@ class MqttIngest:
             self.rejected += 1
             return
         store.ensure_device(device_id)
-        store.touch_device(device_id, store.now_ms())
+        # status 是 retained 的：设备死了以后，边每次重连都会收到它最后一条，
+        # 拿服务器时间写 last_seen 就等于把死设备刷成在线。在线判定只认
+        # 数据上报（ingest.process 里按窗口时间写）
         store.set_status(device_id, msg.fw or msg.version, msg.queue_depth)
         if msg.link:
             store.set_link(device_id, msg.link)

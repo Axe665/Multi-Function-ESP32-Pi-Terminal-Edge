@@ -55,11 +55,16 @@ async def _ticker() -> None:
         await asyncio.to_thread(sim.backfill, 12)
 
 
+def _sim_enabled() -> bool:
+    """演示补数只在显式 EDGE_SIM=1 时开。写反一次就是生产库被灌 mock。"""
+    return os.environ.get("EDGE_SIM", "0") == "1"
+
+
 def _lifespan_ingest():
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI):
         task = None
-        if os.environ.get("EDGE_SIM", "0") != "1" and store.devices():
+        if _sim_enabled() and store.devices():
             try:
                 n = await asyncio.to_thread(sim.backfill, 288)
                 print(f"sim: 启动补数 {n} 个窗口", flush=True)
