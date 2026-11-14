@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -70,6 +71,16 @@ class SnapshotTest(unittest.TestCase):
         self.assertEqual(snap["summary"]["bad"], 1)
         self.assertFalse(snap["health_ok"])
 
+    def test_starting_healthcheck_is_not_counted_bad(self):
+        # 容器刚起时 healthcheck 处于宽限期，算异常会让重启后的页面一片红
+        snap = self._snap(
+            {"api": {"Service": "api", "State": "running", "Health": "starting", "Status": "Up 3s"}}
+        )
+        api = next(s for s in snap["services"] if s["name"] == "api")
+        self.assertTrue(api["running"])
+        self.assertFalse(api["healthy"])
+        self.assertEqual(snap["summary"]["bad"], 0)
+
     def test_missing_container_shows_as_absent(self):
         snap = self._snap({}, ready=(True, ""))
         self.assertTrue(all(s["state"] == "absent" for s in snap["services"]))
@@ -81,6 +92,22 @@ class SnapshotTest(unittest.TestCase):
             snap = stack.snapshot(cfg, "docker")
         self.assertEqual(snap["error"], "没装 docker")
         self.assertIn("docker compose", snap["hint"])
+
+    def test_native_phase_is_starting_while_port_is_closed(self):
+        # 边节点原生启动要几十秒，pid 活着但端口没开时不能报成异常
+        cfg = config.load()
+        with (
+            mock.patch.object(stack, "native_pid", return_value=4242),
+            mock.patch.object(stack, "port_open", return_value=False),
+            mock.patch.object(stack, "compose_ps", return_value={}),
+            mock.patch.object(stack, "http_ok", return_value=False),
+        ):
+            snap = stack.snapshot(cfg, "native")
+        svc = snap["services"][0]
+        self.assertEqual(svc["state"], "starting")
+        self.assertTrue(svc["running"])
+        self.assertFalse(svc["healthy"])
+        self.assertEqual(snap["summary"]["bad"], 0)
 
     def test_native_mode_without_pid_is_stopped(self):
         cfg = config.load()
@@ -121,6 +148,20 @@ class ActionTest(unittest.TestCase):
             ok, msg = stack.act(cfg, "docker", "start", "api")
         self.assertFalse(ok)
         self.assertIn("no such container", msg)
+
+
+class ZombieTest(unittest.TestCase):
+    def test_unreaped_child_counts_as_dead(self):
+        # 子进程退出但没 wait 时会留成僵尸，os.kill(pid, 0) 照样成功
+        proc = subprocess.Popen(["bash", "-c", "exit 0"])
+        try:
+            for _ in range(50):
+                if Path(f"/proc/{proc.pid}/stat").exists() and stack._alive(proc.pid) is False:
+                    break
+                time.sleep(0.05)
+            self.assertFalse(stack._alive(proc.pid))
+        finally:
+            proc.wait()
 
 
 class SharedFilesTest(unittest.TestCase):
