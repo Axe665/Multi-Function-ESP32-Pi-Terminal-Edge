@@ -71,7 +71,8 @@ class AnalysisTest(unittest.TestCase):
                         n_samples, mean, slope, z, k)
                        VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
                     (dev, metric, 1, ts, ts + step, 9, 360, 20.0, 0.1, z, 9))
-        found = {r["metric"] for r in store.anomalies(base - 1)}
+        # 种子数据在最近 2 小时也会产出异常，默认 limit=40 会把测试自己插的挤出去
+        found = {r["metric"] for r in store.anomalies(base - 1, limit=500)}
         self.assertIn("consecutive", found)
         self.assertNotIn("isolated", found)
 
@@ -99,7 +100,8 @@ class AnalysisTest(unittest.TestCase):
                        VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
                     (dev, "mad_metric", 1, base + i * step, base + (i + 1) * step,
                      9, 360, 40.0, 0.0, 0.0, 9))
-        found = {r["metric"]: r for r in store.anomalies(base - 1)}
+        # 同上：种子数据也会产异常，别被 limit=40 截掉
+        found = {r["metric"]: r for r in store.anomalies(base - 1, limit=500)}
         self.assertIn("mad_metric", found)
         self.assertGreater(abs(found["mad_metric"]["robust_z"]), 3.5)
 
