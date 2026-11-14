@@ -1,0 +1,13 @@
+# @ROOT@ 由 scripts/install_systemd.sh 替换成仓库绝对路径；生成的是 deploy/edge-mqtt.conf，别手改那个。
+# 本机联调用的 broker 配置（TLS1.3 + mTLS + ACL）。
+per_listener_settings false
+listener 18883
+allow_anonymous false
+cafile   @ROOT@/docker/mosquitto/certs/ca.crt
+certfile @ROOT@/docker/mosquitto/certs/broker.crt
+keyfile  @ROOT@/docker/mosquitto/certs/broker.key
+require_certificate true
+use_identity_as_username true
+tls_version tlsv1.3
+acl_file @ROOT@/docker/mosquitto/acl
+crlfile  @ROOT@/docker/mosquitto/certs/crl.pem

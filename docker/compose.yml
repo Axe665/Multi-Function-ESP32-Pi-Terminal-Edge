@@ -8,8 +8,11 @@ x-edge: &edge
   depends_on:
     mosquitto:
       condition: service_started
+  # 数据落仓库的 ./data（bind mount）：容器和原生 run.sh 用同一个 edge.db，
+  # 切部署方式时数据不会凭空换一份，备份/排障也能直接看到文件
+  user: "${APP_UID:-1000}:${APP_GID:-1000}"
   volumes:
-    - edge_data:/app/data
+    - ../data:/app/data
     - ./mosquitto/certs:/app/certs
     - ./cloud-certs:/app/cloud-certs:ro
   networks:
@@ -120,7 +123,6 @@ services:
           memory: 128m
 
 volumes:
-  edge_data:
   mqtt_data:
   caddy_data:
 

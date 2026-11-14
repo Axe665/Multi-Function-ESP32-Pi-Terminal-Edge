@@ -2,7 +2,7 @@
 Description=Edge MQTT broker（本机 mTLS，18883）
 
 [Service]
-ExecStart=/usr/sbin/mosquitto -c @ROOT@/docker/mosquitto/edge-local.conf
+ExecStart=/usr/sbin/mosquitto -c @ROOT@/deploy/edge-mqtt.conf
 Restart=on-failure
 RestartSec=2
 

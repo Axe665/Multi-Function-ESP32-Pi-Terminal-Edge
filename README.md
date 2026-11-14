@@ -114,6 +114,19 @@ Docker（含 mTLS broker）：
 ```bash
 python3 scripts/make_broker_cert.py mqtt.edge.local   # 用边 CA 签 broker 证书
 cd docker && docker compose up -d --build
+```
+
+数据落在仓库的 `./data`（bind mount），容器和原生 `run.sh` 共用同一个 `edge.db`，
+切部署方式不会换一份库。从老版本（命名卷 `edge_data`）升上来时先搬数据：
+
+```bash
+cd docker && docker compose down && cd ..
+mv data data.bak-$(date +%Y%m%d) 2>/dev/null; mkdir -p data
+docker run --rm --user root \
+  -v modular-terminal-edge_edge_data:/from -v "$PWD/data":/to \
+  --entrypoint sh modular-terminal-edge:2.0.0 -c 'cp -a /from/. /to/ && chown -R 1000:1000 /to'
+cd docker && docker compose up -d
+```
 
 非容器部署（裸跑 uvicorn + 网页 dev server，适合开发机）：
 
