@@ -196,9 +196,10 @@ const deltaOption = computed(() => {
              axisLine: { lineStyle: { color: t.split } }, axisTick: { show: false } },
     yAxis: { type: 'value', splitNumber: 3, splitLine: { lineStyle: { color: t.split } }, axisLabel: { fontSize: 12, color: t.axis } },
     series: [
-      { name: '近 24 小时', type: 'bar', data: rows.map((r) => r.cur), barWidth: '58%',
+      // 只有 2 个类目：不给上限 58% 会撑到 100px 以上，两根柱贴在一起把类目标签夹住
+      { name: '近 24 小时', type: 'bar', data: rows.map((r) => r.cur), barWidth: '58%', barMaxWidth: 32,
         itemStyle: { color: t.line, borderRadius: [4, 4, 0, 0] } },
-      { name: '前 24 小时', type: 'bar', data: rows.map((r) => r.prev), barWidth: '58%',
+      { name: '前 24 小时', type: 'bar', data: rows.map((r) => r.prev), barWidth: '58%', barMaxWidth: 32,
         itemStyle: { color: t.muted, borderRadius: [4, 4, 0, 0] } },
     ],
   }
