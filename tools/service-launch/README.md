@@ -30,6 +30,10 @@ sed "s#@ROOT@#$PWD#" deploy/edge.desktop.in > ~/.local/share/applications/edge-c
 
 原生模式下，如果端口已经被 Docker 那套占着，启动会直接告诉你，不会起两个抢同一个端口。
 
+云仓的原生模式只起 api：定时任务和 AI 报告仍由 compose 里的 worker 负责，两套各跑一份会重复出报告。库和缓存还是容器，compose 已经把 5432 和 6379 发布到 127.0.0.1，只给宿主机上的原生模式用。
+
+还有一个坑在这里堵住：`run.sh` 的 `CLOUD_AUTOSEED` 默认是 1，而 `cloud/seed.py` 会先 `DELETE` 全部业务表再写演示数据。控制台拉起时固定传 `CLOUD_AUTOSEED=0`，不会把演示数据写进真实库。手动跑 `./run.sh` 时还是原来的行为，自己留意。
+
 ## 配置
 
 仓库根的 `launcher.toml`：
@@ -48,6 +52,9 @@ label = "原生进程 run.sh"         # 界面上显示的名字
 script = "run.sh"                # 原生模式下要拉起的脚本
 ports = [8001]                   # 起之前查冲突、起来之后查存活
 deps = []                        # 云仓是 ["postgres", "redis"]
+
+[native.env]                     # 传给脚本的环境变量，覆盖脚本里的默认值
+CLOUD_AUTOSEED = "0"
 
 [services.mosquitto]
 label = "MQTT 接入"

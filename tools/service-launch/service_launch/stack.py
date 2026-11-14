@@ -134,6 +134,13 @@ def native_pid(cfg: Config) -> int:
     return pid if _alive(pid) else 0
 
 
+def native_env(cfg: Config, base: dict[str, str] | None = None) -> dict[str, str]:
+    """控制台进程的环境 + launcher.toml 里的覆盖，脚本里没写死的默认值才管用。"""
+    env = dict(os.environ if base is None else base)
+    env.update(cfg.native_env)
+    return env
+
+
 def native_start(cfg: Config) -> tuple[bool, str]:
     if native_pid(cfg):
         return True, "原生进程已经在跑"
@@ -147,6 +154,7 @@ def native_start(cfg: Config) -> tuple[bool, str]:
     proc = subprocess.Popen(
         ["bash", str(cfg.native_script)],
         cwd=str(cfg.native_script.parent),
+        env=native_env(cfg),
         stdout=log,
         stderr=subprocess.STDOUT,
         start_new_session=True,
@@ -257,7 +265,7 @@ def snapshot(cfg: Config, mode: str) -> dict:
             {"name": d, "running": str((deps.get(d) or {}).get("State")) == "running"}
             for d in cfg.deps
         ]
-    out["health_ok"] = http_ok(cfg.health_url)
+    out["health_ok"] = http_ok(cfg.native_health_url if mode == "native" else cfg.health_url)
     # starting 是 healthcheck 的宽限期（容器刚起，间隔 60 秒、要连过 3 次），
     # 算成异常会让刚重启完的页面一片红
     out["summary"] = {
