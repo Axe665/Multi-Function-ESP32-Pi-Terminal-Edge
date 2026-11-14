@@ -42,6 +42,24 @@ class DeviceIdentityTest(unittest.TestCase):
         self.assertEqual(ctx.exception.code, "DEVICE_REVOKED")
 
 
+    def test_payload_for_another_edge_is_refused(self):
+        body = json.loads(json.dumps(EXAMPLE))
+        body["edge_id"] = "edge-somewhere-else"
+        with self.assertRaises(ingest.IngestError) as ctx:
+            ingest.process(body, transport_device=body["device_id"])
+        self.assertEqual(ctx.exception.code, "EDGE_MISMATCH")
+
+    def test_future_window_does_not_pin_device_online(self):
+        body = json.loads(json.dumps(EXAMPLE))
+        body["device_id"] = "mt-future-01"
+        body["window"] = {"from": 1, "to": 99_999_999_999_999, "step_ms": 300000}
+        body["aggregates"][0]["n_subjects"] = 8
+        body["aggregates"][0]["k"] = 8
+        ingest.process(body, transport_device="mt-future-01")
+        dev = store.device("mt-future-01")
+        self.assertLess(dev["last_seen"], 99_999_999_999_999, "未来时间戳不能写进 last_seen")
+
+
 class SettingsBoundsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

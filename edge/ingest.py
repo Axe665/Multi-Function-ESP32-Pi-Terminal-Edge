@@ -69,6 +69,11 @@ def process(body: dict[str, Any], transport_device: str | None = None) -> dict[s
         raise IngestError("DEVICE_MISMATCH", "载荷 device_id 与主题不一致")
     if transport_device and store.device_revoked(transport_device):
         raise IngestError("DEVICE_REVOKED", "设备已吊销，先重新配对")
+    claimed_edge = body.get("edge_id")
+    if claimed_edge and claimed_edge != config.EDGE_ID:
+        # 端可能配错边地址，或不只往一台边发；落进来就会串边
+        store.bump("edge_mismatch")
+        raise IngestError("EDGE_MISMATCH", f"载荷属于 {claimed_edge}，不是本边")
     if not storage_ok():
         store.bump("disk_low")
         raise IngestError("DISK_LOW", "边节点磁盘余量不足，暂时拒收",
@@ -117,7 +122,8 @@ def process(body: dict[str, Any], transport_device: str | None = None) -> dict[s
     store.ensure_device(msg.device_id)
     accepted = store.insert_batch(msg.device_id, bid, msg.window.from_,
                                   msg.window.to, safe_body, agg, adv)
-    store.touch_device(msg.device_id, msg.window.to)
+    # 端的时间戳可以比现在晚：直接写会把设备钉成「永远在线」
+    store.touch_device(msg.device_id, min(msg.window.to, store.now_ms()))
     if accepted:
         store.bump("batches")
     return {"accepted": accepted, "batch_id": bid,
