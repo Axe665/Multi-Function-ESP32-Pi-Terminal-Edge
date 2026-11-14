@@ -272,15 +272,26 @@ def _baseline(metric: str, hour: float, day_index: float, devices: list,
         yield _value(metric, hour, d) + random.Random(f"b|{metric}|{int(hour)}|{d}").gauss(0, NOISE.get(metric, 0.5))
 
 
-def append_window(ts: int | None = None) -> int:
-    """模拟一次上报：追加一个窗口（默认当前窗口）。"""
+def append_window(ts: int | None = None) -> dict[str, int]:
+    """模拟一次上报：追加一个窗口（默认当前窗口）。
+
+    已存在同窗口的批次（真机报过）就跳过：演示数据只补空缺，
+    不能盖掉真实聚合 —— 覆盖之后页面上的数是编出来的。
+    """
     now = ts or (store.now_ms() // config.WINDOW_MS * config.WINDOW_MS)
     rnd = random.Random(now)
+    with store.connect() as conn:
+        done = {r["device_id"] for r in conn.execute(
+            "SELECT device_id FROM telemetry WHERE ts_from=?", (now,))}
     n = 0
+    skipped = 0
     for d in store.devices():
         dev = d["device_id"]
         rows = catalog.for_device(dev)
         if not rows:
+            continue
+        if dev in done:
+            skipped += 1
             continue
         aggs, adv_out = [], []
         h = (now / 3600_000) % 24
@@ -316,7 +327,7 @@ def append_window(ts: int | None = None) -> int:
         n += 1
     from . import analysis
     analysis.rebuild_words()
-    return n
+    return {"written": n, "skipped": skipped}
 
 
 def backfill(max_windows: int = 288) -> int:

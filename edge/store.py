@@ -292,8 +292,11 @@ def ensure_device(device_id: str) -> None:
 
 
 def touch_device(device_id: str, ts: int) -> None:
+    # 补传旧窗口时 ts 比当前 last_seen 还早：直接覆盖会把在线设备打回离线
     with connect() as conn:
-        conn.execute("UPDATE devices SET last_seen=? WHERE device_id=?", (ts, device_id))
+        conn.execute(
+            "UPDATE devices SET last_seen=MAX(COALESCE(last_seen, 0), ?) WHERE device_id=?",
+            (ts, device_id))
 
 
 def devices() -> list[dict[str, Any]]:
@@ -678,12 +681,14 @@ def alert_feed(since_ms: int, stale_ms: int, at: int | None = None) -> list[dict
 
     # 数据过期本身就是一条严重告警：没有上报比数值漂移更需要处理
     for d in devices():
-        last = d["last_seen"] or 0
-        if now - last <= stale_ms:
+        # 刚登记的设备 last_seen 还是 NULL，拿 0 去比等于「1970 年起就没上过报」，
+        # 一配对就冒 critical。退回配对时间，连它都没有就不报。
+        last = d["last_seen"] or d.get("paired_at") or 0
+        if not last or now - last <= stale_ms:
             continue
         runs.append({
             "kind": "stale", "device_id": d["device_id"], "metric": "__stale__",
-            "ts_from": last or 0, "ts_to": last or 0,
+            "ts_from": last, "ts_to": last,
             "mean": None, "z": None, "k": None, "windows": 0,
             "max_z": 0, "critical": True, "resolved": False,
         })
@@ -883,12 +888,17 @@ def mark_pair_used(code: str) -> bool:
 
 
 def pair_failure(code: str, max_attempts: int, lock_ms: int) -> None:
+    """失败计数与锁定都落在这一行配对码（= 这一台设备）上，不牵连别人。"""
     with connect() as conn:
-        row = conn.execute("SELECT attempts FROM pair_codes WHERE code=?", (code,)).fetchone()
+        row = conn.execute(
+            "SELECT attempts, device_id FROM pair_codes WHERE code=?", (code,)).fetchone()
         attempts = (row["attempts"] if row else 0) + 1
         locked = now_ms() + lock_ms if attempts >= max_attempts else None
         conn.execute("UPDATE pair_codes SET attempts=?, locked_until=? WHERE code=?",
                      (attempts, locked, code))
+    if locked:
+        audit_action("system", "pair.locked", (row["device_id"] if row else "") or "-",
+                     {"attempts": attempts, "until": locked})
 
 
 # ---------------------------------------------------------------- 证书

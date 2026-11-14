@@ -1,6 +1,7 @@
 """调度：退避序列、保留期清理、到点才生成报表。"""
 from __future__ import annotations
 
+import json
 import os
 import sys
 import tempfile
@@ -124,6 +125,35 @@ class PruneTest(unittest.TestCase):
             left = conn.execute("SELECT COUNT(*) FROM aggregates").fetchone()[0]
         self.assertEqual(left, 1)
 
+    def test_prune_covers_word_audit_and_alert_state(self):
+        """保留期不能只管两张表：词云/审计/告警状态也要有自己的线。"""
+        from edge import analysis
+
+        store.init_db()
+        now = store.now_ms()
+        old = now - 400 * 86_400_000
+        with store.connect() as conn:
+            conn.execute("DELETE FROM word_freq")
+            conn.execute("DELETE FROM audit")
+            conn.execute("DELETE FROM alert_state")
+            conn.execute("INSERT INTO word_freq(day, word, count) VALUES(?,?,?)",
+                         (analysis.day_of(old), "旧词", 3))
+            conn.execute("INSERT INTO word_freq(day, word, count) VALUES(?,?,?)",
+                         (analysis.day_of(now), "新词", 3))
+            conn.execute("INSERT INTO audit(actor, action, target, detail, created_at) "
+                         "VALUES('system','old','x','{}',?)", (old,))
+            conn.execute("INSERT INTO alert_state(device_id, metric, ts_from, updated_at) "
+                         "VALUES('dev-a','m',1,?)", (old,))
+        out = scheduler.prune(180)
+        self.assertEqual(out["word_freq"], 1)
+        self.assertEqual(out["audit"], 1)
+        self.assertEqual(out["alert_state"], 1)
+        pruned = [a for a in store.audit(20) if a["action"] == "retention.prune"]
+        self.assertTrue(pruned, "清理没写审计")
+        detail = json.loads(pruned[0]["detail"])
+        self.assertEqual(detail["l2_days"], 180)
+        self.assertEqual(detail["l3_days"], config.TEXT_KEEP_DAYS)
+
 
 class TickTest(unittest.TestCase):
     def test_tick_without_cloud_does_nothing(self):
@@ -132,6 +162,28 @@ class TickTest(unittest.TestCase):
         out = scheduler.tick()
         self.assertIsNone(out["report"])
         self.assertIsNone(out["drain"])
+
+    def test_cadence_comes_from_settings(self):
+        """设置页的 report_cadence_min 才该决定节奏，config 只是没设过的默认。"""
+        from unittest import mock
+
+        store.init_db()
+        store.set_settings({"report_cadence_min": 1})
+        try:
+            with store.connect() as conn:
+                conn.execute("DELETE FROM outbox")
+            store.enqueue_report("r-cadence", {"schema": "x"})
+            with store.connect() as conn:
+                conn.execute("UPDATE outbox SET created_at=? WHERE report_id='r-cadence'",
+                             (store.now_ms() - 120_000,))
+            with mock.patch.object(cloudpush, "configured", return_value=True), \
+                    mock.patch.object(cloudpush, "push_now",
+                                      return_value={"report_id": "r-cadence"}), \
+                    mock.patch.object(cloudpush, "drain", return_value={"sent": 0}):
+                out = scheduler.tick()
+        finally:
+            store.set_settings({"report_cadence_min": 60})
+        self.assertEqual(out["report"], {"report_id": "r-cadence"})
 
     def test_cloudpush_reports_not_configured(self):
         store.init_db()

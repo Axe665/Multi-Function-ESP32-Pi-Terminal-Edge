@@ -68,6 +68,8 @@ INGEST_TOKEN = _ingest_token()
 ADMIN_TOKEN = _env("EDGE_ADMIN_TOKEN")
 
 K_MIN = int(_env("EDGE_K_MIN", "5"))
+# 文档 §8.4：单条写入上限。5 min 窗口的聚合报文远小于此，超过就是异常或攻击
+MAX_BODY_BYTES = int(_env("EDGE_MAX_BODY_BYTES", str(2 * 1024 * 1024)))
 # 文档 §8.4：写入口限速 + 磁盘水位（0 表示关闭）
 INGEST_RATE_PER_MIN = int(_env("EDGE_INGEST_RATE", "120"))
 MIN_FREE_MB = int(_env("EDGE_MIN_FREE_MB", "512"))
@@ -123,6 +125,10 @@ WINDOW_MS = int(_env("EDGE_WINDOW_MS", str(5 * 60 * 1000)))
 # L2 聚合保留 180 天，L3 文本保留 365 天（文档 §8.1）
 KEEP_DAYS = int(_env("EDGE_KEEP_DAYS", "180"))
 TEXT_KEEP_DAYS = int(_env("EDGE_TEXT_KEEP_DAYS", "365"))
+# 派生数据各有自己的线：词云与告警状态只服务近期视图，审计要按年留
+WORD_KEEP_DAYS = int(_env("EDGE_WORD_KEEP_DAYS", "90"))
+AUDIT_KEEP_DAYS = int(_env("EDGE_AUDIT_KEEP_DAYS", "365"))
+ALERT_STATE_KEEP_DAYS = int(_env("EDGE_ALERT_STATE_KEEP_DAYS", "90"))
 # 每日快照 + 7 天保留（文档 §5.1）
 SNAPSHOT_KEEP = int(_env("EDGE_SNAPSHOT_KEEP", "7"))
 # 演示模式：compose 默认开，UI 挂「演示模式」横幅（文档 §8.5）

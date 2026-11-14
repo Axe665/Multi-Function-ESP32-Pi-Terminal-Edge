@@ -19,5 +19,7 @@
 ## 已知的消费方假设
 
 - 边把 `telemetry.v1` 的示例当单测夹具（`tests/test_contracts.py`）。
+- `contracts/vendor/terminal/telemetry@v1.json` 是**示例载荷**（`SOURCE` 的 files: 里标了
+  `(example)`），不是 schema；端仓发布 `contracts/wire/telemetry.v1.json` 后才换成 schema 引用。
 - 云把 `edge-report.v1.example.json` 当摄取单测夹具。
 - 改字段时两边同时改；消费方不修改 vendor 副本。

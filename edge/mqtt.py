@@ -24,6 +24,18 @@ ACK = "orpi/v1/{dev}/ack"
 CMD = "orpi/v1/{dev}/cmd"
 ADVICE = "orpi/v1/{dev}/advice"
 
+# orpi.advice.v1 一条报文最多 16 条建议（契约里的 maxItems）
+ADVICE_MAX = 16
+
+
+def _batch_id_of(body: dict[str, Any]) -> str | None:
+    """尽力还原批次号：载荷坏了也要让端能把回执对回本地这批。"""
+    try:
+        return ingest.batch_id(str(body.get("device_id", "")),
+                               int(body["window"]["from"]), int(body["window"]["to"]))
+    except (KeyError, TypeError, ValueError):
+        return None
+
 
 class MqttIngest:
     def __init__(self) -> None:
@@ -87,6 +99,11 @@ class MqttIngest:
             self.last_error = f"disconnected rc={rc}"
 
     def _on_message(self, client, userdata, msg):
+        # 单条报文先按大小卡：2 MB 以上不该出现在聚合通道里，解 JSON 前就丢掉
+        if len(msg.payload) > config.MAX_BODY_BYTES:
+            self.rejected += 1
+            store.bump("payload_too_large")
+            return
         try:
             parts = msg.topic.split("/")
             if len(parts) != 4 or parts[0] != "orpi" or parts[1] != "v1":
@@ -123,6 +140,19 @@ class MqttIngest:
                                        "code": e.code}, ensure_ascii=False),
                            qos=1)
             return
+        except Exception as e:  # noqa: BLE001 —— 库锁、磁盘写失败都不能静默丢批
+            # 以前只捕 IngestError：其余异常被 paho 吞掉，但 PUBACK 照发，
+            # 端以为投递成功，这批数据就没了。现在计数 + 审计 + 回否定回执。
+            self.rejected += 1
+            store.bump("mqtt_error")
+            bid = _batch_id_of(body)
+            store.audit_action("system", "mqtt.error", device_id,
+                               {"batch_id": bid, "error": str(e)[:200]})
+            client.publish(ACK.format(dev=device_id),
+                           json.dumps({"batch_id": bid, "accepted": False,
+                                       "code": "INTERNAL_ERROR"}, ensure_ascii=False),
+                           qos=1)
+            return
 
         self.received += 1
         client.publish(ACK.format(dev=device_id),
@@ -133,6 +163,10 @@ class MqttIngest:
         from . import privacy
 
         items = body.get("advice") if isinstance(body.get("advice"), list) else [body]
+        # 契约 advice 上限 16 条：超了截断并计数，别让一条报文把表灌爆
+        if len(items) > ADVICE_MAX:
+            store.bump("advice_truncated", len(items) - ADVICE_MAX)
+            items = items[:ADVICE_MAX]
         saved = 0
         for a in items:
             try:

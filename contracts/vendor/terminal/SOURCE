@@ -1,14 +1,19 @@
 # 端侧契约（orpi.telemetry.v1）
 #
-# 按「谁产生谁拥有」的原则，owner 是终端仓。端仓目前还没有 contracts/ 目录，
-# 所以这份副本暂时由本仓维护；端仓发布后改成 tag 引用并跑 --update。
+# 注意：本目录里的 telemetry@v1.json 是**跨仓对标的示例载荷**，不是 schema。
+# 它只有一条真实报文，没有字段类型/必填/取值范围，拿来当契约依据会漏字段。
+# 真契约在 owner 仓（终端仓）的 contracts/wire/telemetry.v1.json，那边还没发布；
+# 发布后把这里换成 schema 引用（files: 里去掉 (example) 标注），别一直留着示例。
 #
-# TODO(端仓): 发布 contracts/wire/telemetry.v1.json + examples 后，
-#             把 tag 改成 contracts/terminal/v1.0.0，这里只留引用。
+# 按「谁产生谁拥有」的原则，owner 是终端仓；端仓没有 contracts/ 目录之前，
+# 本仓只能拿示例对标字段名，所以这里只做 SHA256 防漂移，不做语义校验。
+#
+# TODO(端仓): 发布 contracts/wire/telemetry.v1.json 后把 tag 改成
+#             contracts/terminal/v1.0.0，这里只留引用与 (example) 之外的 schema。
 repo: https://github.com/Axe665/Multi-Function-ESP32-Pi-Terminal
-path: contracts/wire/telemetry.v1.json（端仓尚未发布）
-tag: 暂无（本仓代为维护）
+path: contracts/wire/telemetry.v1.json（端仓尚未发布，暂无 schema 可引）
+tag: 暂无（本仓代管的示例载荷，非契约）
 synced: 2026-11-09
 
 files:
-  telemetry@v1.json
+  telemetry@v1.json  (example)

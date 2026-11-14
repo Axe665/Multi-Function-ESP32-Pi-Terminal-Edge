@@ -94,14 +94,16 @@ def process(body: dict[str, Any], transport_device: str | None = None) -> dict[s
                           [str(x.get("loc")) for x in e.errors(include_context=False)[:5]])
 
     # 文档 §8.2：桶内 subject < 5 时丢这个桶，不是丢整批。
+    # 批次声明的 privacy.k 只是端的自述：行都合规就照收，只记审计；
     # 以前一个 k=4 的桶会让同批合规桶一起丢掉，端还会以为整批被拒。
     bid = batch_id(msg.device_id, msg.window.from_, msg.window.to)
     k_min = int(store.get_settings().get("k_min", config.K_MIN))
-    if msg.privacy.k < k_min:
-        store.bump("suppressed_buckets", 1)
-        raise IngestError("K_BELOW_MIN", f"批次的 k 小于 {k_min}", batch_id=bid)
     low_rows = [a for a in msg.aggregates if a.k < k_min]
     kept = [a for a in msg.aggregates if a.k >= k_min]
+    if msg.privacy.k < k_min:
+        store.audit_action("device", "privacy.k_claimed_low", msg.device_id,
+                           {"claimed": msg.privacy.k, "k_min": k_min,
+                            "rows_below": len(low_rows)})
     # 计数器把「端自己抑制的」和「边丢掉的」都算上；回执只报边丢了几行
     if len(low_rows) or msg.privacy.suppressed:
         store.bump("suppressed_buckets", len(low_rows) + (msg.privacy.suppressed or 0))

@@ -57,6 +57,51 @@ class AnalysisTest(unittest.TestCase):
             sum(r["n_samples"] for r in rep["telemetry_daily"]),
             sum(r["n_samples"] for r in daily))
 
+    def test_report_drops_rows_below_k_min(self):
+        """设置被写坏也不能让 k<5 的聚合出端：build_report 自己再过滤一遍。"""
+        store.set_settings({"k_min": 99})
+        try:
+            rep = analysis.build_report()
+        finally:
+            store.set_settings({"k_min": config.K_MIN})
+        self.assertEqual(rep["telemetry_daily"], [])
+        self.assertGreaterEqual(rep["privacy"]["k_min"], 5)
+
+    def test_words_rebuild_once_per_day(self):
+        """今天已经算过词频就不再全量重扫 advice。"""
+        today = analysis.day_of(store.now_ms())
+        with store.connect() as conn:
+            conn.execute("DELETE FROM word_freq")
+            conn.execute("INSERT INTO word_freq(day, word, count) VALUES(?,?,?)",
+                         (today, "哨兵", 1))
+        analysis.rebuild_words()
+        self.assertEqual([w["word"] for w in store.wordcloud(7, today)], ["哨兵"])
+        with store.connect() as conn:
+            # 收尾：清空后下一次 build_report 会按「今天没算过」自己重建
+            conn.execute("DELETE FROM word_freq")
+
+    def test_overview_pending_reports_counts_outbox(self):
+        """pending_reports 是发件箱待发，不是待处理告警（两回事，曾被同名变量覆盖）。"""
+        store.enqueue_report("r-pending", {"schema": "x"})
+        try:
+            pending = [o for o in store.outbox(100) if not o["sent_at"]]
+            self.assertEqual(analysis.overview()["pending_reports"], len(pending))
+        finally:
+            with store.connect() as conn:
+                conn.execute("DELETE FROM outbox WHERE report_id='r-pending'")
+
+    def test_append_window_skips_windows_a_real_batch_covered(self):
+        """演示补数只填空缺：同窗口已有批次就跳过，不能盖掉真机的聚合。"""
+        from edge import sim
+
+        window = config.WINDOW_MS
+        now = store.now_ms() // window * window
+        dev = store.devices()[0]["device_id"]
+        store.insert_batch(dev, "real-batch", now, now + window,
+                           {"schema": "orpi.telemetry.v1"}, [], [])
+        out = sim.append_window(now)
+        self.assertGreaterEqual(out["skipped"], 1)
+
     def test_anomalies_need_consecutive_windows(self):
         dev = store.devices()[0]["device_id"]
         base = store.now_ms() - 2 * 3600_000

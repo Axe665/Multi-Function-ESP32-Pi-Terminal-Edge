@@ -91,6 +91,18 @@ class AlertTest(unittest.TestCase):
         self.assertEqual(stale[0]["severity"], "critical")
         self.assertEqual(stale[0]["metric"], "__stale__")
 
+    def test_new_device_is_not_stale(self):
+        """ensure_device 的 last_seen 是 NULL：拿 0 去比会让新设备一配对就报 critical。"""
+        store.ensure_device("dev-fresh")
+        self.assertEqual([a for a in self.feed() if a["kind"] == "stale"], [])
+
+    def test_last_seen_never_rewinds(self):
+        """补传旧窗口不该把在线设备打回离线。"""
+        now = store.now_ms()
+        store.touch_device("dev-a", now)
+        store.touch_device("dev-a", now - 3600_000)
+        self.assertEqual(store.device("dev-a")["last_seen"], now)
+
 
 if __name__ == "__main__":
     unittest.main()

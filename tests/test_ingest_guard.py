@@ -92,6 +92,83 @@ class SettingsBoundsTest(unittest.TestCase):
         r = self.client.put("/api/v1/settings", json={"retention_days": "abc"})
         self.assertEqual(r.status_code, 422, r.text)
 
+    def test_k_min_cannot_go_below_5(self):
+        # 5 是文档 §8.2 的硬门槛：允许写更低等于自己给自己开洞
+        r = self.client.put("/api/v1/settings", json={"k_min": 1})
+        self.assertEqual(r.status_code, 422, r.text)
+        r = self.client.put("/api/v1/settings", json={"k_min": 5})
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(store.get_settings().get("k_min"), 5)
+
+
+class CloudConfigTest(unittest.TestCase):
+    """云地址与令牌：只收 https，文件必须是 0600；模型代理没配云就 503。"""
+
+    @classmethod
+    def setUpClass(cls):
+        from edge import config
+
+        store.init_db()
+        cls.client = TestClient(app)
+        cls.config = config
+
+    def setUp(self):
+        self._old = (self.config.CLOUD_URL, self.config.CLOUD_TOKEN)
+
+    def tearDown(self):
+        self.config.CLOUD_URL, self.config.CLOUD_TOKEN = self._old
+
+    def test_cloud_url_must_be_https(self):
+        for url in ("http://127.0.0.1:9000", "http://cloud.local"):
+            r = self.client.post("/api/v1/cloud/config", json={"url": url, "token": "t"})
+            self.assertEqual(r.status_code, 400, r.text)
+        self.assertFalse(any(
+            (self.config.CLOUD_OVERRIDE_PATH.exists()
+             and url in self.config.CLOUD_OVERRIDE_PATH.read_text(encoding="utf-8"))
+            for url in ("http://127.0.0.1:9000", "http://cloud.local")))
+
+    def test_token_file_is_owner_only(self):
+        r = self.client.post("/api/v1/cloud/config",
+                             json={"url": "https://cloud.local", "token": "tok"})
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(self.config.CLOUD_OVERRIDE_PATH.stat().st_mode & 0o777, 0o600)
+
+    def test_ai_proxy_without_cloud_is_503(self):
+        self.config.CLOUD_URL, self.config.CLOUD_TOKEN = "", ""
+        r = self.client.post("/api/v1/ai/generate", json={"prompt": "hi"})
+        self.assertEqual(r.status_code, 503, r.text)
+
+    def test_ai_proxy_passes_cloud_answer_through(self):
+        from unittest import mock
+
+        from edge import api
+
+        self.config.CLOUD_URL, self.config.CLOUD_TOKEN = "https://cloud.local", "tok"
+        answer = mock.Mock(status_code=200)
+        answer.json.return_value = {"text": "好的"}
+        with mock.patch.object(api.httpx, "Client") as client_cls:
+            post = client_cls.return_value.__enter__.return_value.post
+            post.return_value = answer
+            r = self.client.post("/api/v1/ai/generate", json={"prompt": "hi"})
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(r.json(), {"text": "好的"})
+        args, kwargs = post.call_args
+        self.assertEqual(args[0], "https://cloud.local/api/v1/ai/reports")
+        self.assertEqual(kwargs["headers"]["Authorization"], "Bearer tok")
+
+    def test_ai_proxy_keeps_cloud_error_code(self):
+        from unittest import mock
+
+        from edge import api
+
+        self.config.CLOUD_URL, self.config.CLOUD_TOKEN = "https://cloud.local", "tok"
+        answer = mock.Mock(status_code=429, text="rate limited")
+        with mock.patch.object(api.httpx, "Client") as client_cls:
+            client_cls.return_value.__enter__.return_value.post.return_value = answer
+            r = self.client.post("/api/v1/ai/generate", json={"prompt": "hi"})
+        self.assertEqual(r.status_code, 429, r.text)
+        self.assertEqual(r.json()["body"], "rate limited")
+
 
 if __name__ == "__main__":
     unittest.main()
