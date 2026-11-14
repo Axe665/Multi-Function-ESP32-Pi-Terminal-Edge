@@ -39,6 +39,14 @@ for (const [hash, title, block] of pages) {
         return c ? c.scrollHeight - c.clientHeight : 0
       })
       if (over > 1) bad.push(`总览纵向溢出 ${over}px`)
+      // 主题切换：点了必须真的换，否则说明按钮没接上
+      const before = await page.evaluate(() => document.documentElement.dataset.theme)
+      await page.locator('.theme-toggle').click()
+      await page.waitForTimeout(300)
+      const after = await page.evaluate(() => document.documentElement.dataset.theme)
+      if (after === before) bad.push('主题切换没生效')
+      await page.locator('.theme-toggle').click()
+      await page.waitForTimeout(200)
     }
     if (bad.length) {
       failed++

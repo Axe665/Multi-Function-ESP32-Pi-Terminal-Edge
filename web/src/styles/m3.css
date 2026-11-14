@@ -140,14 +140,32 @@
 
 [data-theme='dark'] {
   color-scheme: dark;
+  /* 中性黑：暗色下不用绿色调的“墨绿底”，面用纯黑到灰阶 */
+  --md-surface: #000000;
+  --md-surface-tint: var(--md-primary);
+  --md-surface-dim: #000000;
+  --md-surface-bright: #2b2b2b;
+  --md-surface-container-lowest: #0a0a0a;
+  --md-surface-container-low: #141414;
+  --md-surface-container: #0e0e0e;
+  --md-surface-container-high: #1e1e1e;
+  --md-surface-container-highest: #262626;
+  --md-surface-variant: #2a2a2a;
+  --md-on-surface: #eaeaea;
+  --md-on-surface-variant: #b8b8b8;
+  --md-outline: #8f8f8f;
+  --md-outline-variant: #3a3a3a;
+  --md-inverse-surface: #eaeaea;
+  --md-inverse-on-surface: #1a1a1a;
+
   --md-primary: #9cd67e;
   --md-on-primary: #0a3900;
   --md-primary-container: #205107;
   --md-on-primary-container: #b7f397;
-  --md-secondary: #bdcbb0;
-  --md-on-secondary: #283421;
-  --md-secondary-container: #3e4b36;
-  --md-on-secondary-container: #d9e7cb;
+  --md-secondary: #c3c8bb;
+  --md-on-secondary: #2a2f27;
+  --md-secondary-container: #343a31;
+  --md-on-secondary-container: #dfe4d7;
   --md-tertiary: #a0cfd4;
   --md-on-tertiary: #00363a;
   --md-tertiary-container: #1f4d51;
@@ -157,31 +175,14 @@
   --md-error-container: #93000a;
   --md-on-error-container: #ffdad6;
 
-  --md-surface: #10130d;
-  --md-on-surface: #e3e4dc;
-  --md-surface-tint: var(--md-primary);
-  --md-surface-dim: #10130d;
-  --md-surface-bright: #373a33;
-  --md-surface-container-lowest: #0b0e08;
-  --md-surface-container-low: #1a1d17;
-  --md-surface-container: #151811;
-  --md-surface-container-high: #23271e;
-  --md-surface-container-highest: #2d3128;
-  --md-surface-variant: #43483e;
-  --md-on-surface-variant: #c3c8bb;
-  --md-outline: #8d9286;
-  --md-outline-variant: #43483e;
-  --md-inverse-surface: #e3e4dc;
-  --md-inverse-on-surface: #2f312c;
-
   --md-ok: #9cd67e;
-  --md-ok-container: #22301a;
+  --md-ok-container: #1d2a16;
   --md-on-ok-container: #c9eeb5;
   --md-notice: #e0b05a;
-  --md-notice-container: #33280f;
+  --md-notice-container: #2c2410;
   --md-on-notice-container: #f6dda9;
   --md-critical: #ffb4ab;
-  --md-critical-container: #3b1b18;
+  --md-critical-container: #351513;
   --md-on-critical-container: #ffdad6;
 
   --md-chart-1: #9cd67e;
@@ -193,7 +194,7 @@
   --md-chart-cool: var(--md-tertiary);
   --md-chart-warm: var(--md-notice);
 
-  --md-elev-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px 1px rgba(0, 0, 0, 0.15);
+  --md-elev-1: 0 1px 2px rgba(0, 0, 0, 0.6), 0 1px 3px 1px rgba(0, 0, 0, 0.4);
 }
 
 /* ---------------------------------------------------------------- 基础 */

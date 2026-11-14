@@ -24,10 +24,13 @@ function apply() {
     ? {
         ...base,
         tooltip: {
-          backgroundColor: token('--md-surface-container-high', '#282b25'),
-          borderColor: token('--md-outline-variant', '#43483e'),
+          backgroundColor: token('--md-surface-container-high', '#1e1e1e'),
+          borderColor: token('--md-outline-variant', '#3a3a3a'),
           borderWidth: 1,
-          textStyle: { fontSize: 13, color: token('--md-on-surface', '#e3e3dc') },
+          padding: [8, 12],
+          confine: true,
+          textStyle: { fontSize: 12, color: token('--md-on-surface', '#eaeaea'), lineHeight: 20 },
+          extraCssText: 'border-radius: 10px; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);',
           ...base.tooltip,
         },
       }
