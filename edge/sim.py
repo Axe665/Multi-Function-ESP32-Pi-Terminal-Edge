@@ -253,6 +253,11 @@ def generate(days: int = 7, seed: int | None = None) -> dict[str, int]:
         store.audit_action("system", "seed.demo", config.EDGE_ID,
                            {"operator": "sim", "build": config.BUILD, "days": days,
                             "batches": inserted, "suppressed": suppressed})
+        # 文档 §8.5：初始化脚本为 5 个演示用户各写一条「数据分析」同意记录
+        for i in range(1, 6):
+            store.audit_action("system", "consent.demo", f"demo-user-{i}",
+                               {"scope": "数据分析", "granted": True, "operator": "sim",
+                                "build": config.BUILD})
     return {"batches": inserted, "suppressed": suppressed, "days": days,
             "devices": len(devices)}
 

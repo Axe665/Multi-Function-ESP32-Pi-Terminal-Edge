@@ -160,6 +160,10 @@ docker restart mt-mqtt
   Caddy 反代；管理 API 同理只绑 `127.0.0.1:8001`。
 - **设置项有边界**：`retention_days` 只接受 1 到 3650，`k_min` 1 到 100，
   `report_cadence_min` 1 到 1440。保留期直接决定清理任务的删除线，写 0 等于清库。
+- **mDNS 由宿主发布**：容器看不到局域网组播，跑一次 `./scripts/install_avahi.sh`
+  把 `_orpi-edge._tcp` 交给 Avahi；容器里的广播默认关（`EDGE_MDNS=0`）。
+- **改 `EDGE_ID` 要同步 ACL**：`docker/mosquitto/acl` 里边的用户名写死成
+  `edge-lab-01`，改 id 后边会订阅不到 topic。
 - **摄取认身份**：MQTT 落库前比对「主题里的 deviceId」与「载荷里的 device_id」，
   不一致拒收；已吊销的设备在摄取入口统一拦住（HTTP 与 MQTT 都走这里）。
 

@@ -2,9 +2,11 @@
 pattern readwrite orpi/v1/%u/telemetry
 pattern readwrite orpi/v1/%u/advice
 pattern readwrite orpi/v1/%u/status
-pattern readwrite orpi/v1/%u/ack
+# ack 是边发给设备的回执，设备不该有写权限（否则能伪造「已接收」）
+pattern read orpi/v1/%u/ack
 pattern read  orpi/v1/%u/cmd
 
-# 边自己（CN=edge-lab-01）可以读写全部，用于下发命令与收全量
+# 边自己（CN = EDGE_ID）可以读写全部，用于下发命令与收全量。
+# 改 EDGE_ID 时这里要一起改，否则边订阅不到 topic。
 user edge-lab-01
 topic readwrite orpi/v1/#
