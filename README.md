@@ -103,6 +103,12 @@ python3 scripts/icons.py                 # 加了新图标才跑：重抽子集�
 图标是 Material Symbols 的子集（约 18 KB），全量字体不进仓库。`<Icon name="settings" />`
 写在源码里，`scripts/icons.py` 扫源码重新生成 `public/fonts/` 与 `src/lib/icons.js`。
 
+服务控制台（启停、健康检查、日志，边 8101）：
+
+```bash
+./tools/service-launch/launch.sh
+```
+
 Docker（含 mTLS broker）：
 
 ```bash

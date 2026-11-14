@@ -1,0 +1,259 @@
+/* 控制台外壳。颜色、字阶、按钮、卡片、列表全部来自 /m3.css（网页端那一份），
+   这里只补它没有的：布局、状态点、分段按钮、对话框、日志区。 */
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  min-width: 900px;
+}
+
+/* ---------------------------------------------------------------- 顶栏 */
+
+.appbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  height: var(--appbar-h);
+  padding: 0 var(--space-5);
+  border-bottom: 1px solid var(--md-outline-variant);
+  background: var(--appbar-bg);
+  flex: none;
+}
+
+.titles {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.appbar h1 {
+  font: var(--md-title-large);
+}
+
+.appbar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+/* 分段按钮：两段，选中态用 secondary-container */
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-full);
+  overflow: hidden;
+}
+
+.seg button {
+  border: 0;
+  background: transparent;
+  color: var(--md-on-surface-variant);
+  font: var(--md-label-large);
+  padding: 0 16px;
+  height: 40px;
+  cursor: pointer;
+}
+
+.seg button[aria-pressed='true'] {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+
+.seg button:not([aria-pressed='true']):hover {
+  background: color-mix(in srgb, var(--md-on-surface) 6%, transparent);
+}
+
+/* ---------------------------------------------------------------- 主体 */
+
+.body {
+  display: grid;
+  grid-template-columns: 400px minmax(0, 1fr);
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  flex: 1;
+  min-height: 0;
+}
+
+.pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.pane--list #services {
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.svc {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 10px var(--space-3);
+  border-radius: var(--md-shape-sm);
+  cursor: pointer;
+}
+
+.svc + .svc {
+  border-top: 1px solid var(--md-outline-variant);
+  border-radius: 0;
+}
+
+.svc:hover {
+  background: color-mix(in srgb, var(--md-on-surface) 6%, transparent);
+}
+
+.svc[aria-selected='true'] {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+
+.svc-name { font: var(--md-title-small); }
+.svc-sub {
+  font: var(--md-body-small);
+  color: var(--md-on-surface-variant);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.svc[aria-selected='true'] .svc-sub { color: inherit; opacity: 0.8; }
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--md-outline);
+  flex: none;
+}
+
+.dot--ok { background: var(--md-ok); }
+.dot--warn { background: var(--md-notice); }
+.dot--bad { background: var(--md-critical); }
+.dot--off { background: var(--md-outline-variant); }
+
+.svc-actions {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.svc-actions .md-btn {
+  height: 32px;
+  padding: 0 12px;
+  font: var(--md-label-medium);
+}
+
+/* ---------------------------------------------------------------- 详情 */
+
+.detail-empty {
+  padding: var(--space-4) 0;
+}
+
+.detail h2 {
+  font: var(--md-title-medium);
+}
+
+.detail dl {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 8px var(--space-3);
+  margin: var(--space-3) 0 0;
+  font: var(--md-body-small);
+}
+
+.detail dt { color: var(--md-on-surface-variant); }
+.detail dd { margin: 0; word-break: break-all; }
+
+.log-head { margin-top: var(--space-4); }
+
+.log {
+  flex: 1;
+  min-height: 120px;
+  margin: 0;
+  padding: var(--space-3);
+  overflow: auto;
+  border-radius: var(--md-shape-sm);
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface-variant);
+  font: 12px/1.55 var(--md-mono);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* ---------------------------------------------------------------- 提示 */
+
+.banner {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--md-shape-sm);
+  background: var(--md-error-container);
+  color: var(--md-on-error-container);
+  font: var(--md-body-small);
+}
+
+.banner--info {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+
+.banner code {
+  font-family: var(--md-mono);
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  padding: 1px 5px;
+  border-radius: 4px;
+  cursor: copy;
+}
+
+/* ---------------------------------------------------------------- 底栏 */
+
+.footer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+  border-top: 1px solid var(--md-outline-variant);
+  flex: none;
+}
+
+.md-btn--outline.danger {
+  border-color: var(--md-error);
+  color: var(--md-error);
+}
+
+.md-btn--outline.danger:hover {
+  background: color-mix(in srgb, var(--md-error) 8%, transparent);
+}
+
+/* ---------------------------------------------------------------- 对话框 */
+
+dialog {
+  border: 0;
+  padding: var(--space-5);
+  max-width: 420px;
+  border-radius: var(--md-shape-xl);
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+  box-shadow: var(--md-elev-3);
+}
+
+dialog::backdrop { background: rgba(0, 0, 0, 0.4); }
+dialog h2 { font: var(--md-headline-small); margin: 0 0 var(--space-3); }
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+}
+
+[hidden] { display: none !important; }

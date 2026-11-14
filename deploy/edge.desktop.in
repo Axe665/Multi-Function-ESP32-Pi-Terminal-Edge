@@ -1,8 +1,8 @@
 [Desktop Entry]
 Type=Application
-Name=边
-Comment=边节点：网页入口与启停
-Exec=python3 @ROOT@/tools/edge-launch/edge_launch.py
+Name=边节点控制台
+Comment=边服务启停、健康检查与日志
+Exec=bash @ROOT@/tools/service-launch/launch.sh
 Icon=@ROOT@/deploy/icons/edge.svg
 Terminal=false
 Categories=Utility;Network;

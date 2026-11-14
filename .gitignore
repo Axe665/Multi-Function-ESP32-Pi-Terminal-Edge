@@ -15,3 +15,6 @@ node_modules/
 cloud-certs/
 .venv/
 deploy/edge.env
+
+# 服务控制台：进程号、日志、控制台自己的输出
+.run/

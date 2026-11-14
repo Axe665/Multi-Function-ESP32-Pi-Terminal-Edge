@@ -11,6 +11,8 @@ jobs:
       - run: pip install -r requirements.txt
       - run: python -m unittest discover -s tests -t . -v
       - run: python scripts/sync_contracts.py --check
+      # 边/云两仓的 tools/service-launch/ 必须字节相同，漏同步就红
+      - run: python3 tools/service-launch/checksums.py --check
 
   web:
     runs-on: ubuntu-latest
