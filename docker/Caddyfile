@@ -15,6 +15,11 @@
 	handle {
 		root * /srv/web
 		encode gzip
+		# index.html 不回缓存，否则旧标签页永远停在上一版；带 hash 的产物反过来长缓存
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+		@noassets not path /assets/*
+		header @noassets Cache-Control "no-cache"
 		try_files {path} /index.html
 		file_server
 	}

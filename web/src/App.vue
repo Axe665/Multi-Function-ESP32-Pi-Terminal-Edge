@@ -60,7 +60,7 @@ onMounted(async () => {
             :title="theme === 'dark' ? '切到亮色' : '切到暗色'"
             @click="toggleTheme"
           >
-            <Icon :name="theme === 'dark' ? 'light_mode' : 'dark_mode'" :size="20" />
+            <Icon :key="theme" :name="theme === 'dark' ? 'light_mode' : 'dark_mode'" :size="20" />
           </button>
         </div>
       </header>

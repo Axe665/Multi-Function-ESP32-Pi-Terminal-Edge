@@ -45,9 +45,9 @@
   --md-scrim: #000000;
   --md-shadow: #000000;
 
-  /* 组件别名：卡片纯白，靠 1px 描边和白色页面分开 */
-  --md-card-bg: #ffffff;
-  --md-card-border: #e6e9e0;
+  /* 组件别名：卡片纯白，靠 outline-variant 描边和白色页面分开 */
+  --md-card-bg: var(--md-surface-container-low);
+  --md-card-border: var(--md-outline-variant);
 
   /* ---- 严重度（只有异常才饱和） ---- */
   --md-ok: #386a20;
@@ -195,7 +195,8 @@
   --md-chart-cool: var(--md-tertiary);
   --md-chart-warm: var(--md-notice);
 
-  --md-card-bg: #141414;
+  /* 暗色靠色阶分层：卡片 #141414 对 #000 页面，不再描边 */
+  --md-card-bg: var(--md-surface-container-low);
   --md-card-border: transparent;
   --appbar-bg: var(--md-surface-container);
   --rail-bg: var(--md-surface-container);
@@ -819,7 +820,7 @@ h3 {
 }
 
 
-/* ---------------------------------------------------------------- 深色开关 */
+/* ---------------------------------------------------------------- 主题切换 */
 
 /* 主题切换：M3 outlined icon button，图标本身就是「切到哪边」 */
 .md-icon-outline {
@@ -842,6 +843,13 @@ h3 {
 }
 .md-icon-outline:active {
   background: color-mix(in srgb, var(--md-on-surface) 10%, transparent);
+}
+/* 换面时淡入 160 ms：图标瞬间切换容易被当成没点上 */
+@keyframes md-icon-in {
+  from { opacity: 0; }
+}
+.theme-toggle .ms-icon {
+  animation: md-icon-in 160ms var(--md-ease);
 }
 
 /* ---------------------------------------------------------------- 工具 */
