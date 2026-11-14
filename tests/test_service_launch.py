@@ -150,6 +150,20 @@ class ActionTest(unittest.TestCase):
         self.assertIn("no such container", msg)
 
 
+class NativeEnvTest(unittest.TestCase):
+    def test_config_env_overrides_process_env(self):
+        cfg = config.load()
+        env = stack.native_env(cfg, {"PATH": "/bin", "CLOUD_AUTOSEED": "1"})
+        self.assertEqual(env["PATH"], "/bin")
+        for key, value in cfg.native_env.items():
+            self.assertEqual(env[key], value)
+
+    def test_native_env_never_enables_demo_seed(self):
+        # seed 会先清空业务表再写演示数据，原生模式绝不能默认打开
+        cfg = config.load()
+        self.assertNotEqual(cfg.native_env.get("CLOUD_AUTOSEED"), "1")
+
+
 class ZombieTest(unittest.TestCase):
     def test_unreaped_child_counts_as_dead(self):
         # 子进程退出但没 wait 时会留成僵尸，os.kill(pid, 0) 照样成功

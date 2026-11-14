@@ -34,6 +34,8 @@ class Config:
     native_label: str
     native_script: Path
     native_ports: tuple[int, ...]
+    native_env: dict[str, str]
+    native_health_url: str
     deps: tuple[str, ...]
     services: dict[str, ServiceMeta] = field(default_factory=dict)
 
@@ -53,6 +55,8 @@ def load(path: Path | None = None) -> Config:
         native_label=str(n.get("label", n.get("service", "原生进程"))),
         native_script=ROOT / str(n.get("script", "run.sh")),
         native_ports=tuple(int(p) for p in n.get("ports", [])),
+        native_env={str(k): str(v) for k, v in (n.get("env") or {}).items()},
+        native_health_url=str(n.get("health_url", c["health_url"])),
         deps=tuple(str(d) for d in n.get("deps", [])),
         services={
             name: ServiceMeta(
