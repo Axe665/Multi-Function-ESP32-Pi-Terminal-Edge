@@ -41,6 +41,14 @@ class DeviceIdentityTest(unittest.TestCase):
             ingest.process(body, transport_device="mt-revoked-01")
         self.assertEqual(ctx.exception.code, "DEVICE_REVOKED")
 
+    def test_revoked_device_is_refused_without_transport_identity(self):
+        """吊销以前只拦 MQTT：换到 HTTP 通道（没有 transport_device）就绕过了。"""
+        body = json.loads(json.dumps(EXAMPLE))
+        body["device_id"] = "mt-revoked-http"
+        store.revoke_serial("serial-http", "mt-revoked-http", "测试")
+        with self.assertRaises(ingest.IngestError) as ctx:
+            ingest.process(body)
+        self.assertEqual(ctx.exception.code, "DEVICE_REVOKED")
 
     def test_payload_for_another_edge_is_refused(self):
         body = json.loads(json.dumps(EXAMPLE))
@@ -83,6 +91,49 @@ class SettingsBoundsTest(unittest.TestCase):
     def test_non_integer_is_refused(self):
         r = self.client.put("/api/v1/settings", json={"retention_days": "abc"})
         self.assertEqual(r.status_code, 422, r.text)
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+
+class HttpIngestIdentityTest(unittest.TestCase):
+    """HTTP 通道也要有身份：以前它不比对 device_id，也不查吊销。"""
+
+    @classmethod
+    def setUpClass(cls):
+        store.init_db()
+        cls.client = TestClient(app)
+        from edge import config
+
+        cls.client.headers.update({"Authorization": f"Bearer {config.INGEST_TOKEN}"})
+
+    def test_header_identity_must_match_payload(self):
+        body = json.loads(json.dumps(EXAMPLE))
+        r = self.client.post("/api/v1/ingest/telemetry", json=body,
+                             headers={"x-device-id": "mt-someone-else"})
+        self.assertEqual(r.status_code, 422, r.text)
+        self.assertEqual(r.json()["detail"]["code"], "DEVICE_MISMATCH")
+
+    def test_revoked_device_cannot_post(self):
+        body = json.loads(json.dumps(EXAMPLE))
+        body["device_id"] = "mt-http-revoked"
+        store.revoke_serial("serial-http-2", "mt-http-revoked", "测试")
+        r = self.client.post("/api/v1/ingest/telemetry", json=body,
+                             headers={"x-device-id": "mt-http-revoked"})
+        self.assertEqual(r.status_code, 422, r.text)
+        self.assertEqual(r.json()["detail"]["code"], "DEVICE_REVOKED")
+
+    def test_missing_token_is_not_treated_as_open(self):
+        """令牌生成失败（目录只读）时必须拒绝，不能退回「不校验」。"""
+        from unittest import mock
+
+        from edge import config
+
+        with mock.patch.object(config, "INGEST_TOKEN", ""):
+            r = self.client.post("/api/v1/ingest/telemetry",
+                                 json=json.loads(json.dumps(EXAMPLE)))
+        self.assertEqual(r.status_code, 503, r.text)
 
 
 if __name__ == "__main__":

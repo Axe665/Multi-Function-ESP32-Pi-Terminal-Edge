@@ -119,3 +119,44 @@ class CertShapeTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RenewAuthorizationTest(unittest.TestCase):
+    """续签以前只校验共享摄取令牌，device_id 由调用方给 —— 等于发证书给任意人。"""
+
+    @classmethod
+    def setUpClass(cls):
+        from fastapi.testclient import TestClient
+
+        from edge.main import app
+
+        store.init_db()
+        store.upsert_device("mt-renew-target", "续签目标", "health", "orpi 1.4.2", [83])
+        cls.client = TestClient(app)
+
+    def test_device_token_alone_cannot_renew(self):
+        from unittest import mock
+
+        from edge import config
+
+        with mock.patch.object(config, "ADMIN_TOKEN", "admin-for-test"):
+            r = self.client.post("/api/v1/devices/mt-renew-target/renew",
+                                 json={"csr": make_csr("mt-renew-target")},
+                                 headers={"Authorization": "Bearer device-token"})
+        self.assertEqual(r.status_code, 401, r.text)
+
+    def test_admin_token_can_renew(self):
+        from unittest import mock
+
+        from edge import config
+
+        with mock.patch.object(config, "ADMIN_TOKEN", "admin-for-test"):
+            r = self.client.post("/api/v1/devices/mt-renew-target/renew",
+                                 json={"csr": make_csr("mt-renew-target")},
+                                 headers={"Authorization": "Bearer admin-for-test"})
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertIn("cert_pem", r.json())
+
+
+if __name__ == "__main__":
+    unittest.main()

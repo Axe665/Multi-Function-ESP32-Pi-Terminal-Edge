@@ -109,9 +109,19 @@ class _CloudListener(ServiceListener):
         props = {k.decode(): v.decode() for k, v in info.properties.items() if v is not None}
         fp = props.get("ca_fp", "")
         pin = pinned_cloud_fp()
-        # 文档 §8.4：mDNS 只解决地址，信任靠 CA 指纹。广播的指纹和预置的
-        # cloud-ca 对不上就是假云，不能拿它替换上报地址（报表会被骗走）
-        if pin and fp != pin:
+        # 文档 §8.4：mDNS 只解决地址，信任靠 CA 指纹。没有预置 cloud-ca 就没有
+        # 可比对的信任根 —— 此时 fail-open 等于谁广播就信谁，报表连同
+        # Bearer 令牌都会发给攻击者。没根就不采信，走静态地址兜底。
+        if not pin:
+            if _rejected["reason"] != "unpinned":
+                _rejected.update(ca_fp="", reason="unpinned")
+                from . import store
+
+                store.audit_action("system", "mdns.unpinned", name,
+                                   {"detail": "未预置 cloud-ca，mDNS 地址不采信"})
+            return
+        # 广播的指纹和预置的 cloud-ca 对不上就是假云，不能拿它替换上报地址
+        if fp != pin:
             reason = f"ca_fp 不符：广播 {fp or '(空)'}，预置 {pin}"
             if _rejected["ca_fp"] != fp:
                 _rejected.update(ca_fp=fp, reason=reason)
@@ -155,7 +165,11 @@ def browse_cloud(seconds: float = 2.5) -> list[dict]:
                 return
             # 云可用 TXT 的 url 给出域名形式（IP 字面量做 SNI 在部分网关会 421）
             url = props.get("url") or f"https://{addresses[0]}:{info.port or 8443}"
-            found[url] = {"url": url, "ca_fp": props.get("ca_fp", ""),
+            pin = pinned_cloud_fp()
+            fp = props.get("ca_fp", "")
+            found[url] = {"url": url, "ca_fp": fp,
+                          # 没预置信任根，或指纹对不上，都只能展示不能直接用
+                          "trusted": bool(pin) and fp == pin,
                           "name": name.removesuffix("." + CLOUD_TYPE)}
 
         def update_service(self, *args) -> None:

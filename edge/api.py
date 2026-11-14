@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 
 import re
+import secrets
 from typing import Any
 
 
@@ -32,19 +33,27 @@ def _model_name(name: str) -> str:
 
 
 def admin_guard(authorization: str | None = Header(default=None)) -> None:
-    """设了 EDGE_ADMIN_TOKEN 才校验；单机演示默认关闭，见 README。"""
+    """设了 EDGE_ADMIN_TOKEN 才校验；单机演示默认关闭，见 README。
+
+    文档把管理台划在「内网」范围（§10 范围排除里写的是公网管理台），所以这里
+    不再强制令牌，但部署面必须收在本机或内网：见 deploy/systemd 的 loopback
+    绑定与 README 的 EDGE_ADMIN_TOKEN 说明。
+    """
     if not config.ADMIN_TOKEN:
         return
-    if authorization != f"Bearer {config.ADMIN_TOKEN}":
+    if not authorization or not secrets.compare_digest(
+            authorization, f"Bearer {config.ADMIN_TOKEN}"):
         raise HTTPException(401, "需要管理员令牌")
 
 
-def ingest_guard(authorization: str | None = Header(default=None),
-                 x_forwarded_for: str | None = Header(default=None)) -> None:
+def ingest_guard(authorization: str | None = Header(default=None)) -> str:
+    """校验共享摄取令牌，返回令牌本身（HTTP 入口没有更强的身份）。"""
     if not config.INGEST_TOKEN:
-        return
-    if authorization != f"Bearer {config.INGEST_TOKEN}":
+        raise HTTPException(503, "边未生成摄取令牌，HTTP 通道不可用")
+    if not authorization or not secrets.compare_digest(
+            authorization, f"Bearer {config.INGEST_TOKEN}"):
         raise HTTPException(401, "设备令牌无效")
+    return config.INGEST_TOKEN
 
 
 admin = [Depends(admin_guard)]
@@ -81,9 +90,15 @@ def _raw_hits(node: Any, path: str = "") -> list[str]:
 # ---------------------------------------------------------------- 设备接入
 
 @router.post("/ingest/telemetry", dependencies=device)
-def ingest_telemetry(body: dict[str, Any]) -> dict[str, Any]:
+def ingest_telemetry(body: dict[str, Any],
+                     x_device_id: str | None = Header(default=None)) -> dict[str, Any]:
+    """HTTP 通道的身份来自 X-Device-Id（前置反代按证书 CN 填）。
+
+    没有这个头时仍然走共享令牌，但吊销检查照样对 body 里的 device_id 生效
+    ——以前吊销只拦 MQTT，设备被吊销后换 HTTP 端口接着写。
+    """
     try:
-        return ingest.process(body)
+        return ingest.process(body, transport_device=x_device_id)
     except ingest.IngestError as e:
         detail: dict[str, Any] = {"code": e.code, "message": e.message}
         if e.fields:
@@ -150,9 +165,13 @@ def certs() -> list[dict[str, Any]]:
     return security.device_certs()
 
 
-@router.post("/devices/{device_id}/renew", dependencies=device)
+@router.post("/devices/{device_id}/renew", dependencies=admin)
 def renew_cert(device_id: str, body: dict[str, Any]) -> dict[str, Any]:
-    """设备到期前拿新证书；旧证书保留到自然过期，避免交接期断链。"""
+    """设备到期前拿新证书；旧证书保留到自然过期，避免交接期断链。
+
+    必须管理员调用：历史实现只校验共享摄取令牌，而 device_id 由调用方指定，
+    等于拿到令牌就能给任意设备签一张 CN 对得上的证书（§8.4 Spoofing）。
+    """
     try:
         return security.renew(device_id, str(body.get("csr", "")))
     except ValueError as e:

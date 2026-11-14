@@ -166,6 +166,15 @@ docker restart mt-mqtt
   `edge-lab-01`，改 id 后边会订阅不到 topic。
 - **摄取认身份**：MQTT 落库前比对「主题里的 deviceId」与「载荷里的 device_id」，
   不一致拒收；已吊销的设备在摄取入口统一拦住（HTTP 与 MQTT 都走这里）。
+  HTTP 兜底通道的身份来自反代填的 `X-Device-Id`，且必须带 `EDGE_INGEST_TOKEN`。
+- **管理台按「内网」定位**：文档把公网管理台排除在范围外，所以管理接口不强制令牌，
+  但部署面必须收在本机或内网——systemd 单元默认 `--host 127.0.0.1`，compose 也只
+  绑 `127.0.0.1:8001`。要在内网多机访问，先配 `EDGE_ADMIN_TOKEN`（前端不带令牌时
+  自己逐个 curl 即可）。
+- **续签要管理员**：`POST /devices/{id}/renew` 从「共享摄取令牌」提到管理员权限。
+  以前 device_id 由调用方给，拿到令牌就能给任意设备签一张 CN 对得上的证书。
+- **mDNS 没有信任根就不采信**：没配 `EDGE_CLOUD_CA` 时，广播来的云地址一律不用
+  （写一条 `mdns.unpinned` 审计），走静态 `EDGE_CLOUD_URL`。
 
 ## 数据流
 

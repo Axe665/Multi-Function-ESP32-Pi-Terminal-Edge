@@ -67,7 +67,11 @@ def process(body: dict[str, Any], transport_device: str | None = None) -> dict[s
     if transport_device and str(body.get("device_id", "")) != transport_device:
         store.bump("device_mismatch")
         raise IngestError("DEVICE_MISMATCH", "载荷 device_id 与主题不一致")
-    if transport_device and store.device_revoked(transport_device):
+    # 吊销检查认 body 里的 device_id：它就是要写进去的那个分区。
+    # 以前只在有 transport_device（MQTT）时才查，HTTP 通道等于绕过吊销。
+    claimed_device = str(body.get("device_id", ""))
+    if claimed_device and store.device_revoked(claimed_device):
+        store.bump("revoked_rejected")
         raise IngestError("DEVICE_REVOKED", "设备已吊销，先重新配对")
     claimed_edge = body.get("edge_id")
     if claimed_edge and claimed_edge != config.EDGE_ID:

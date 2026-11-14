@@ -97,12 +97,19 @@ class CloudPinTest(unittest.TestCase):
         lis.add_service(Zc(Info("")), mdns.CLOUD_TYPE, "old._orpi-cloud._tcp.local.")
         self.assertIsNone(lis.url)
 
-    def test_no_pin_falls_back_to_accept(self):
-        """没预置 cloud-ca 时无法比对，只能接受（mTLS 仍会挡住连不上的假云）。"""
+    def test_no_pin_is_not_trusted(self):
+        """没预置 cloud-ca 就没有信任根，此时采信 mDNS 等于谁广播就信谁。
+
+        旧行为是放行（注释说「mTLS 会挡住」）——但 mTLS 只保证对端有证书，
+        不等于那颗 CA 是我们预置的，TXT 里的 url 还能直接指向攻击者域名。
+        """
         config.CLOUD_CA = ""
         lis = mdns._CloudListener()
         lis.add_service(Zc(Info("deadbeefdeadbeef")), mdns.CLOUD_TYPE, "x._orpi-cloud._tcp.local.")
-        self.assertEqual(lis.url, "https://127.0.0.1:8443")
+        self.assertIsNone(lis.url, "没有信任根时不许替换上报地址")
+        self.assertEqual(mdns.cloud_reject_reason(), "unpinned")
+        actions = [a["action"] for a in store.audit(limit=10)]
+        self.assertIn("mdns.unpinned", actions)
 
     def test_status_reports_background_discovery(self):
         """后台 listener 已经找到云时，不用等 discover_cloud 也能在 /discovery 看到。"""

@@ -41,7 +41,6 @@ def _cloud_url() -> str:
 CLOUD_URL = _cloud_url()
 CLOUD_TOKEN = _env("EDGE_CLOUD_TOKEN")
 
-# 空的 ingest token 表示只接受本机写入，见 README「安全边界」。
 def _ingest_token() -> str:
     """设备写入口的令牌：环境变量优先，否则首次启动生成并落盘。
 
@@ -60,6 +59,8 @@ def _ingest_token() -> str:
         path.chmod(0o600)
         return token
     except OSError:
+        # 以前这里返回空串，ingest_guard 见到空就放行 —— 数据目录只读或磁盘满时
+        # 写入口等于裸奔。返回空串现在意味着 503，见 api.ingest_guard。
         return ""
 
 
