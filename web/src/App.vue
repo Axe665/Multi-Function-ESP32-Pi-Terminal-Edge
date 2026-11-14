@@ -45,16 +45,6 @@ onMounted(async () => {
         <span>{{ item.label }}</span>
       </RouterLink>
 
-      <span class="rail-spacer"></span>
-
-      <button
-        class="md-btn md-btn--icon"
-        :aria-label="theme === 'dark' ? '切到亮色' : '切到暗色'"
-        :title="theme === 'dark' ? '切到亮色' : '切到暗色'"
-        @click="toggleTheme"
-      >
-        <Icon :name="theme === 'dark' ? 'light_mode' : 'dark_mode'" />
-      </button>
     </nav>
 
     <div class="main">
@@ -63,6 +53,14 @@ onMounted(async () => {
         <span v-if="demo" class="md-chip" role="status">演示数据</span>
         <div class="appbar-actions">
           <slot name="appbar"></slot>
+          <button
+            class="md-btn md-btn--icon theme-toggle"
+            :aria-label="theme === 'dark' ? '切到亮色' : '切到暗色'"
+            :title="theme === 'dark' ? '切到亮色' : '切到暗色'"
+            @click="toggleTheme"
+          >
+            <Icon :name="theme === 'dark' ? 'light_mode' : 'dark_mode'" />
+          </button>
         </div>
       </header>
 

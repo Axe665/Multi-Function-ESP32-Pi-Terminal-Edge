@@ -70,6 +70,8 @@ export function chartTokens(mode) {
       i <= 3 ? mix(cool, surface, i / 3) : mix(surface, warm, (i - 3) / 3),
     ),
     border: surface,
+    // 次要序列（“前 24 小时”这类对比柱）：暗色下 outline-variant 太黑，按面与字混一点
+    muted: mix(surface, read('--md-on-surface') || '#1a1c18', theme.value === 'dark' ? 0.3 : 0.16),
     palette: [1, 2, 3, 4, 5, 6].map((i) => read(`--md-chart-${i}`) || line),
     word: { sat: [38, 56], light: theme.value === 'dark' ? [62, 80] : [24, 36] },
   }

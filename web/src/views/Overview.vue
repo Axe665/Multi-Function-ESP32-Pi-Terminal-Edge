@@ -139,13 +139,14 @@ const heatOption = computed(() => {
   const cells = heat.value?.cells || []
   const days = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
   return {
-    grid: { left: 4, right: 8, top: 6, bottom: 22, containLabel: true },
+    grid: { left: 4, right: 8, top: 2, bottom: 18, containLabel: true },
     tooltip: {
       formatter: (p) => `${days[p.value[1]]} ${String(p.value[0]).padStart(2, '0')}:00<br/>z ${p.value[2].toFixed(2)}`,
     },
     xAxis: { type: 'category', data: Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0')),
-             axisLabel: { fontSize: 12, color: t.axis, interval: 3 }, axisLine: { show: false }, axisTick: { show: false } },
-    yAxis: { type: 'category', data: days, axisLabel: { fontSize: 12, color: t.axis, interval: 0 },
+             axisLabel: { fontSize: 10, color: t.axis, interval: 3 }, axisLine: { show: false }, axisTick: { show: false } },
+    // 7 行挤在 ~100px 里，两个字会叠在一起；轴上只留「日/一/二」，完整星期名放 tooltip
+    yAxis: { type: 'category', data: days.map((d) => d[1]), axisLabel: { fontSize: 10, color: t.axis, interval: 0 },
              axisLine: { show: false }, axisTick: { show: false } },
     visualMap: { show: false, min: -2.5, max: 2.5, inRange: { color: t.heatZ } },
     series: [{
@@ -198,7 +199,7 @@ const deltaOption = computed(() => {
       { name: '近 24 小时', type: 'bar', data: rows.map((r) => r.cur), barWidth: '58%',
         itemStyle: { color: t.line, borderRadius: [4, 4, 0, 0] } },
       { name: '前 24 小时', type: 'bar', data: rows.map((r) => r.prev), barWidth: '58%',
-        itemStyle: { color: t.split, borderRadius: [4, 4, 0, 0] } },
+        itemStyle: { color: t.muted, borderRadius: [4, 4, 0, 0] } },
     ],
   }
 })
@@ -381,15 +382,15 @@ const adviceRows = computed(() => {
   flex-direction: column;
   min-width: 0;
 }
-.card-b { height: 184px; }
+.card-b { height: 170px; }
 .card-c { height: 194px; }
-.card-d { height: 180px; }
+.card-d { height: 194px; }
 .card-e { height: 144px; }
 .chart-fill {
   flex: 1;
   min-height: 0;
 }
-.chart-fill :deep(div) {
+.chart-fill > :deep(div) {
   height: 100%;
 }
 
@@ -423,11 +424,11 @@ const adviceRows = computed(() => {
   display: flex;
   align-items: flex-start;
   gap: var(--space-2);
-  padding: var(--space-2) 0;
+  padding: 4px 0;
 }
 .advice-text {
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
   font: var(--md-body-small);
