@@ -51,8 +51,9 @@ defineProps({
   align-items: center;
   gap: var(--space-4);
   padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--md-card-border);
   border-radius: var(--md-shape-lg);
-  background: var(--md-surface-container-low);
+  background: var(--md-card-bg);
   grid-column: span 12;
 }
 .status--notice {

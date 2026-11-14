@@ -31,7 +31,8 @@ const arrow = (v) => (v > 0 ? '▲' : v < 0 ? '▼' : '—')
 .kpis {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  background: var(--md-surface-container-low);
+  background: var(--md-card-bg);
+  border: 1px solid var(--md-card-border);
   border-radius: var(--md-shape-md);
   overflow: hidden;
   grid-column: span 12;
