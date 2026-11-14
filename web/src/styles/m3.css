@@ -811,6 +811,59 @@ h3 {
   z-index: 40;
 }
 
+
+/* ---------------------------------------------------------------- 深色开关 */
+
+.theme-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 40px;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--md-shape-full);
+  background: transparent;
+  color: var(--md-on-surface-variant);
+  font: var(--md-label-large);
+  cursor: pointer;
+  transition: background-color var(--md-dur-short) var(--md-ease);
+}
+.theme-switch:hover {
+  background: color-mix(in srgb, var(--md-on-surface) 8%, transparent);
+}
+.theme-switch__track {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  border-radius: var(--md-shape-full);
+  border: 2px solid var(--md-outline);
+  background: var(--md-surface-container-highest);
+  transition: background-color var(--md-dur-short) var(--md-ease),
+    border-color var(--md-dur-short) var(--md-ease);
+}
+.theme-switch__thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--md-outline);
+  transition: transform var(--md-dur-short) var(--md-ease),
+    background-color var(--md-dur-short) var(--md-ease);
+}
+.theme-switch[aria-checked='true'] .theme-switch__track {
+  background: var(--md-primary);
+  border-color: var(--md-primary);
+}
+.theme-switch[aria-checked='true'] .theme-switch__thumb {
+  transform: translateX(16px);
+  background: var(--md-on-primary);
+}
+.theme-switch[aria-checked='true'] {
+  color: var(--md-on-surface);
+}
+
 /* ---------------------------------------------------------------- 工具 */
 
 .md-muted {
