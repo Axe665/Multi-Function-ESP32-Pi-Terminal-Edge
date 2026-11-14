@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { api, fmtTime } from '../api'
-import PageHeader from '../components/PageHeader.vue'
+import PageLead from '../components/PageLead.vue'
 import KpiRow from '../components/KpiRow.vue'
 import ChartBox from '../components/ChartBox.vue'
 import { chartTokens, useTheme } from '../lib/theme'
@@ -36,8 +36,8 @@ const outboxOption = computed(() => {
     series: [{
       type: 'bar', data: [sent, pending, failed], barMaxWidth: 30,
       itemStyle: {
-        color: (p) => [t.line, t.palette[2], '#c0392b'][p.dataIndex],
-        borderRadius: [3, 3, 0, 0],
+        color: (p) => [t.line, t.palette[2], t.critical][p.dataIndex],
+        borderRadius: [4, 4, 0, 0],
       },
       label: { show: true, position: 'top', fontSize: 10, color: t.axis },
     }],
@@ -61,7 +61,7 @@ const intervalOption = computed(() => {
              axisLabel: { fontSize: 10, color: t.axis } },
     series: [{
       type: 'bar', data: buckets, barMaxWidth: 30,
-      itemStyle: { color: t.palette[1], borderRadius: [3, 3, 0, 0] },
+      itemStyle: { color: t.palette[1], borderRadius: [4, 4, 0, 0] },
       label: { show: true, position: 'top', fontSize: 10, color: t.axis },
     }],
   }
@@ -162,50 +162,49 @@ const cloud = () => [
 </script>
 
 <template>
-  <PageHeader title="设置" sub="上报节奏、云连接、保留期与隐私计数。">
-    <button class="md-btn" :disabled="busy" @click="pushNow">立即上报</button>
-  </PageHeader>
-
   <p v-if="error" class="error">{{ error }}</p>
 
-  <KpiRow :items="cloud()" />
+  <PageLead sub="上报节奏、云连接、保留期与隐私计数。">
+    <button class="md-btn" :disabled="busy" @click="pushNow">立即上报</button>
+  </PageLead>
 
-  <div class="charts">
-    <section class="md-card">
-      <div class="section-head">
+  <div class="md-grid">
+    <KpiRow :items="cloud()" />
+
+    <section class="md-card span-6">
+      <div class="md-card-head">
         <h2>发件箱</h2>
-        <span class="md-muted">{{ outbox.length }} 份</span>
+        <span class="meta">{{ outbox.length }} 份</span>
       </div>
-      <ChartBox :option="outboxOption" height="132px" />
+      <ChartBox :option="outboxOption" height="140px" label="发件箱按状态统计" />
     </section>
-    <section class="md-card">
-      <div class="section-head">
-        <h2>上报间隔</h2>
-        <span class="md-muted">相邻报表的生成间隔</span>
-      </div>
-      <ChartBox :option="intervalOption" height="132px" />
-    </section>
-  </div>
 
-  <div class="duo">
-    <section class="md-card">
-      <div class="section-head">
+    <section class="md-card span-6">
+      <div class="md-card-head">
+        <h2>上报间隔</h2>
+        <span class="meta">相邻报表的生成间隔</span>
+      </div>
+      <ChartBox :option="intervalOption" height="140px" label="相邻报表的生成间隔分布" />
+    </section>
+
+    <section class="md-card span-6">
+      <div class="md-card-head">
         <h2>云连接</h2>
-        <span class="md-muted">{{ overview?.cloud_enabled ? '自动上报已开启' : '报表只留在本机' }}</span>
+        <span class="meta">{{ overview?.cloud_enabled ? '自动上报已开启' : '报表只留在本机' }}</span>
       </div>
       <div class="form">
-        <label>
+        <label class="md-field">
           <span>云地址</span>
-          <input v-model="cloudUrl" class="md-field" placeholder="https://cloud.local:8443" />
+          <input v-model="cloudUrl" placeholder="https://cloud.local:8443" />
         </label>
-        <label>
+        <label class="md-field">
           <span>访问令牌（可选）</span>
-          <input v-model="cloudToken" class="md-field" />
+          <input v-model="cloudToken" />
         </label>
       </div>
       <div class="actions">
         <button class="md-btn" :disabled="busy" @click="saveCloud">保存并连接</button>
-        <button class="md-btn" :disabled="cloudSearching" @click="searchCloud">
+        <button class="md-btn md-btn--tonal" :disabled="cloudSearching" @click="searchCloud">
           {{ cloudSearching ? '搜索中…' : '搜索云' }}
         </button>
       </div>
@@ -215,21 +214,24 @@ const cloud = () => [
             <strong class="md-mono">{{ item.url }}</strong>
             <span class="md-muted"> · {{ item.ca_fp || '无指纹' }} · {{ item.trusted ? '可信' : '未校验' }}</span>
           </div>
-          <button class="md-btn" :disabled="busy" @click="connectCloud(item.url)">连接</button>
+          <button class="md-btn md-btn--tonal" :disabled="busy" @click="connectCloud(item.url)">连接</button>
         </li>
       </ul>
     </section>
 
-    <section class="md-card">
-      <h2>上报</h2>
+    <section class="md-card span-6">
+      <div class="md-card-head">
+        <h2>上报</h2>
+        <span class="meta">节奏与保留期</span>
+      </div>
       <div v-if="settings" class="form">
-        <label>
+        <label class="md-field">
           <span>上报节奏（分钟）</span>
-          <input v-model.number="settings.report_cadence_min" type="number" min="5" class="md-field" />
+          <input v-model.number="settings.report_cadence_min" type="number" min="5" />
         </label>
-        <label>
+        <label class="md-field">
           <span>保留天数</span>
-          <input v-model.number="settings.retention_days" type="number" min="7" class="md-field" />
+          <input v-model.number="settings.retention_days" type="number" min="7" />
         </label>
         <label class="check">
           <input v-model="settings.cloud_enabled" type="checkbox" />
@@ -245,142 +247,142 @@ const cloud = () => [
         </label>
       </div>
       <p v-else class="md-muted">读取中…</p>
-      <button class="md-btn" :disabled="busy || !settings" @click="save">保存</button>
+      <div class="actions">
+        <button class="md-btn" :disabled="busy || !settings" @click="save">保存</button>
+      </div>
       <p class="md-muted small hint">
         失败按 1 / 5 / 30 分钟、2 小时退避；报表最多保留 7 天。
         上报节奏决定自动打包间隔；保留天数影响本机聚合与发件箱。
       </p>
     </section>
 
-    <section class="md-card">
-      <div class="section-head">
+    <section class="md-card span-6">
+      <div class="md-card-head">
         <h2>隐私计数</h2>
-        <span class="md-muted">只增不减</span>
+        <span class="meta">只增不减</span>
       </div>
       <div class="md-list">
-        <div class="md-list-row"><div class="md-grow">k 门槛</div><span class="md-mono">{{ privacy?.k_min ?? '—' }}</span></div>
-        <div class="md-list-row"><div class="md-grow">被抑制的桶</div><span class="md-mono">{{ privacy?.suppressed_buckets ?? '—' }}</span></div>
-        <div class="md-list-row"><div class="md-grow">原始字段拦截</div><span class="md-mono">{{ privacy?.raw_rejected ?? '—' }}</span></div>
-        <div class="md-list-row"><div class="md-grow">假名方式</div><span class="md-mono">{{ privacy?.pseudonym || '—' }}</span></div>
-        <div class="md-list-row"><div class="md-grow">保留天数</div><span class="md-mono">{{ privacy?.retention ?? settings?.retention_days ?? '—' }}</span></div>
+        <div class="md-list-item"><div class="md-grow">k 门槛</div><span class="md-mono">{{ privacy?.k_min ?? '—' }}</span></div>
+        <div class="md-list-item"><div class="md-grow">被抑制的桶</div><span class="md-mono">{{ privacy?.suppressed_buckets ?? '—' }}</span></div>
+        <div class="md-list-item"><div class="md-grow">原始字段拦截</div><span class="md-mono">{{ privacy?.raw_rejected ?? '—' }}</span></div>
+        <div class="md-list-item"><div class="md-grow">假名方式</div><span class="md-mono">{{ privacy?.pseudonym || '—' }}</span></div>
+        <div class="md-list-item"><div class="md-grow">保留天数</div><span class="md-mono">{{ privacy?.retention ?? settings?.retention_days ?? '—' }}</span></div>
       </div>
       <p class="md-muted small hint">
         出端前剥掉 min/max/subject/user_id；出现原始字段整份拒收，不做静默清洗。
       </p>
     </section>
-  </div>
 
-
-  <section class="md-card access-summary">
-    <div class="section-head">
-      <h2>证书与设备接入</h2>
-      <RouterLink class="md-btn md-btn--text" to="/access">去接入页</RouterLink>
-    </div>
-    <div class="md-list">
-      <div class="md-list-row"><div class="md-grow">已配对设备</div><span class="md-mono">{{ paired }}</span></div>
-      <div class="md-list-row"><div class="md-grow">签发证书</div><span class="md-mono">{{ certs.length }}</span></div>
-      <div class="md-list-row">
-        <div class="md-grow">30 天内到期</div>
-        <span class="md-mono">{{ certs.filter((c) => c.expiring).length }}</span>
+    <section class="md-card span-6">
+      <div class="md-card-head">
+        <h2>证书与设备接入</h2>
+        <RouterLink class="md-btn md-btn--text" to="/access">去接入页</RouterLink>
       </div>
-    </div>
-  </section>
+      <div class="md-list">
+        <div class="md-list-item"><div class="md-grow">已配对设备</div><span class="md-mono">{{ paired }}</span></div>
+        <div class="md-list-item"><div class="md-grow">签发证书</div><span class="md-mono">{{ certs.length }}</span></div>
+        <div class="md-list-item">
+          <div class="md-grow">30 天内到期</div>
+          <span class="md-mono">{{ certs.filter((c) => c.expiring).length }}</span>
+        </div>
+      </div>
+    </section>
 
-  <section class="md-card report">
-    <div class="section-head">
-      <h2>报表预览</h2>
-      <span class="md-muted">
-        {{ preview ? `report_id ${preview.report_id} 前 8 行` : '预览不可用' }}
-      </span>
-    </div>
-    <table v-if="preview?.sample?.length" class="md-table">
-      <thead>
-        <tr><th>设备</th><th>日期</th><th>指标</th><th class="num">均值</th><th class="num">斜率</th><th class="num">z</th><th class="num">k</th></tr>
-      </thead>
-      <tbody>
-        <tr v-for="(r, i) in preview.sample" :key="i">
-          <td class="md-mono">{{ r.device_id }}</td>
-          <td>{{ r.day }}</td>
-          <td>{{ r.metric }}</td>
-          <td class="num">{{ r.mean }}</td>
-          <td class="num">{{ r.slope }}</td>
-          <td class="num">{{ r.z }}</td>
-          <td class="num">{{ r.k }}</td>
-        </tr>
-      </tbody>
-    </table>
-    <p v-else class="md-muted">暂时没有可上报的日聚合。</p>
-  </section>
+    <section class="md-card span-12">
+      <div class="md-card-head">
+        <h2>报表预览</h2>
+        <span class="meta">
+          {{ preview ? `report_id ${preview.report_id} 前 8 行` : '预览不可用' }}
+        </span>
+      </div>
+      <table v-if="preview?.sample?.length" class="md-table">
+        <thead>
+          <tr><th>设备</th><th>日期</th><th>指标</th><th class="num">均值</th><th class="num">斜率</th><th class="num">z</th><th class="num">k</th></tr>
+        </thead>
+        <tbody>
+          <tr v-for="(r, i) in preview.sample" :key="i">
+            <td class="md-mono">{{ r.device_id }}</td>
+            <td>{{ r.day }}</td>
+            <td>{{ r.metric }}</td>
+            <td class="num">{{ r.mean }}</td>
+            <td class="num">{{ r.slope }}</td>
+            <td class="num">{{ r.z }}</td>
+            <td class="num">{{ r.k }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <p v-else class="md-muted">暂时没有可上报的日聚合。</p>
+    </section>
 
-  <section class="md-card outbox">
-    <div class="section-head">
-      <h2>发件箱</h2>
-      <span class="md-muted">{{ outbox.length }} 份报表</span>
-    </div>
-    <table class="md-table">
-      <thead><tr><th>报告</th><th>生成</th><th>状态</th><th class="num">次数</th><th>最后一次错误</th></tr></thead>
-      <tbody>
-        <tr v-for="x in outbox" :key="x.report_id">
-          <td class="md-mono">{{ x.report_id }}</td>
-          <td>{{ fmtTime(x.created_at, true) }}</td>
-          <td>
-            <span class="md-chip" :class="x.sent_at ? 'md-chip--ok' : 'md-chip--warn'">
-              {{ x.sent_at ? '已送达' : '等待' }}
-            </span>
-          </td>
-          <td class="num">{{ x.attempts }}</td>
-          <td class="md-muted">{{ x.last_error || '—' }}</td>
-        </tr>
-        <tr v-if="!outbox.length"><td colspan="5" class="md-muted">还没有报表。</td></tr>
-      </tbody>
-    </table>
-  </section>
+    <section class="md-card span-12">
+      <div class="md-card-head">
+        <h2>发件箱</h2>
+        <span class="meta">{{ outbox.length }} 份报表</span>
+      </div>
+      <table class="md-table">
+        <thead><tr><th>报告</th><th>生成</th><th>状态</th><th class="num">次数</th><th>最后一次错误</th></tr></thead>
+        <tbody>
+          <tr v-for="x in outbox" :key="x.report_id">
+            <td class="md-mono">{{ x.report_id }}</td>
+            <td>{{ fmtTime(x.created_at, true) }}</td>
+            <td>
+              <span class="md-chip" :class="x.sent_at ? 'md-chip--ok' : 'md-chip--warn'">
+                {{ x.sent_at ? '已送达' : '等待' }}
+              </span>
+            </td>
+            <td class="num">{{ x.attempts }}</td>
+            <td class="md-muted">{{ x.last_error || '—' }}</td>
+          </tr>
+          <tr v-if="!outbox.length"><td colspan="5" class="md-muted">还没有报表。</td></tr>
+        </tbody>
+      </table>
+    </section>
+  </div>
 </template>
 
 <style scoped>
-.error { color: var(--md-error); margin-bottom: var(--space-3); }
-.charts {
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-4); margin-top: var(--space-4);
+.error { color: var(--md-error); max-width: var(--content-max); margin: 0 auto var(--space-3); }
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
 }
-@media (max-width: 1000px) { .charts { grid-template-columns: minmax(0, 1fr); } }
-.duo {
-  display: grid; grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-4);
-  max-width: 760px;
+.check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font: var(--md-body-medium);
+  color: var(--md-on-surface);
+  min-height: 32px;
+  cursor: pointer;
 }
-.form { display: flex; flex-direction: column; gap: var(--space-3); margin: var(--space-3) 0; }
-.form label { display: flex; flex-direction: column; gap: 4px; font: var(--md-label-medium); color: var(--md-on-surface-variant); }
-.form .check { flex-direction: row; align-items: center; gap: var(--space-2); }
-.section-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--space-3); }
+.check input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--md-primary);
+}
 .small { font: var(--md-body-small); }
 .hint { margin-top: var(--space-3); }
-.report { margin-top: var(--space-4); }
-.access-summary { margin-top: var(--space-4); }
-.outbox { margin-top: var(--space-4); }
-@media (max-width: 900px) {
-  .duo { grid-template-columns: minmax(0, 1fr); }
+.actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
 }
 .cloud-list {
   list-style: none;
-  margin: 12px 0 0;
+  margin: var(--space-3) 0 0;
   padding: 0;
   display: grid;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .cloud-list li {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--md-outline-variant);
-  border-radius: 10px;
-}
-.actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-top: 12px;
+  border-radius: var(--md-shape-sm);
 }
 </style>

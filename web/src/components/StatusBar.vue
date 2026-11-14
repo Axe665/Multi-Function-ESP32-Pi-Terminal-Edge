@@ -1,20 +1,19 @@
 <script setup>
 /**
  * 首屏第一块：现在有没有事。颜色只是辅助，结论用文字说清楚。
+ * 标题是结论本身，不占 heading 层级（页面名在顶栏 h1）。
  */
-const props = defineProps({
+defineProps({
   status: { type: Object, default: () => ({}) },
   title: { type: String, default: '' },
   sub: { type: String, default: '' },
 })
-
-
 </script>
 
 <template>
   <section class="status" :class="`status--${status.level || 'ok'}`" aria-live="polite">
     <span class="status-icon" aria-hidden="true">
-      <svg v-if="(status.level || 'ok') === 'ok'" viewBox="0 0 16 16" width="14" height="14">
+      <svg v-if="(status.level || 'ok') === 'ok'" viewBox="0 0 16 16" width="16" height="16">
         <path d="M3 8.5l3.2 3.2L13 5" fill="none" stroke="currentColor"
               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
       </svg>
@@ -22,7 +21,7 @@ const props = defineProps({
     </span>
 
     <div class="status-text">
-      <h1>{{ title }}</h1>
+      <p class="status-title">{{ title }}</p>
       <p class="status-sub">{{ sub }}</p>
     </div>
 
@@ -49,52 +48,46 @@ const props = defineProps({
 <style scoped>
 .status {
   display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
   border-radius: var(--md-shape-lg);
-  border: 1px solid var(--md-card-border);
-  border-left-width: 4px;
-  background: var(--md-card-bg);
-}
-.status--ok {
-  border-left-color: var(--md-outline-variant);
+  background: var(--md-surface-container-low);
+  grid-column: span 12;
 }
 .status--notice {
-  border-left-color: var(--md-notice);
+  background: var(--md-notice-container);
 }
 .status--critical {
-  border-left-color: var(--md-critical);
-  background: color-mix(in srgb, var(--md-critical-container) 40%, var(--md-card-bg));
+  background: var(--md-critical-container);
 }
 
 .status-icon {
   display: grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  font: var(--md-label-large);
+  width: 40px;
+  height: 40px;
+  border-radius: var(--md-shape-full);
+  font: var(--md-title-medium);
   flex: none;
-  margin-top: 2px;
-  background: var(--md-surface-container-highest);
-  color: var(--md-on-surface-variant);
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
 }
 .status--notice .status-icon {
-  background: var(--md-notice-container);
-  color: var(--md-on-notice-container);
+  background: var(--md-notice);
+  color: var(--md-on-primary);
 }
 .status--critical .status-icon {
-  background: var(--md-critical-container);
-  color: var(--md-on-critical-container);
+  background: var(--md-critical);
+  color: var(--md-on-error);
 }
 
 .status-text {
   flex: 1;
   min-width: 0;
 }
-.status-text h1 {
-  font: var(--md-title-large);
+.status-title {
+  font: var(--md-headline-small);
   color: var(--md-on-surface);
   display: flex;
   align-items: baseline;
@@ -103,8 +96,12 @@ const props = defineProps({
 }
 .status-sub {
   margin-top: 2px;
-  font: var(--md-body-medium);
+  font: var(--md-body-small);
   color: var(--md-on-surface-variant);
+}
+.status--notice .status-sub,
+.status--critical .status-sub {
+  color: color-mix(in srgb, var(--md-on-surface) 70%, transparent);
 }
 
 .status-facts {
@@ -113,17 +110,5 @@ const props = defineProps({
   gap: var(--space-2);
   flex-wrap: wrap;
   justify-content: flex-end;
-}
-
-/* 窄屏把计数换到下一行，标题拿到整行宽度 */
-@media (max-width: 640px) {
-  .status {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-  }
-  .status-facts {
-    grid-column: 1 / -1;
-    justify-content: flex-start;
-  }
 }
 </style>

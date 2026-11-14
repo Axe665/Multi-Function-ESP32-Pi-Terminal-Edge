@@ -10,6 +10,10 @@ from typing import Any
 
 from . import store
 
+# (device_id, metric) -> (取值时刻, 行)
+_CACHE: dict[tuple[str, str], tuple[int, dict[str, Any] | None]] = {}
+_CACHE_MS = 5_000
+
 
 def upsert(device_id: str, metric: str, module_id: int, package_id: str = "",
            label: str = "", unit: str = "", table: str = "samples",
@@ -40,6 +44,7 @@ def _write(conn, device_id, metric, module_id, package_id, label, unit, table, d
                  last_seen=excluded.last_seen""",
         (device_id, metric, module_id, package_id, label, unit, table,
          decimals, store.now_ms(), store.now_ms()))
+    _CACHE.pop((device_id, metric), None)
 
 
 def for_device(device_id: str) -> list[dict[str, Any]]:
@@ -50,11 +55,20 @@ def for_device(device_id: str) -> list[dict[str, Any]]:
 
 
 def get(device_id: str, metric: str) -> dict[str, Any] | None:
+    # 每次连接 SQLCipher 都要跑一遍 KDF（约 80 ms），而 label/unit/decimals 是
+    # 列表页的热点：一个 overview 就能触发几十次。目录只在 upsert 时变，短缓存够用。
+    key = (device_id, metric)
+    hit = _CACHE.get(key)
+    now = store.now_ms()
+    if hit and now - hit[0] < _CACHE_MS:
+        return hit[1]
     with store.connect() as conn:
         r = conn.execute(
             "SELECT * FROM catalog WHERE device_id=? AND metric=?",
-            (device_id, metric)).fetchone()
-    return dict(r) if r else None
+            key).fetchone()
+    row = dict(r) if r else None
+    _CACHE[key] = (now, row)
+    return row
 
 
 def label(device_id: str, metric: str) -> str:

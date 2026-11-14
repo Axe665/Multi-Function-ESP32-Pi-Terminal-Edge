@@ -3,7 +3,7 @@
 端-边-云三层里的**边**：局域网内的一台管理节点。三台 Pi 终端把 5 分钟窗口的
 **假名聚合**推上来，这里做趋势、时段矩阵、词云和异常检测，再把日聚合打包上报云端。
 
-## 界面（1900×1040，亮色）
+## 界面（1900×1040）
 
 | 总览 | 设备 | 设备详情 |
 |---|---|---|
@@ -11,7 +11,10 @@
 | **分析** | **接入** | **设置** |
 | ![分析](docs/screenshots/analysis.png) | ![接入](docs/screenshots/access.png) | ![设置](docs/screenshots/settings.png) |
 
-截图是按 1900×1040 截的；页面用 `clamp` 栅格，1920/1440/1366 下总览也是整屏不滚动。
+![暗色总览](docs/screenshots/dark-overview.png)
+
+截图按 1900×1040 截；亮色是默认，暗色走 `[data-theme="dark"]`，首次打开跟随系统。
+总览在 1900×1040 下整屏不滚动（`web/tests/smoke.mjs` 会拦）。
 
 ## 边、云两仓的分工
 
@@ -93,7 +96,12 @@ python3 -m pip install -r requirements.txt
 ```bash
 cd web && npm install && npm run dev     # http://127.0.0.1:5173，/api 代理到 8001
 npm run build                            # 产物 dist/ 不进仓库，镜像里多阶段构建
+node tests/smoke.mjs http://127.0.0.1:5173   # 逐页冒烟：顶栏、区块、控制台、整屏不滚动
+python3 scripts/icons.py                 # 加了新图标才跑：重抽子集字体 + 名字表
 ```
+
+图标是 Material Symbols 的子集（约 18 KB），全量字体不进仓库。`<Icon name="settings" />`
+写在源码里，`scripts/icons.py` 扫源码重新生成 `public/fonts/` 与 `src/lib/icons.js`。
 
 Docker（含 mTLS broker）：
 

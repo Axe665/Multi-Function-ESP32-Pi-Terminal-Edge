@@ -1,10 +1,16 @@
 <!doctype html>
-<html lang="zh-CN" data-theme="light">
+<html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Modular Terminal · 边节点</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <script>
+      // 首帧前定主题，避免暗色用户先看到一下亮色
+      const saved = localStorage.getItem('mt-theme')
+      document.documentElement.dataset.theme =
+        saved || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+    </script>
   </head>
   <body>
     <div id="app"></div>

@@ -1,44 +1,76 @@
 import { ref } from 'vue'
 
-const saved = localStorage.getItem('mt-theme')
-export const theme = ref(saved === 'dark' ? 'dark' : 'light')
+const KEY = 'mt-theme'
+
+// index.html 里的内联脚本已经在首帧前写好 data-theme，这里只接管状态
+export const theme = ref(document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light')
 
 function apply() {
   document.documentElement.dataset.theme = theme.value
-  localStorage.setItem('mt-theme', theme.value)
 }
-
-// 模块加载时就应用，避免刷新后先闪一下亮色
-apply()
 
 export function useTheme() {
   function toggleTheme() {
     theme.value = theme.value === 'dark' ? 'light' : 'dark'
+    localStorage.setItem(KEY, theme.value)
     apply()
   }
   return { theme, toggleTheme }
 }
 
-/** 图表配色：ECharts 不认 CSS 变量，按主题给两套。 */
+// 没手动选过就跟随系统，选过之后手动优先
+if (!localStorage.getItem(KEY)) {
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+    theme.value = e.matches ? 'dark' : 'light'
+    apply()
+  })
+}
+
+const root = document.documentElement
+const read = (name) => getComputedStyle(root).getPropertyValue(name).trim()
+
+function hexToRgb(hex) {
+  const h = hex.replace('#', '')
+  const n = parseInt(h.length === 3 ? h.replace(/./g, (c) => c + c) : h, 16)
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+}
+
+const rgb = (hex, a = 1) => `rgba(${hexToRgb(hex).join(',')},${a})`
+
+/** 两个颜色按 t 线性混合，用来从 token 派生热力/面积色。 */
+function mix(a, b, t) {
+  const [r1, g1, b1] = hexToRgb(a)
+  const [r2, g2, b2] = hexToRgb(b)
+  const at = (x, y) => Math.round(x + (y - x) * t)
+  return `#${[at(r1, r2), at(g1, g2), at(b1, b2)]
+    .map((v) => v.toString(16).padStart(2, '0'))
+    .join('')}`
+}
+
+/**
+ * 图表配色：ECharts 不认 CSS 变量，运行时从 token 读，
+ * 所以亮暗两套只有 m3.css 一处来源。mode 只用于让调用方显式重算。
+ */
 export function chartTokens(mode) {
-  const dark = mode === 'dark'
-  return dark
-    ? {
-        axis: '#8d9286', split: '#33362f', text: '#e3e3dc',
-        line: '#9cd67e', area: 'rgba(156,214,126,0.14)',
-        heat: ['#2a2d26', '#4f7a3a', '#b7f397'],
-        heatZ: ['#4d86a6', '#7fb3d1', '#3f5b66', '#2a2d26', '#5c4a22', '#b8862f', '#e0b05a'],
-        border: '#1e201b',
-        word: { sat: [35, 50], light: [62, 80] },
-        palette: ['#9cd67e', '#7fd3d8', '#e0b05a', '#e39ab0', '#9aa8e8', '#b8c78a'],
-      }
-    : {
-        axis: '#74796d', split: '#eef1ec', text: '#1a1c18',
-        line: '#386a20', area: 'rgba(56,106,32,0.10)',
-        heat: ['#eef1ec', '#9cd67e', '#386a20'],
-        heatZ: ['#3f7ea0', '#8fc0d6', '#dce9ef', '#f4f4f0', '#f0dcb6', '#ddab55', '#b57a05'],
-        border: '#ffffff',
-        word: { sat: [38, 56], light: [24, 36] },
-        palette: ['#386a20', '#38656a', '#7a5900', '#8c4a5f', '#4a5b8c', '#5d6b3a'],
-      }
+  void mode
+  const surface = read('--md-surface-container-low') || '#ffffff'
+  const line = read('--md-chart-1') || '#386a20'
+  const cool = read('--md-chart-cool') || line
+  const warm = read('--md-chart-warm') || '#8a5a00'
+  return {
+    axis: read('--md-on-surface-variant') || '#43483e',
+    split: read('--md-outline-variant') || '#c3c8bb',
+    text: read('--md-on-surface') || '#1a1c18',
+    line,
+    critical: read('--md-critical') || '#b3261e',
+    notice: read('--md-notice') || '#8a5a00',
+    area: rgb(line, theme.value === 'dark' ? 0.18 : 0.12),
+    heat: [mix(surface, line, 0.12), mix(surface, line, 0.5), line],
+    heatZ: [0, 1, 2, 3, 4, 5, 6].map((i) =>
+      i <= 3 ? mix(cool, surface, i / 3) : mix(surface, warm, (i - 3) / 3),
+    ),
+    border: surface,
+    palette: [1, 2, 3, 4, 5, 6].map((i) => read(`--md-chart-${i}`) || line),
+    word: { sat: [38, 56], light: theme.value === 'dark' ? [62, 80] : [24, 36] },
+  }
 }

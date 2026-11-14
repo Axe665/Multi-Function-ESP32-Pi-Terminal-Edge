@@ -335,12 +335,14 @@ def alerts(days: int = Query(default=7, ge=1, le=30),
            state: str = Query(default="open")) -> list[dict[str, Any]]:
     rows = store.alert_feed(store.now_ms() - days * 86_400_000,
                             stale_ms=3 * config.WINDOW_MS)
+    # 设备名一次取全：逐条 store.device() 是每条一次 SQLCipher 连接，800 多条要一分钟
+    names = {d["device_id"]: d["name"] for d in store.devices()}
     for r in rows:
         r["label"] = "数据过期" if r["kind"] == "stale" \
             else catalog.label(r["device_id"], r["metric"])
         r["unit"] = "" if r["kind"] == "stale" \
             else catalog.unit(r["device_id"], r["metric"])
-        r["device_name"] = (store.device(r["device_id"]) or {}).get("name", r["device_id"])
+        r["device_name"] = names.get(r["device_id"], r["device_id"])
     if state == "open":
         rows = [r for r in rows if r["state"] in ("pending", "acked", "muted")]
     return rows
