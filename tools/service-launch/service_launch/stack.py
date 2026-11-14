@@ -103,7 +103,26 @@ def _pid_file(cfg: Config) -> Path:
     return RUN_DIR / f"{cfg.native_service}.pid"
 
 
+# 自己拉起的子进程要留着句柄，否则退出后会变僵尸、poll 不到
+_children: dict[str, subprocess.Popen] = {}
+
+
+def _alive(pid: int) -> bool:
+    """僵尸也算死的。控制台重启后接管旧 PID 时只能查进程表，这里认状态位。"""
+    try:
+        with open(f"/proc/{pid}/stat", "rb") as fh:
+            return fh.read().rsplit(b") ", 1)[-1].split()[0] != b"Z"
+    except OSError:
+        return False
+
+
 def native_pid(cfg: Config) -> int:
+    child = _children.get(cfg.native_service)
+    if child is not None:
+        if child.poll() is not None:  # 顺手回收僵尸
+            _children.pop(cfg.native_service, None)
+            return 0
+        return child.pid
     try:
         pid = int(_pid_file(cfg).read_text().strip())
     except (OSError, ValueError):
@@ -112,7 +131,7 @@ def native_pid(cfg: Config) -> int:
         os.kill(pid, 0)
     except OSError:
         return 0
-    return pid
+    return pid if _alive(pid) else 0
 
 
 def native_start(cfg: Config) -> tuple[bool, str]:
@@ -133,8 +152,24 @@ def native_start(cfg: Config) -> tuple[bool, str]:
         start_new_session=True,
     )
     _pid_file(cfg).write_text(str(proc.pid))
+    _children[cfg.native_service] = proc
     log.close()
-    return True, f"已启动原生进程（pid {proc.pid}）"
+    # 边节点要建 jieba 词典、开加密库，起得慢；先等一会儿再给结论
+    for _ in range(30):
+        if not native_pid(cfg):
+            return False, f"原生进程刚起就退了：{_native_log_tail(cfg)}"
+        if not cfg.native_ports or any(port_open(p) for p in cfg.native_ports):
+            return True, f"原生进程已启动（pid {proc.pid}）"
+        time.sleep(0.5)
+    return True, f"原生进程已拉起（pid {proc.pid}），还在初始化，日志见 .run/"
+
+
+def _native_log_tail(cfg: Config, lines: int = 3) -> str:
+    path = RUN_DIR / f"{cfg.native_service}.log"
+    if not path.exists():
+        return "没有日志"
+    rows = [ln for ln in path.read_text(errors="replace").splitlines() if ln.strip()]
+    return " / ".join(rows[-lines:])[:200] or "日志是空的"
 
 
 def native_stop(cfg: Config) -> tuple[bool, str]:
@@ -202,6 +237,7 @@ def snapshot(cfg: Config, mode: str) -> dict:
     else:
         pid = native_pid(cfg)
         ports = [p for p in cfg.native_ports if port_open(p)]
+        serving = bool(pid) and (not cfg.native_ports or bool(ports))
         deps = compose_ps(cfg) if cfg.deps else {}
         out["services"].append(
             {
@@ -209,10 +245,10 @@ def snapshot(cfg: Config, mode: str) -> dict:
                 "label": cfg.native_label,
                 "note": " / ".join(str(p) for p in cfg.native_ports),
                 "group": "",
-                "state": "running" if pid else "stopped",
-                "health": "",
+                "state": "running" if serving else "starting" if pid else "stopped",
+                "health": "starting" if pid and not serving else "",
                 "running": bool(pid),
-                "healthy": bool(pid) and (not cfg.native_ports or bool(ports)),
+                "healthy": serving,
                 "ports": " / ".join(str(p) for p in ports),
                 "status": f"pid {pid}" if pid else "",
             }
@@ -222,10 +258,14 @@ def snapshot(cfg: Config, mode: str) -> dict:
             for d in cfg.deps
         ]
     out["health_ok"] = http_ok(cfg.health_url)
+    # starting 是 healthcheck 的宽限期（容器刚起，间隔 60 秒、要连过 3 次），
+    # 算成异常会让刚重启完的页面一片红
     out["summary"] = {
         "total": len(out["services"]),
         "running": sum(1 for s in out["services"] if s["running"]),
-        "bad": sum(1 for s in out["services"] if s["running"] and not s["healthy"]),
+        "bad": sum(
+            1 for s in out["services"] if s["running"] and not s["healthy"] and s["health"] != "starting"
+        ),
     }
     return out
 

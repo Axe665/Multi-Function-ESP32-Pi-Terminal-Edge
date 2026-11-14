@@ -7,7 +7,8 @@ const state = { mode: '', selected: '', logs: '', busy: false, data: null }
 const esc = (s) =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
 
-const tone = (s) => (s.running ? (s.healthy ? 'ok' : 'bad') : 'off')
+// starting 是 healthcheck 宽限期，用黄色，别当故障
+const tone = (s) => (!s.running ? 'off' : s.health === 'starting' ? 'warn' : s.healthy ? 'ok' : 'bad')
 
 function toast(text, bad = false) {
   const bar = el('snack')
@@ -63,7 +64,8 @@ function renderList(data) {
   list.innerHTML = data.services
     .map((s) => {
       const d = 'dot--' + tone(s)
-      const sub = [s.label !== s.name ? s.name : '', s.ports || s.note, s.health && s.health !== 'healthy' ? s.health : '']
+      const hs = s.health === 'starting' ? '检查中' : s.health && s.health !== 'healthy' ? s.health : ''
+      const sub = [s.label !== s.name ? s.name : '', s.ports || s.note, hs]
         .filter(Boolean)
         .join('，')
       const verb = s.running ? 'stop' : 'start'
@@ -88,9 +90,10 @@ function renderDetail(data) {
     el('log-meta').textContent = '最近 200 行'
     return
   }
+  const stateText = { running: '在跑', starting: '正在启动', stopped: '已停止', absent: '还没创建' }[s.state] || s.state
   const rows = [
-    ['状态', s.running ? '在跑' : s.state === 'absent' ? '还没创建' : '已停止'],
-    ['健康', s.health ? s.health : s.running ? (data.health_ok ? '接口通' : '接口不通') : '—'],
+    ['状态', stateText],
+    ['健康', s.health === 'starting' ? '检查中' : s.health || (s.running ? (data.health_ok ? '接口通' : '接口不通') : '—')],
     ['端口', s.ports || '—'],
     ['容器状态', s.status || '—'],
   ]
@@ -198,6 +201,8 @@ el('services').addEventListener('click', (e) => {
   if (!row) return
   state.selected = row.dataset.service
   state.logs = ''
+  // 选中态立刻生效，别等下一次轮询
+  document.querySelectorAll('.svc').forEach((r) => r.setAttribute('aria-selected', String(r === row)))
   renderDetail(state.data)
   pollLogs()
 })
