@@ -7,19 +7,29 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 from typing import Any
 
 from . import analysis, cloudpush, config, store
 
 
 def prune(retention_days: int) -> dict[str, int]:
-    """按天清理边上的聚合与建议：L2 默认 180 天，L3 文本 365 天。"""
-    cutoff = store.now_ms() - retention_days * 86_400_000
-    text_cutoff = store.now_ms() - config.TEXT_KEEP_DAYS * 86_400_000
+    """按天清理：L2 聚合/原始批 retention_days，L3 文本 365 天，其余各有线。"""
+    now = store.now_ms()
+    cutoff = now - retention_days * 86_400_000
+    text_cutoff = now - config.TEXT_KEEP_DAYS * 86_400_000
+    word_cutoff = analysis.day_of(now - config.WORD_KEEP_DAYS * 86_400_000)
+    audit_cutoff = now - config.AUDIT_KEEP_DAYS * 86_400_000
+    alert_cutoff = now - config.ALERT_STATE_KEEP_DAYS * 86_400_000
     with store.connect() as conn:
         agg = conn.execute("DELETE FROM aggregates WHERE ts_to < ?", (cutoff,)).rowcount
         tel = conn.execute("DELETE FROM telemetry WHERE ts_to < ?", (cutoff,)).rowcount
         adv = conn.execute("DELETE FROM advice WHERE created_at < ?", (text_cutoff,)).rowcount
+        words = conn.execute("DELETE FROM word_freq WHERE day < ?", (word_cutoff,)).rowcount
+        audit_rows = conn.execute(
+            "DELETE FROM audit WHERE created_at < ?", (audit_cutoff,)).rowcount
+        alerts = conn.execute(
+            "DELETE FROM alert_state WHERE updated_at < ?", (alert_cutoff,)).rowcount
         out = conn.execute(
             "DELETE FROM outbox WHERE sent_at IS NOT NULL AND created_at < ?", (cutoff,)).rowcount
         expired = conn.execute(
@@ -27,8 +37,17 @@ def prune(retention_days: int) -> dict[str, int]:
             (store.now_ms() - store.OUTBOX_MAX_AGE_MS,)).rowcount
     if expired:
         store.bump("outbox_expired", expired)
-    return {"aggregates": agg, "telemetry": tel, "advice": adv,
-            "outbox": out, "outbox_expired": expired}
+    counts = {"aggregates": agg, "telemetry": tel, "advice": adv, "word_freq": words,
+              "audit": audit_rows, "alert_state": alerts,
+              "outbox": out, "outbox_expired": expired}
+    # 一次清理只留一条审计，明细里写清各表删了多少、用的是哪条线
+    store.audit_action("system", "retention.prune", "edge",
+                       {**counts, "l2_days": retention_days,
+                        "l3_days": config.TEXT_KEEP_DAYS,
+                        "word_days": config.WORD_KEEP_DAYS,
+                        "audit_days": config.AUDIT_KEEP_DAYS,
+                        "alert_days": config.ALERT_STATE_KEEP_DAYS})
+    return counts
 
 
 def snapshot() -> dict[str, Any]:
@@ -60,7 +79,13 @@ def tick(now: int | None = None) -> dict[str, Any]:
     if cloudpush.configured() and settings.get("cloud_enabled", True):
         with store.connect() as conn:
             last = conn.execute("SELECT MAX(created_at) AS m FROM outbox").fetchone()["m"] or 0
-        if now - last >= config.PUSH_INTERVAL_MS:
+            # 设置页的「上报节奏」是分钟：只在库里真的存过时才用它，
+            # 否则退回 config 的 PUSH_INTERVAL_MS（环境变量调过就该生效）
+            row = conn.execute(
+                "SELECT value FROM settings WHERE key='report_cadence_min'").fetchone()
+        cadence = (int(json.loads(row["value"])) * 60_000
+                   if row else config.PUSH_INTERVAL_MS)
+        if now - last >= cadence:
             out["report"] = cloudpush.push_now()
         out["drain"] = cloudpush.drain()
     return out

@@ -21,10 +21,10 @@ if [ "$ca_broker" != "$ca_edge" ]; then
   exit 1
 fi
 
-# 前提：证书目录要对 api 容器（uid 10001）可写，否则临时证书放不进去、吊销也写不了 CRL
+# 前提：证书目录要对 api 容器（compose 的 APP_UID，默认 1000）可写，否则临时证书放不进去、吊销也写不了 CRL
 if ! $docker exec "$API" sh -c ': >> /app/certs/crl.pem' 2>/dev/null; then
   echo "[FAIL] api 容器写不了证书目录/吊销列表"
-  echo "       修：chmod 777 docker/mosquitto/certs && chmod 666 docker/mosquitto/certs/crl.pem"
+  echo "       修：sudo chown -R ${APP_UID:-1000}:${APP_GID:-1000} docker/mosquitto/certs（compose 的 edge/api 用这个 uid 跑）"
   exit 1
 fi
 

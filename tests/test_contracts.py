@@ -108,14 +108,17 @@ class IngestTest(unittest.TestCase):
         self.assertIn("min", r.json()["detail"]["fields"])
         self.assertIn("max", r.json()["detail"]["fields"])
 
-    def test_k_below_min_is_refused(self):
-        """整批声明的 k 不够，整批退回（端要重新攒窗口）。"""
+    def test_low_k_claim_with_compliant_rows_is_accepted(self):
+        """批次声明的 k 只是端自述：行都合规就照收，只记审计（§8.2 丢的是桶，不是整批）。"""
         low = json.loads(json.dumps(self.payload))
         low["window"] = {"from": 1, "to": 2, "step_ms": 1000}
         low["privacy"]["k"] = 4
         r = self.client.post("/api/v1/ingest/telemetry", json=low)
-        self.assertEqual(r.status_code, 422)
-        self.assertEqual(r.json()["detail"]["code"], "K_BELOW_MIN")
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertTrue(r.json()["accepted"])
+        self.assertEqual(r.json()["suppressed"], 0)
+        actions = {a["action"] for a in store.audit(200)}
+        self.assertIn("privacy.k_claimed_low", actions)
 
     def test_low_k_row_is_dropped_not_whole_batch(self):
         """文档 §8.2：丢的是这个桶，不是整批。合规的桶必须照常入库。"""
@@ -166,6 +169,59 @@ class IngestTest(unittest.TestCase):
         broken["schema"] = "orpi.telemetry.v2"
         r = self.client.post("/api/v1/ingest/telemetry", json=broken)
         self.assertEqual(r.status_code, 422)
+
+    def test_oversize_body_is_refused(self):
+        """一条 5 min 聚合报文顶多几十 KB：2 MB 以上直接 413，不读进内存。"""
+        big = b'{"pad":"' + b"x" * (2 * 1024 * 1024) + b'"}'
+        r = self.client.post("/api/v1/ingest/telemetry", content=big,
+                             headers={"Content-Type": "application/json"})
+        self.assertEqual(r.status_code, 413, r.text)
+        self.assertEqual(r.json()["detail"]["code"], "PAYLOAD_TOO_LARGE")
+
+    def test_oversize_chunked_body_is_refused(self):
+        """分块传输没有 Content-Length：按读到的字节数截断。"""
+        big = b'{"pad":"' + b"x" * (2 * 1024 * 1024 + 1) + b'"}'
+        r = self.client.post("/api/v1/ingest/telemetry", content=iter([big]),
+                             headers={"Content-Type": "application/json"})
+        self.assertEqual(r.status_code, 413, r.text)
+
+    def test_chunked_body_still_reaches_ingest(self):
+        """中间件自己读了体，下游必须还能读到同一份，否则合规报文会被吞。"""
+        body = json.loads(json.dumps(self.payload))
+        body["window"] = {"from": 20, "to": 21, "step_ms": 1000}
+        r = self.client.post("/api/v1/ingest/telemetry",
+                             content=iter([json.dumps(body).encode()]),
+                             headers={"Content-Type": "application/json"})
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertTrue(r.json()["accepted"])
+
+
+class VendorContractTest(unittest.TestCase):
+    """contracts/vendor 只放两种东西：真 schema，或 SOURCE 里标了 (example) 的示例载荷。"""
+
+    SOURCE = CONTRACTS / "vendor" / "terminal" / "SOURCE"
+
+    def _marked_examples(self) -> set[str]:
+        marked: set[str] = set()
+        in_files = False
+        for line in self.SOURCE.read_text(encoding="utf-8").splitlines():
+            text = line.strip()
+            if text.startswith("files:"):
+                in_files = True
+                continue
+            if not in_files or not text or text.startswith("#"):
+                continue
+            if "(example)" in text:
+                marked.add(text.split()[0])
+        return marked
+
+    def test_vendor_json_is_schema_or_marked_example(self):
+        marked = self._marked_examples()
+        for path in sorted((CONTRACTS / "vendor").rglob("*.json")):
+            data = json.loads(path.read_text(encoding="utf-8"))
+            is_schema = any(k in data for k in ("$schema", "type", "properties"))
+            self.assertTrue(is_schema or path.name in marked,
+                            f"{path} 既不是 schema，也没在 SOURCE 里标 (example)")
 
 
 class ConsentApiTest(unittest.TestCase):

@@ -116,5 +116,88 @@ class MqttTest(unittest.TestCase):
         self.assertTrue(any(t == "orpi/v1/mt-3b-01/cmd" for t, _ in self.broker.published))
 
 
+class MqttGuardTest(unittest.TestCase):
+    """直接喂回调，验证大小、条数与内部错误这三道闸门。"""
+
+    class Msg:
+        def __init__(self, topic: str, payload: bytes):
+            self.topic, self.payload = topic, payload
+
+    class Client:
+        def __init__(self) -> None:
+            self.acks: list[tuple[str, bytes]] = []
+
+        def publish(self, topic, payload, qos=0):
+            self.acks.append((topic, payload))
+
+    @classmethod
+    def setUpClass(cls):
+        store.init_db()
+
+    def test_oversize_payload_is_dropped(self):
+        before = store.counters().get("payload_too_large", 0)
+        client = self.Client()
+        mqtt.mqtt_ingest._on_message(
+            client, None,
+            self.Msg("orpi/v1/mt-3b-01/telemetry", b"x" * (config.MAX_BODY_BYTES + 1)))
+        self.assertEqual(store.counters().get("payload_too_large", 0), before + 1)
+        self.assertEqual(client.acks, [], "超限报文不该有任何回执")
+
+    def test_advice_is_capped_at_16(self):
+        items = [{"text": f"建议 {i}", "risk": "info", "confidence": 0.5,
+                  "source": "local"} for i in range(18)]
+        before = store.counters().get("advice_truncated", 0)
+        mqtt.mqtt_ingest._on_message(
+            self.Client(), None,
+            self.Msg("orpi/v1/mt-advice-01/advice",
+                     json.dumps({"advice": items}, ensure_ascii=False).encode()))
+        self.assertEqual(store.counters().get("advice_truncated", 0), before + 2)
+        self.assertEqual(len(store.advice("mt-advice-01", limit=50)), 16)
+
+    def test_unexpected_error_acks_and_counts(self):
+        """库锁这类异常以前被吞掉，PUBACK 照发，整批静默丢失。"""
+        from unittest import mock
+
+        from edge import ingest
+
+        client = self.Client()
+        before = store.counters().get("mqtt_error", 0)
+        with mock.patch.object(ingest, "process",
+                               side_effect=RuntimeError("database is locked")):
+            mqtt.mqtt_ingest._on_message(
+                client, None,
+                self.Msg("orpi/v1/mt-3b-01/telemetry",
+                         json.dumps(BATCH, ensure_ascii=False).encode()))
+        self.assertEqual(store.counters().get("mqtt_error", 0), before + 1)
+        ack = json.loads(client.acks[-1][1])
+        self.assertFalse(ack["accepted"])
+        self.assertEqual(ack["code"], "INTERNAL_ERROR")
+        self.assertEqual(ack["batch_id"],
+                         ingest.batch_id(BATCH["device_id"],
+                                         BATCH["window"]["from"], BATCH["window"]["to"]))
+
+
 if __name__ == "__main__":
     unittest.main()
+
+class RetainedStatusTest(unittest.TestCase):
+    """retained 的 status 重放不能把掉线设备刷成在线。"""
+
+    def setUp(self):
+        store.init_db()
+        with store.connect() as conn:
+            conn.execute("DELETE FROM devices")
+
+    def test_status_does_not_refresh_last_seen(self):
+        store.ensure_device("mt-dead-01")
+        stale = store.now_ms() - 6 * 3600_000
+        with store.connect() as conn:
+            conn.execute("UPDATE devices SET last_seen=? WHERE device_id='mt-dead-01'", (stale,))
+
+        ing = mqtt.MqttIngest()
+        ing._status("mt-dead-01", {"fw": "orpi 1.4.2", "queue_depth": 0})
+
+        dev = store.device("mt-dead-01")
+        self.assertEqual(dev["last_seen"], stale, "status 不该动 last_seen")
+        self.assertEqual(dev["fw"], "orpi 1.4.2", "但 fw 这类状态信息要更新")
+

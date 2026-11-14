@@ -55,11 +55,16 @@ async def _ticker() -> None:
         await asyncio.to_thread(sim.backfill, 12)
 
 
+def _sim_enabled() -> bool:
+    """演示补数只在显式 EDGE_SIM=1 时开。写反一次就是生产库被灌 mock。"""
+    return os.environ.get("EDGE_SIM", "0") == "1"
+
+
 def _lifespan_ingest():
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI):
         task = None
-        if os.environ.get("EDGE_SIM", "1") != "0" and store.devices():
+        if _sim_enabled() and store.devices():
             try:
                 n = await asyncio.to_thread(sim.backfill, 288)
                 print(f"sim: 启动补数 {n} 个窗口", flush=True)
@@ -94,6 +99,27 @@ def create_app(role: str = "all") -> FastAPI:
 
     @app.middleware("http")
     async def ingest_guard(request: Request, call_next):
+        # 请求体上限：内容长度报大就直接回 413，不读进内存
+        if request.method in ("POST", "PUT", "PATCH"):
+            declared = request.headers.get("content-length")
+            if declared and declared.isdigit() and int(declared) > config.MAX_BODY_BYTES:
+                return JSONResponse({"detail": {
+                    "code": "PAYLOAD_TOO_LARGE",
+                    "message": f"请求体超过 {config.MAX_BODY_BYTES // (1024 * 1024)} MB",
+                }}, status_code=413)
+            if not declared:
+                # 分块传输没有 Content-Length：自己读到上限为止，超了立刻断
+                chunks: list[bytes] = []
+                size = 0
+                async for chunk in request.stream():
+                    size += len(chunk)
+                    if size > config.MAX_BODY_BYTES:
+                        return JSONResponse({"detail": {
+                            "code": "PAYLOAD_TOO_LARGE",
+                            "message": f"请求体超过 {config.MAX_BODY_BYTES // (1024 * 1024)} MB",
+                        }}, status_code=413)
+                    chunks.append(chunk)
+                request._body = b"".join(chunks)
         # 配对是猜码入口，单独限速：每分钟 10 次，比写入口更紧
         if request.url.path == "/api/v1/pair/redeem" and request.method == "POST":
             ip = request.client.host if request.client else "-"

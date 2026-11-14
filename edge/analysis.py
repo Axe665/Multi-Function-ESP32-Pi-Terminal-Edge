@@ -67,6 +67,15 @@ _LEXICON = ["收缩压", "舒张压", "血压", "脉搏", "温度", "湿度", "�
 
 
 def rebuild_words() -> None:
+    """词频按天累积：今天已经算过就不再全量重扫 advice。
+
+    全量重建要读整张 advice 表，定时上云每小时跑一次等于每小时重算全历史。
+    """
+    today = day_of(store.now_ms())
+    with store.connect() as conn:
+        last = conn.execute("SELECT MAX(day) AS d FROM word_freq").fetchone()["d"]
+    if last == today:
+        return
     per_day: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     with store.connect() as conn:
         rows = conn.execute("SELECT text, created_at FROM advice").fetchall()
@@ -178,7 +187,10 @@ def build_report() -> dict[str, Any]:
     now = store.now_ms()
     since = now - 24 * 3_600_000
     devices = store.devices()
-    daily = daily_aggregates(since)
+    settings = store.get_settings()
+    # 设置被写坏（直接改库）也不能让 k<5 的聚合出端：这里再按有效门槛过滤一遍
+    k_min = max(5, int(settings.get("k_min", config.K_MIN)))
+    daily = [r for r in daily_aggregates(since) if r["k"] >= k_min]
     adv = store.advice(limit=200, since_ms=since)
     rebuild_words()
 
@@ -190,7 +202,6 @@ def build_report() -> dict[str, Any]:
     words = [dict(r) for r in rows][:512]
 
     c = store.counters()
-    settings = store.get_settings()
     payload = {
         "schema": "orpi.edge.report.v1",
         "report_id": "",
@@ -212,7 +223,7 @@ def build_report() -> dict[str, Any]:
         } for a in adv],
         "word_freq": words,
         "privacy": {
-            "k_min": config.K_MIN,
+            "k_min": k_min,
             "suppressed_buckets": c.get("suppressed_buckets", 0),
             "raw_rejected": c.get("raw_rejected", 0),
             "subjects_total": sum(max([a["n_subjects"] for a in daily if a["device_id"] == d["device_id"]] or [0])
@@ -302,9 +313,10 @@ def overview() -> dict[str, Any]:
 
     feed = store.alert_feed(now - 7 * 86_400_000, stale_ms=3 * config.WINDOW_MS)
     open_alerts = [a for a in feed if a["state"] in ("pending", "acked", "muted")]
-    pending = [a for a in open_alerts if a["state"] == "pending"]
-    critical = sum(1 for a in pending if a["severity"] == "critical")
-    notice = sum(1 for a in pending if a["severity"] == "notice")
+    # 别叫 pending：上面那份是发件箱待发，两回事，混用会把 pending_reports 算成告警数
+    pending_alerts = [a for a in open_alerts if a["state"] == "pending"]
+    critical = sum(1 for a in pending_alerts if a["severity"] == "critical")
+    notice = sum(1 for a in pending_alerts if a["severity"] == "notice")
     status = "critical" if critical else "notice" if notice else "ok"
 
     # 一台设备一条，带上设备名：前端按设备分行，否则三行看起来是同一句话
@@ -322,8 +334,8 @@ def overview() -> dict[str, Any]:
             "notice": notice,
             "acked": sum(1 for a in open_alerts if a["state"] == "acked"),
             "muted": sum(1 for a in open_alerts if a["state"] == "muted"),
-            "stale_devices": sum(1 for a in pending if a["kind"] == "stale"),
-            "top": pending[:3],
+            "stale_devices": sum(1 for a in pending_alerts if a["kind"] == "stale"),
+            "top": pending_alerts[:3],
         },
         "k_min": min([lane["k"] for lane in lanes if lane["k"]] or [0]),
         "edge_id": config.EDGE_ID, "edge_name": config.EDGE_NAME,

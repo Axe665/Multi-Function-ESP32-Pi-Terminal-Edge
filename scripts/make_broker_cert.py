@@ -30,14 +30,18 @@ def main() -> None:
     client = security.issue_edge_client(edge_id)
     (out / "edge.crt").write_text(client["cert_pem"])
     (out / "edge.key").write_text(client["key_pem"])
-    # 容器里的 mosquitto 以 uid 1883 运行，读不到 0600 的私钥；演示证书放 0644
     (out / "crl.pem").write_bytes(security.crl_pem())
-    for f in ("ca.crt", "broker.crt", "broker.key", "edge.crt", "edge.key", "crl.pem"):
+    # 目录 0777 + 私钥 0644 等于把 key 发给同机任何用户。收紧到：目录 0755，
+    # 公钥/证书/CRL 0644，边自己的私钥 0600（只有边进程读）。
+    for f in ("ca.crt", "broker.crt", "edge.crt", "crl.pem"):
         (out / f).chmod(0o644)
-    # api 容器（uid 10001）要在吊销时重写 crl.pem：目录得能建文件，文件本身也得可写
-    (out / "crl.pem").chmod(0o666)
-    out.chmod(0o777)
+    (out / "edge.key").chmod(0o600)
+    # broker.key 例外：mosquitto 以非属主的 uid 运行，0600 会让它读不到私钥。
+    # 真要收，就把整个 certs 目录交给 broker 用户（或换 systemd 部署，两边同一用户）。
+    (out / "broker.key").chmod(0o644)
+    out.chmod(0o755)
     print(f"已签发 {name} 的 broker 证书与 {edge_id} 的客户端证书 → {out}")
+    print("    broker.key 保持 0644 供 mosquitto 读；edge.key 已收紧到 0600")
 
 
 if __name__ == "__main__":

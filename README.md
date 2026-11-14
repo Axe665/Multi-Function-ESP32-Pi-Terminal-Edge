@@ -158,14 +158,24 @@ docker restart mt-mqtt
 
 - **调试口只给本机**：ingest 的 `8885` 映射成 `127.0.0.1:8885`，正式流量走 `8001` 的
   Caddy 反代；管理 API 同理只绑 `127.0.0.1:8001`。
-- **设置项有边界**：`retention_days` 只接受 1 到 3650，`k_min` 1 到 100，
-  `report_cadence_min` 1 到 1440。保留期直接决定清理任务的删除线，写 0 等于清库。
+- **设置项有边界**：`retention_days` 只接受 1 到 3650，`k_min` 5 到 100（5 是 §8.2
+  的硬门槛，写更低等于自己开洞），`report_cadence_min` 1 到 1440。保留期直接决定
+  清理任务的删除线，写 0 等于清库。
 - **mDNS 由宿主发布**：容器看不到局域网组播，跑一次 `./scripts/install_avahi.sh`
   把 `_orpi-edge._tcp` 交给 Avahi；容器里的广播默认关（`EDGE_MDNS=0`）。
 - **改 `EDGE_ID` 要同步 ACL**：`docker/mosquitto/acl` 里边的用户名写死成
   `edge-lab-01`，改 id 后边会订阅不到 topic。
 - **摄取认身份**：MQTT 落库前比对「主题里的 deviceId」与「载荷里的 device_id」，
   不一致拒收；已吊销的设备在摄取入口统一拦住（HTTP 与 MQTT 都走这里）。
+  HTTP 兜底通道的身份来自反代填的 `X-Device-Id`，且必须带 `EDGE_INGEST_TOKEN`。
+- **管理台按「内网」定位**：文档把公网管理台排除在范围外，所以管理接口不强制令牌，
+  但部署面必须收在本机或内网——systemd 单元默认 `--host 127.0.0.1`，compose 也只
+  绑 `127.0.0.1:8001`。要在内网多机访问，先配 `EDGE_ADMIN_TOKEN`（前端不带令牌时
+  自己逐个 curl 即可）。
+- **续签要管理员**：`POST /devices/{id}/renew` 从「共享摄取令牌」提到管理员权限。
+  以前 device_id 由调用方给，拿到令牌就能给任意设备签一张 CN 对得上的证书。
+- **mDNS 没有信任根就不采信**：没配 `EDGE_CLOUD_CA` 时，广播来的云地址一律不用
+  （写一条 `mdns.unpinned` 审计），走静态 `EDGE_CLOUD_URL`。
 
 ## 数据流
 
@@ -199,7 +209,7 @@ HTTPS  POST /ingest/telemetry                                   ← 兜底通道
 | mDNS | 广播 `_orpi-edge._tcp`、发现 `_orpi-device._tcp` 与 `_orpi-cloud._tcp`；静态地址（环境变量或 `cloud.json`）兜底 | `edge/mdns.py`；容器内实测发现到 `https://172.20.0.5:8443`，组播不可用时退化 |
 | 定时上云 | 每小时生成报表 + 到期队列投递 | `tests/test_scheduler.py` |
 | 退避与保留期 | 1/5/30 分钟、2 小时，7 天发不出去就丢弃；L2 聚合保留 180 天、L3 文本 365 天 | 同上 |
-| 隐私闸门 | 批次与每一行的 k<5 都拦、原始字段整份 422、min/max/subject 不出端 | `tests/test_contracts.py` |
+| 隐私闸门 | 每一行的 k<5 只丢那一行（批次声明的 k 低了只记审计）、原始字段整份 422、min/max/subject 不出端 | `tests/test_contracts.py` |
 | 写入口防护 | 每 IP 120 次/分；磁盘余量低于 512 MB 回 507；MQTT 同样按水位拒收 | 同上 |
 | 证书校验 | 出站前用同一份契约再验一次 | `cloudpush.send` |
 | 指标目录 | 端报什么就登记什么，前端下拉框动态生成 | `edge/catalog.py` + `/api/v1/metrics` |
@@ -231,7 +241,7 @@ HTTPS  POST /ingest/telemetry                                   ← 兜底通道
   `cloud-ca.crt` 比（同一口径：证书 DER 的 SHA256 前 16 hex），对不上就不换上报地址，写 `mdns.cloud_rejected`
   审计；`/api/v1/discovery` 的 `edge.cloud` 里能看到 `pinned_fp`、当前用的是静态还是 mDNS、最近被拒的原因。
   没预置 CA 时无法比对，仍放行 —— 此时靠 mTLS 兜底。
-- **吊销写 CRL 的坑补了**：api 容器以 uid 10001 跑，证书目录原来对它只读，`crl.pem` 一直没被重写（错误被吞掉）。现在 `make_broker_cert.py` 把目录设 0777、`crl.pem` 设 0666，写失败会记 `cert.crl_write_failed` 审计。
+- **吊销写 CRL 的坑补了**：api 容器要在吊销时重写证书目录里的 `crl.pem`，所以证书目录不能对容器只读（写失败会记 `cert.crl_write_failed` 审计）。权限按读者收：目录 `0755`、公私钥以外的证书与 `crl.pem` 都是 `0644`、边自己的 `edge.key` 收紧到 `0600`；`broker.key` 只留给 mosquitto（非属主 uid），仍是 `0644`。容器部署时证书目录要归 `APP_UID`（默认 1000），否则 api 写不进 CRL。
 
 ## 告警怎么判定、怎么关掉
 
@@ -286,6 +296,7 @@ HTTPS  POST /ingest/telemetry                                   ← 兜底通道
 | POST | `/api/v1/alerts/ack` | 确认一条告警 |
 | POST | `/api/v1/alerts/mute` | 静音一条，必填时长与理由 |
 | POST | `/api/v1/alerts/unmute` | 取消静音 |
+| POST | `/api/v1/ai/generate` | 管理员：把模型请求转给云的 `/api/v1/ai/reports`（端不持云令牌，文档 §0.2 / §4.6.4） |
 
 ## 契约
 
@@ -297,7 +308,12 @@ HTTPS  POST /ingest/telemetry                                   ← 兜底通道
 | `orpi.cmd.v1`（边→端） | `contracts/wire/cmd.v1.json` | **本仓** |
 | `orpi.edge.report.v1`（边→云） | `contracts/wire/edge-report.v1.json` | **本仓** |
 
-`python3 scripts/sync_contracts.py --check` 校验 vendor 副本没漂移。
+`python3 scripts/sync_contracts.py --check` 校验 vendor 副本没漂移（只比 SHA256）。
+
+`contracts/vendor/terminal/` 里放的是**跨仓对标的示例载荷**，不是 schema：它只有一条
+真实报文，没有字段类型与必填，`SOURCE` 里也标着 `(example)`。等端仓发布
+`contracts/wire/telemetry.v1.json` 后再换成 schema 引用（`tests/test_contracts.py` 会拦住
+「既不是 schema 又没标 example」的 json）。
 
 ## 测试
 
@@ -305,7 +321,7 @@ HTTPS  POST /ingest/telemetry                                   ← 兜底通道
 python3 -m unittest discover -s tests -t . -v
 ```
 
-**62 个用例**：契约与示例（含 advice / status / cmd）、摄取边界（原始字段 / 批次与行级 k<5 / 幂等 / 限速 / 磁盘水位）、分析口径
+**118 个用例**：契约与示例（含 advice / status / cmd、vendor 只放 schema 或标了 example）、摄取边界（原始字段 / 行级 k<5 / 幂等 / 限速 / 2 MB 请求体上限 / 磁盘水位）、分析口径
 （热力图不重复、报表样本数等于日聚合之和）、CA 与配对与 CRL、
 MQTT 真实报文往返、mDNS 只收 CA 指纹对得上的云、退避序列、发件箱 7 天过期、保留期清理、每日快照、
 SQLCipher 加密与错误口令拒绝、异常需连续窗口、告警合并与确认/静音/审计。
@@ -323,7 +339,7 @@ SQLCipher 加密与错误口令拒绝、异常需连续窗口、告警合并与�
 | §5.7 设备接入 | CA、配对码、365 天证书、吊销、续期 | ✅ CA/配对/365 天证书/吊销完成；吊销后重写 `certs/crl.pem`，消息层立即拒收，宿主 systemd timer 5 s 内让 broker 重读 CRL；续期是**设备主动 renew + 30 天提醒**，边不代签 |
 | §5.8 边→云 | 每小时批量、幂等、退避 | ✅ 1/5/30 分钟、2 小时退避，7 天 |
 | §5.9 mDNS | 广播 + 发现，TXT 只放 ID/型号/版本/端口/CA 指纹 | ✅ 云地址优先用 mDNS 发现的，静态地址兜底；只靠 mDNS 也能触发定时上云；发现云时比对 `ca_fp`，对不上就当假云丢弃（§8.4） |
-| §8.4 写入口防护 | 限速 + 单条/单批上限 + 磁盘水位 | ✅ 单批上限在 schema 里；每 IP 120 次/分；磁盘余量低于 512 MB 时 HTTP 回 507、MQTT 直接拒收 |
+| §8.4 写入口防护 | 限速 + 单条/单批上限 + 磁盘水位 | ✅ 单批上限在 schema 里，请求体超 2 MB 直接 413 / MQTT 拒收；每 IP 120 次/分；磁盘余量低于 512 MB 时 HTTP 回 507、MQTT 直接拒收 |
 | §5.10 无头与十用户 | 1 带屏 + 2 无头，10 用户轮换 | 部分：演示数据里有 1 带屏 + 2 无头；端仓还没有 headless 构建，也没有 10 用户轮换 |
 
 ## 仍然没做的

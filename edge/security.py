@@ -192,14 +192,18 @@ def revoke(device_id: str, reason: str = "unspecified") -> int:
     for r in rows:
         store.revoke_serial(r["serial"], device_id, reason)
         n += 1
+    if not n:
+        # 没有证书可吊销也是结论：「什么都没发生」不能报成成功
+        store.audit_action("system", "cert.revoke_noop", device_id,
+                           {"device_id": device_id, "matched": 0})
     if n:
         # mosquitto 的 crl_file 读这个文件；重载后断连，消息层另有即时拦截
         try:
             config.BROKER_CRL.write_bytes(crl_pem())
             config.BROKER_CRL.chmod(0o644)
         except OSError as e:
-            # 证书目录必须对容器用户可写（make_broker_cert.py 会设 0777）；
-            # 写不进去就只剩消息层拦截，broker 侧吊销会失效 —— 记审计，不留哑巴
+            # crl.pem 必须归 api 进程（compose 里是 APP_UID）可写，否则只剩消息层拦截，
+            # broker 侧吊销会失效 —— 记审计，不留哑巴
             store.audit_action("system", "cert.crl_write_failed", device_id,
                                {"path": str(config.BROKER_CRL), "error": str(e)[:200]})
     return n
@@ -234,40 +238,23 @@ def new_pair_code(device_id: str) -> str:
     return code
 
 
-def _pair_gate(now: int) -> None:
-    """全局限流：码不存在也要计数，否则 6 位码可以按全速枚举。"""
-    until = int(store.get_settings().get("pair_locked_until", 0) or 0)
-    if until > now:
-        raise ValueError("配对尝试过多，请 10 分钟后再试")
-
-
-def _pair_miss(now: int) -> None:
-    settings = store.get_settings()
-    count = int(settings.get("pair_fail_count", 0) or 0) + 1
-    if count >= PAIR_MAX_ATTEMPTS:
-        store.set_settings({"pair_fail_count": 0, "pair_locked_until": now + PAIR_LOCK_MS})
-        store.audit_action("system", "pair.locked", "pair", {"attempts": count})
-    else:
-        store.set_settings({"pair_fail_count": count})
-
-
 def redeem(code: str, csr_pem: str) -> dict[str, Any]:
+    """配对码兑换。失败计数与锁定都记在这一台设备（这一行码）上。"""
     now = store.now_ms()
-    _pair_gate(now)
     row = store.pair_code(code)
     if not row:
-        # 关键：码不存在以前直接抛错、不计数，等于可以无限猜
-        _pair_miss(now)
+        # 未知码不锁任何东西：全局锁等于让一个人拿乱码锁死全场配对，
+        # 枚举由 /pair/redeem 的 10 次/分接口限速兜底（roles.ingest_guard）
         raise ValueError("配对码不存在")
     now = store.now_ms()
-    if row["used_at"]:
-        _pair_miss(now)
-        raise ValueError("配对码已使用过")
-    if row["expires_at"] < now:
-        _pair_miss(now)
-        raise ValueError("配对码已过期")
     if row["locked_until"] and row["locked_until"] > now:
         raise ValueError("失败次数过多，请 10 分钟后再试")
+    if row["used_at"]:
+        store.pair_failure(code, PAIR_MAX_ATTEMPTS, PAIR_LOCK_MS)
+        raise ValueError("配对码已使用过")
+    if row["expires_at"] < now:
+        store.pair_failure(code, PAIR_MAX_ATTEMPTS, PAIR_LOCK_MS)
+        raise ValueError("配对码已过期")
 
     # 配对码绑定公钥指纹：同一码换一把钥匙来兑换就会被拒
     fp = _csr_fingerprint(csr_pem)
@@ -277,12 +264,14 @@ def redeem(code: str, csr_pem: str) -> dict[str, Any]:
 
     if not store.mark_pair_used(code):
         store.pair_failure(code, PAIR_MAX_ATTEMPTS, PAIR_LOCK_MS)
-        _pair_miss(now)
         raise ValueError("配对码已被占用")
-    store.set_settings({"pair_fail_count": 0})
     # 重新配对即视为换发了新证书：清掉这台设备的历史吊销，否则它配对成功也收发不了
     store.clear_revoked(row["device_id"])
-    return issue(row["device_id"], csr_pem)
+    out = issue(row["device_id"], csr_pem)
+    # 签发是设备接入的起点，审计里必须有：谁的证书、哪一串号（码本身不再落库）
+    store.audit_action("device", "pair.issued", row["device_id"],
+                       {"serial": out["serial"]})
+    return out
 
 
 def _csr_fingerprint(csr_pem: str) -> str:

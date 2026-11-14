@@ -6,7 +6,9 @@ After=network-online.target
 Type=simple
 WorkingDirectory=@ROOT@
 EnvironmentFile=-@ROOT@/deploy/edge.env
-ExecStart=@ROOT@/.venv/bin/python -m uvicorn edge.main:app --host 0.0.0.0 --port 8001
+# 管理台按文档只在内网：绑 loopback，外网靠隧道/VPN。绑 0.0.0.0 又没有
+# EDGE_ADMIN_TOKEN 时，同网段任何人可以配对取码、换证书、改设置
+ExecStart=@ROOT@/.venv/bin/python -m uvicorn edge.main:app --host 127.0.0.1 --port 8001
 Restart=on-failure
 RestartSec=3
 

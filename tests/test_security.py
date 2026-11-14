@@ -1,6 +1,7 @@
 """CA / 配对码 / 证书吊销。全部离线，不碰网络。"""
 from __future__ import annotations
 
+import json
 import os
 import sys
 import tempfile
@@ -91,6 +92,42 @@ class PairingTest(unittest.TestCase):
             security.redeem(code, make_csr("mt-3b-01"))
         self.assertIn("10 分钟", str(ctx.exception))
 
+    def test_lock_is_per_device(self):
+        """锁的是这台设备的码：以前全局计数，一个人猜错码就锁死全场配对。"""
+        code_a = security.new_pair_code("mt-3b-01")
+        code_b = security.new_pair_code("mt-3b-02")
+        for _ in range(security.PAIR_MAX_ATTEMPTS):
+            store.pair_failure(code_a, security.PAIR_MAX_ATTEMPTS, security.PAIR_LOCK_MS)
+        with self.assertRaises(ValueError):
+            security.redeem(code_a, make_csr("mt-3b-01"))
+        out = security.redeem(code_b, make_csr("mt-3b-02"))
+        self.assertIn("BEGIN CERTIFICATE", out["cert_pem"])
+
+    def test_unknown_code_does_not_lock_everything(self):
+        """未知码只交给 /pair/redeem 的接口限速，不写全局锁。"""
+        with store.connect() as conn:
+            conn.execute("DELETE FROM pair_codes WHERE code='999999'")
+        with self.assertRaises(ValueError):
+            security.redeem("999999", make_csr("mt-3b-01"))
+        code = security.new_pair_code("mt-3b-01")
+        self.assertIn("BEGIN CERTIFICATE", security.redeem(code, make_csr("mt-3b-01"))["cert_pem"])
+
+    def test_redeem_writes_audit(self):
+        code = security.new_pair_code("mt-3b-01")
+        out = security.redeem(code, make_csr("mt-3b-01"))
+        rows = [a for a in store.audit(200) if a["action"] == "pair.issued"]
+        self.assertTrue(rows, "签发证书没留审计")
+        self.assertEqual(json.loads(rows[0]["detail"])["serial"], out["serial"])
+
+    def test_revoke_without_cert_is_not_silent(self):
+        """没有证书可吊销也是结论，别把「什么都没发生」报成成功。"""
+        self.assertEqual(security.revoke("mt-no-certs", "admin"), 0)
+        rows = [a for a in store.audit(200) if a["action"] == "cert.revoke_noop"]
+        self.assertTrue(rows)
+        detail = json.loads(rows[0]["detail"])
+        self.assertEqual(detail["device_id"], "mt-no-certs")
+        self.assertEqual(detail["matched"], 0)
+
     def test_revoke_blocks_verify_and_fills_crl(self):
         code = security.new_pair_code("mt-3b-01")
         out = security.redeem(code, make_csr("mt-3b-01"))
@@ -115,6 +152,47 @@ class CertShapeTest(unittest.TestCase):
         )
         with self.assertRaises(Exception):
             security.verify(rogue.public_bytes(serialization.Encoding.PEM).decode())
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+
+class RenewAuthorizationTest(unittest.TestCase):
+    """续签以前只校验共享摄取令牌，device_id 由调用方给 —— 等于发证书给任意人。"""
+
+    @classmethod
+    def setUpClass(cls):
+        from fastapi.testclient import TestClient
+
+        from edge.main import app
+
+        store.init_db()
+        store.upsert_device("mt-renew-target", "续签目标", "health", "orpi 1.4.2", [83])
+        cls.client = TestClient(app)
+
+    def test_device_token_alone_cannot_renew(self):
+        from unittest import mock
+
+        from edge import config
+
+        with mock.patch.object(config, "ADMIN_TOKEN", "admin-for-test"):
+            r = self.client.post("/api/v1/devices/mt-renew-target/renew",
+                                 json={"csr": make_csr("mt-renew-target")},
+                                 headers={"Authorization": "Bearer device-token"})
+        self.assertEqual(r.status_code, 401, r.text)
+
+    def test_admin_token_can_renew(self):
+        from unittest import mock
+
+        from edge import config
+
+        with mock.patch.object(config, "ADMIN_TOKEN", "admin-for-test"):
+            r = self.client.post("/api/v1/devices/mt-renew-target/renew",
+                                 json={"csr": make_csr("mt-renew-target")},
+                                 headers={"Authorization": "Bearer admin-for-test"})
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertIn("cert_pem", r.json())
 
 
 if __name__ == "__main__":

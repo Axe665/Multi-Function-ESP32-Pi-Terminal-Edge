@@ -4,10 +4,14 @@ from __future__ import annotations
 import json
 
 import re
+import secrets
+import time
 from typing import Any
 
 
+import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
 from . import (analysis, catalog, cloudpush, config, ingest, mdns, models,
@@ -32,19 +36,27 @@ def _model_name(name: str) -> str:
 
 
 def admin_guard(authorization: str | None = Header(default=None)) -> None:
-    """设了 EDGE_ADMIN_TOKEN 才校验；单机演示默认关闭，见 README。"""
+    """设了 EDGE_ADMIN_TOKEN 才校验；单机演示默认关闭，见 README。
+
+    文档把管理台划在「内网」范围（§10 范围排除里写的是公网管理台），所以这里
+    不再强制令牌，但部署面必须收在本机或内网：见 deploy/systemd 的 loopback
+    绑定与 README 的 EDGE_ADMIN_TOKEN 说明。
+    """
     if not config.ADMIN_TOKEN:
         return
-    if authorization != f"Bearer {config.ADMIN_TOKEN}":
+    if not authorization or not secrets.compare_digest(
+            authorization, f"Bearer {config.ADMIN_TOKEN}"):
         raise HTTPException(401, "需要管理员令牌")
 
 
-def ingest_guard(authorization: str | None = Header(default=None),
-                 x_forwarded_for: str | None = Header(default=None)) -> None:
+def ingest_guard(authorization: str | None = Header(default=None)) -> str:
+    """校验共享摄取令牌，返回令牌本身（HTTP 入口没有更强的身份）。"""
     if not config.INGEST_TOKEN:
-        return
-    if authorization != f"Bearer {config.INGEST_TOKEN}":
+        raise HTTPException(503, "边未生成摄取令牌，HTTP 通道不可用")
+    if not authorization or not secrets.compare_digest(
+            authorization, f"Bearer {config.INGEST_TOKEN}"):
         raise HTTPException(401, "设备令牌无效")
+    return config.INGEST_TOKEN
 
 
 admin = [Depends(admin_guard)]
@@ -81,9 +93,15 @@ def _raw_hits(node: Any, path: str = "") -> list[str]:
 # ---------------------------------------------------------------- 设备接入
 
 @router.post("/ingest/telemetry", dependencies=device)
-def ingest_telemetry(body: dict[str, Any]) -> dict[str, Any]:
+def ingest_telemetry(body: dict[str, Any],
+                     x_device_id: str | None = Header(default=None)) -> dict[str, Any]:
+    """HTTP 通道的身份来自 X-Device-Id（前置反代按证书 CN 填）。
+
+    没有这个头时仍然走共享令牌，但吊销检查照样对 body 里的 device_id 生效
+    ——以前吊销只拦 MQTT，设备被吊销后换 HTTP 端口接着写。
+    """
     try:
-        return ingest.process(body)
+        return ingest.process(body, transport_device=x_device_id)
     except ingest.IngestError as e:
         detail: dict[str, Any] = {"code": e.code, "message": e.message}
         if e.fields:
@@ -150,9 +168,13 @@ def certs() -> list[dict[str, Any]]:
     return security.device_certs()
 
 
-@router.post("/devices/{device_id}/renew", dependencies=device)
+@router.post("/devices/{device_id}/renew", dependencies=admin)
 def renew_cert(device_id: str, body: dict[str, Any]) -> dict[str, Any]:
-    """设备到期前拿新证书；旧证书保留到自然过期，避免交接期断链。"""
+    """设备到期前拿新证书；旧证书保留到自然过期，避免交接期断链。
+
+    必须管理员调用：历史实现只校验共享摄取令牌，而 device_id 由调用方指定，
+    等于拿到令牌就能给任意设备签一张 CN 对得上的证书（§8.4 Spoofing）。
+    """
     try:
         return security.renew(device_id, str(body.get("csr", "")))
     except ValueError as e:
@@ -460,16 +482,25 @@ def cloud_discovery() -> dict[str, Any]:
 
 @router.post("/cloud/config", dependencies=admin)
 def set_cloud_config(body: dict[str, Any]) -> dict[str, Any]:
-    """运行时配置云地址/令牌（落盘 data/cloud.json，重启仍生效）。"""
+    """运行时配置云地址/令牌（落盘 data/cloud.json，重启仍生效）。
+
+    只收 https：令牌是明文 Bearer，走 http 等于把它发给链路上的任何人。
+    内网确实只有 http 的，在前面放一个反代再填反代的 https 地址。
+    """
     from . import config as cfg
 
     url = str(body.get("url", "")).strip()
     token = str(body.get("token", "")).strip()
-    if url and not url.startswith(("https://", "http://")):
-        raise HTTPException(400, "云地址必须以 http:// 或 https:// 开头")
+    if url and not url.startswith("https://"):
+        raise HTTPException(400, "云地址必须是 https://（内网 http 请用反代）")
     data = {"url": url, "token": token}
     cfg.CLOUD_OVERRIDE_PATH.write_text(
         json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    try:
+        # 文件里是云端令牌：老文件的 0644 也要收紧，不只是新建的
+        cfg.CLOUD_OVERRIDE_PATH.chmod(0o600)
+    except OSError:
+        pass
     cfg.CLOUD_URL = url
     cfg.CLOUD_TOKEN = token
     return {"configured": bool(url), "url": url}
@@ -484,6 +515,41 @@ def report_cloud() -> dict[str, Any]:
     if out.get("bytes"):
         body["bytes"] = out["bytes"]
     return body
+
+
+@router.post("/ai/generate", dependencies=admin)
+def ai_generate(body: dict[str, Any]) -> Any:
+    """端只连边：模型调用由边代理（文档 §0.2 / §4.6.4）。
+
+    云端令牌只落在边上，端不该拿到；这里把请求整体转给云的 /ai/reports。
+    """
+    url = (config.CLOUD_URL or "").rstrip("/")
+    token = config.CLOUD_TOKEN or ""
+    if not url or not token:
+        raise HTTPException(503, "云未配置：先在 /cloud/config 填 https 地址与令牌")
+
+    started = time.monotonic()
+    status = 0
+    detail = ""
+    try:
+        with httpx.Client(timeout=30, trust_env=False) as c:
+            r = c.post(f"{url}/api/v1/ai/reports", json=body,
+                       headers={"Authorization": f"Bearer {token}"})
+        status = r.status_code
+    except (httpx.HTTPError, ValueError) as e:
+        detail = str(e)[:200]
+    store.audit_action("admin", "ai.proxy", "cloud",
+                       {"scope": "reports", "status": status,
+                        "ms": int((time.monotonic() - started) * 1000),
+                        **({"error": detail} if detail else {})})
+    if detail:
+        raise HTTPException(502, f"云不可达：{detail}") from None
+    if status != 200:
+        return JSONResponse({"status": status, "body": r.text[:2000]}, status_code=status)
+    try:
+        return r.json()
+    except ValueError:
+        return JSONResponse({"status": 200, "body": r.text[:2000]})
 
 
 @router.get("/health", dependencies=admin)
@@ -545,7 +611,8 @@ def put_settings(patch: dict[str, Any]) -> dict[str, Any]:
     if not clean:
         raise HTTPException(400, "没有可更新的字段")
     # 保留期直接喂给 prune 的 cutoff：0 或负数会把全表删光，必须有边界
-    bounds = {"retention_days": (1, 3650), "k_min": (1, 100), "report_cadence_min": (1, 1440)}
+    # k_min 的 5 是文档 §8.2 的硬门槛，允许写更低等于自己给自己开洞
+    bounds = {"retention_days": (1, 3650), "k_min": (5, 100), "report_cadence_min": (1, 1440)}
     for key, (low, high) in bounds.items():
         if key in clean:
             try:
@@ -567,6 +634,7 @@ def put_settings(patch: dict[str, Any]) -> dict[str, Any]:
 @router.get("/privacy", dependencies=admin)
 def privacy() -> dict[str, Any]:
     now = store.now_ms()
+    settings = store.get_settings()
     cols = analysis.daily_aggregates(now - 7 * 86_400_000)
     ks = [c["k"] for c in cols]
     dist: dict[str, int] = {}
@@ -575,14 +643,15 @@ def privacy() -> dict[str, Any]:
         dist[b] = dist.get(b, 0) + 1
     c = store.counters()
     return {
-        "k_min": config.K_MIN,
+        # 页面上「当前门槛」要跟实际生效的一致：设置里改过 k_min 还显示 config 就是骗人
+        "k_min": settings.get("k_min", config.K_MIN),
         "buckets": len(ks),
         "k_distribution": dist,
         "k_min_seen": min(ks) if ks else 0,
         "suppressed_buckets": c.get("suppressed_buckets", 0),
         "raw_rejected": c.get("raw_rejected", 0),
         "pseudonym": "HMAC-SHA256(device_salt, userId)[:8]",
-        "retention": store.get_settings().get("retention_days", 180),
+        "retention": settings.get("retention_days", 180),
         "fields_allowed": ["mean", "slope", "z", "n", "k", "window"],
         "fields_stripped": ["min", "max", "subject", "user_id", "values"],
     }

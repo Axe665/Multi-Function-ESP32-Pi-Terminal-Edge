@@ -1324,6 +1324,44 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/ai/generate:
+    post:
+      summary: Ai Generate
+      description: '端只连边：模型调用由边代理（文档 §0.2 / §4.6.4）。
+
+
+        云端令牌只落在边上，端不该拿到；这里把请求整体转给云的 /ai/reports。'
+      operationId: ai_generate_api_v1_ai_generate_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              title: Body
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Ai Generate Api V1 Ai Generate Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
 components:
   schemas:
     HTTPValidationError:
